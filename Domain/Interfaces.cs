@@ -1,0 +1,40 @@
+using System;
+using System.Collections.Generic;
+using System.Threading;
+using System.Threading.Tasks;
+
+namespace ResearchApi.Domain;
+
+public interface ILlmClient
+{
+    Task<string> CompleteAsync(
+        string systemPrompt,
+        string userPrompt,
+        CancellationToken cancellationToken = default);
+
+    string StripThinkBlock(string text);
+}
+
+public record SearchResult(string Url, string Title, string Snippet);
+
+public interface ISearchClient
+{
+    Task<IReadOnlyList<SearchResult>> SearchAsync(string query, int limit, CancellationToken ct = default);
+    Task<string> FetchContentAsync(string url, CancellationToken ct = default);
+}
+
+public interface IResearchJobStore
+{
+    ResearchJob CreateJob(string query, IEnumerable<Clarification> clarifications, int breadth, int depth);
+    ResearchJob? GetJob(Guid id);
+    void UpdateJob(ResearchJob job);
+    IReadOnlyList<ResearchEvent> GetEvents(Guid jobId);
+    void AppendEvent(Guid jobId, ResearchEvent ev);
+}
+
+public interface IResearchOrchestrator
+{
+    Task<IReadOnlyList<string>> GenerateFeedbackQueries(string query, int max, bool includeBreadthDepthQuestions, CancellationToken ct);
+    ResearchJob StartJob(string query, IEnumerable<Clarification> clarifications, int breadth, int depth);
+    Task RunJobAsync(Guid jobId, CancellationToken ct);
+}
