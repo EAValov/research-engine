@@ -9,7 +9,7 @@ public static class PlanningPromptFactory
     /// Builds a planning prompt to generate SERP queries for the given research query.
     /// Clarifications, breadth and depth are optional and will be gracefully handled.
     /// </summary>
-    public static string Build(
+    public static Prompt Build(
         string query,
         string? clarificationsText = null,
         int? breadth = null,
@@ -74,6 +74,27 @@ public static class PlanningPromptFactory
         sb.AppendLine("{ \"queries\": [ \"first query here\", \"second query here\", \"third query here\" ] }");
         sb.AppendLine("Do not include any other keys, comments, or text outside this JSON object.");
         sb.AppendLine("Do NOT include your reasoning, only the JSON.");
+
+        return new Prompt(GetSystemPrompt(), sb.ToString());
+    }
+
+    private static string GetSystemPrompt()
+    {
+        var dt = DateTime.UtcNow.ToString("s", System.Globalization.CultureInfo.InvariantCulture);
+        var sb = new StringBuilder();
+
+        sb.AppendLine($"You are an expert web research planner. Today is {dt} (UTC).");
+        sb.AppendLine("Your job is to design highly effective search engine queries (SERP queries) for a separate crawler.");
+        sb.AppendLine();
+        sb.AppendLine("Core principles:");
+        sb.AppendLine("- Treat the user as a highly experienced analyst; do NOT oversimplify.");
+        sb.AppendLine("- Your focus is on COVERAGE and RELEVANCE of sources, not on answering the question yourself.");
+        sb.AppendLine("- Accuracy means: queries must reliably surface authoritative, up-to-date, domain-relevant sources.");
+        sb.AppendLine("- Prefer primary and reputable sources (regulators, official docs, standards bodies, well-known market research firms, major tech/finance/health outlets).");
+        sb.AppendLine("- Avoid queries that are so generic they return unrelated industries just because of shared buzzwords (e.g. generic 'AI market 2030' if the topic is 'AI in dermatology').");
+        sb.AppendLine();
+        sb.AppendLine("When a task prompt specifies an output format (e.g., JSON with a `queries` array), you MUST follow it exactly and output nothing else.");
+        sb.AppendLine("Do not include your reasoning or commentary in the output; only produce what the task prompt asks for.");
 
         return sb.ToString();
     }

@@ -6,6 +6,7 @@ using System.Text.Json.Serialization;
 using Microsoft.Extensions.Options;
 using ResearchApi.Configuration;
 using ResearchApi.Domain;
+using ResearchApi.Prompts;
 
 namespace ResearchApi.Infrastructure;
 
@@ -32,10 +33,7 @@ public class MicrosoftAiLlmClient : ILlmClient
         }
     }
 
-    public async Task<string> CompleteAsync(
-        string systemPrompt,
-        string userPrompt,
-        CancellationToken cancellationToken = default)
+    public async Task<string> CompleteAsync(Prompt prompt, CancellationToken cancellationToken = default)
     {
         var url = $"{_options.Endpoint.TrimEnd('/')}/chat/completions";
 
@@ -44,8 +42,8 @@ public class MicrosoftAiLlmClient : ILlmClient
             model = _options.Model,
             messages = new[]
             {
-                new { role = "system", content = systemPrompt },
-                new { role = "user",   content = userPrompt }
+                new { role = "system", content = prompt.systemPrompt },
+                new { role = "user",   content = prompt.userPrompt }
             }
             // you can add max_tokens, temperature, etc. here if you want
         };

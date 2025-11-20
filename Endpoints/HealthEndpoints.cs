@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 using ResearchApi.Configuration;
 using ResearchApi.Domain;
+using ResearchApi.Prompts;
 
 public static class HealthEndpoints
 {
@@ -35,13 +36,9 @@ public static class HealthEndpoints
                     using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
                     linkedCts.CancelAfter(TimeSpan.FromSeconds(5));
 
-                    var systemPrompt = "You are a health check for a research API.";
-                    var userPrompt   = "Reply with a single word: OK.";
+                    var prompt = new Prompt("You are a health check for a research API.", "Reply with a single word: OK.");
 
-                    var reply = await llmClient.CompleteAsync(
-                        systemPrompt,
-                        userPrompt,
-                        linkedCts.Token);
+                    var reply = await llmClient.CompleteAsync(prompt, linkedCts.Token);
 
                     var ok = !string.IsNullOrWhiteSpace(reply)
                              && reply.Contains("OK", StringComparison.OrdinalIgnoreCase);

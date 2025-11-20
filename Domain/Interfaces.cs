@@ -2,15 +2,13 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
+using ResearchApi.Prompts;
 
 namespace ResearchApi.Domain;
 
 public interface ILlmClient
 {
-    Task<string> CompleteAsync(
-        string systemPrompt,
-        string userPrompt,
-        CancellationToken cancellationToken = default);
+    Task<string> CompleteAsync(Prompt prompt, CancellationToken cancellationToken = default);
 
     string StripThinkBlock(string text);
 }

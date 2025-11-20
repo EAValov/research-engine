@@ -8,7 +8,7 @@ public static class LearningExtractionPromptFactory
     /// Builds a prompt to extract dense learnings from fetched page content for a given query.
     /// Clarifications are optional and will be used as extra context if present.
     /// </summary>
-    public static string Build(
+    public static Prompt Build(
     string query,
     string content,
     string? clarificationsText = null,
@@ -61,6 +61,34 @@ public static class LearningExtractionPromptFactory
         sb.AppendLine();
         sb.AppendLine("Return ONLY the final learnings as a simple list, one per line.");
         sb.AppendLine("Do NOT add numbering, bullets, headings, labels, or any extra commentary.");
+
+        return new Prompt(GetSystemPrompt(), sb.ToString());
+    }
+
+    private static string GetSystemPrompt()
+    {
+        var dt = DateTime.UtcNow.ToString("s", System.Globalization.CultureInfo.InvariantCulture);
+        var sb = new StringBuilder();
+
+        sb.AppendLine($"You are an expert analyst extracting structured learnings from web pages. Today is {dt} (UTC).");
+        sb.AppendLine("Your job is NOT to summarize everything, but to cherry-pick the most important, concrete information that helps answer the research query.");
+        sb.AppendLine();
+        sb.AppendLine("Core principles:");
+        sb.AppendLine("- The user is an expert; focus on high-signal, domain-specific insights, not generic explanations.");
+        sb.AppendLine("- Prioritize information that is directly relevant to the original research query and clarifications.");
+        sb.AppendLine("- Prefer concrete facts, definitions, quantitative estimates, regulatory requirements, and clear consensus views.");
+        sb.AppendLine("- Preserve important metrics, numbers, dates, and legal references EXACTLY as written.");
+        sb.AppendLine("- If large parts of the content are off-topic, ignore them instead of forcing vague or generic learnings.");
+        sb.AppendLine("- If the content provides nothing useful for the query, you may return fewer learnings or even none (if allowed by the task prompt).");
+        sb.AppendLine();
+        sb.AppendLine("Source handling:");
+        sb.AppendLine("- You are not browsing yourself; trust the provided content as the page text.");
+        sb.AppendLine("- Do NOT invent facts that are not supported by the content.");
+        sb.AppendLine("- If the content conflicts with common knowledge, prefer what is explicitly in the text, but avoid extrapolating beyond it.");
+        sb.AppendLine();
+        sb.AppendLine("Format discipline:");
+        sb.AppendLine("- Always obey the local task instructions: if the prompt asks for 'one learning per line, no numbering', follow that exactly.");
+        sb.AppendLine("- Do NOT add headings, explanations, or commentary beyond what the task requires.");
 
         return sb.ToString();
     }

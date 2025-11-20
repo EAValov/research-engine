@@ -109,10 +109,9 @@ public class ResearchOrchestrator(ILlmClient llmClient, ISearchClient searchClie
 
     public async Task<IReadOnlyList<string>> GenerateFeedbackQueries(string query, int max, bool includeBreadthDepthQuestions, CancellationToken ct)
     {
-        var systemPrompt = systemPromptFactory.Build();
-        var userPrompt = FeedbackPromptFactory.Build(query, max, includeBreadthDepthQuestions);
+        var prompt = FeedbackPromptFactory.Build(query, max, includeBreadthDepthQuestions);
 
-        var rawResponse = await _llmClient.CompleteAsync(systemPrompt, userPrompt, ct);
+        var rawResponse = await _llmClient.CompleteAsync(prompt, ct);
 
         // Strip <think> and any junk before first '{'
         var withoutThink = _llmClient.StripThinkBlock(rawResponse);
@@ -148,16 +147,15 @@ public class ResearchOrchestrator(ILlmClient llmClient, ISearchClient searchClie
         int breadth,
         CancellationToken ct)
     {
-        var systemPrompt = systemPromptFactory.BuildSerpPlanner();
         var clarificationsText = FormatClarifications(clarifications);
 
-        var userPrompt = PlanningPromptFactory.Build(
+        var prompt = PlanningPromptFactory.Build(
             query,
             clarificationsText: clarificationsText,
             breadth: breadth,
             depth: depth);
 
-        var rawResponse = await _llmClient.CompleteAsync(systemPrompt, userPrompt, ct);
+        var rawResponse = await _llmClient.CompleteAsync(prompt, ct);
 
         // Strip <think> and any junk before first '{'
         var withoutThink = _llmClient.StripThinkBlock(rawResponse);
@@ -204,17 +202,15 @@ public class ResearchOrchestrator(ILlmClient llmClient, ISearchClient searchClie
         string content,
         CancellationToken ct)
     {
-        var systemPrompt = systemPromptFactory.BuildLearningsExtractor();
-
         var clarificationsText = FormatClarifications(clarifications);
 
-        var userPrompt = LearningExtractionPromptFactory.Build(
+        var prompt = LearningExtractionPromptFactory.Build(
             query,
             content,
             clarificationsText: clarificationsText,
             maxLearnings: 3);
 
-        var response = await _llmClient.CompleteAsync(systemPrompt, userPrompt, ct);
+        var response = await _llmClient.CompleteAsync(prompt, ct);
 
         var learnings = response
             .Split('\n')
@@ -226,23 +222,21 @@ public class ResearchOrchestrator(ILlmClient llmClient, ISearchClient searchClie
     }
 
     private async Task<string> WriteFinalReport(
-        string prompt,
+        string query,
         IEnumerable<Clarification> clarifications,
         List<string> learnings,
         List<string> visitedUrls,
         CancellationToken ct)
     {
-        var systemPrompt = systemPromptFactory.BuildSynthesis();
-
         var clarificationsText = FormatClarifications(clarifications);
         var learningsString = string.Join("\n", learnings.Select(l => $"<learning>\n{l}\n</learning>"));
 
-        var userPrompt = SynthesisPromptFactory.Build(
-            prompt,
+        var prompt = SynthesisPromptFactory.Build(
+            query,
             learningsString,
             clarificationsText: clarificationsText);
 
-        var response = await _llmClient.CompleteAsync(systemPrompt, userPrompt, ct);
+        var response = await _llmClient.CompleteAsync(prompt, ct);
 
         var urlsSection = $"\n\n## Sources\n\n{string.Join("\n", visitedUrls.Select(url => $"- {url}"))}";
         return response + urlsSection;

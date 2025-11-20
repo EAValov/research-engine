@@ -81,7 +81,6 @@ if (app.Environment.IsDevelopment())
 }
 
 // Map custom endpoints
-app.MapResearchEndpoints();
 app.MapHealthEndpoints();
 app.MapDeepResearchModel();
 
