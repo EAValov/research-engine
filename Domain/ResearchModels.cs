@@ -6,6 +6,8 @@ namespace ResearchApi.Domain;
 
 public record Clarification(string Question, string Answer);
 
+public record Learning(string Text, string SourceUrl);
+
 [JsonConverter(typeof(JsonStringEnumConverter))]
 public enum ResearchJobStatus { Pending, Running, Completed, Failed }
 

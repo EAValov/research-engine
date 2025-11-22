@@ -46,6 +46,10 @@ public static class SynthesisPromptFactory
         sb.AppendLine(learningsBlock);
         sb.AppendLine("</learnings>");
         sb.AppendLine();
+        sb.AppendLine("Each <learning> may contain a citation tag like [1], [2] indicating its source.");
+        sb.AppendLine("Please use these citations in your final report where you reference the corresponding facts.");
+        sb.AppendLine("Do NOT generate new citation tags - only use the ones already provided.");
+        sb.AppendLine();
         sb.AppendLine("Now write the final report in Markdown. Include an executive summary at the top,");
         sb.AppendLine("followed by detailed sections. Do not include the raw <learnings> block in the output.");
 

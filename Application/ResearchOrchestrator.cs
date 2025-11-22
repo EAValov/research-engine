@@ -50,7 +50,7 @@ public class ResearchOrchestrator(ILlmClient llmClient, ISearchClient searchClie
 
             // Step 2: Process each SERP query
             var visitedUrls = new HashSet<string>();
-            var allLearnings = new HashSet<string>();
+            var allLearnings = new List<Learning>();
             var semaphore = new SemaphoreSlim(MaxConcurrentRequests);
 
             var tasks = serpQueries.Select(async query =>
@@ -68,8 +68,8 @@ public class ResearchOrchestrator(ILlmClient llmClient, ISearchClient searchClie
                     var contentString = string.Join("\n\n", contents.Where(c => !string.IsNullOrEmpty(c)));
 
                     // NOW pass clarifications into learning extraction as well
-                    var learnings = await ExtractLearnings(job.Query, clarifications, contentString, ct);
-                    allLearnings.UnionWith(learnings);
+                    var learnings = await ExtractLearnings(job.Query, clarifications, contentString, newUrls, ct);
+                    allLearnings.AddRange(learnings);
 
                     _jobStore.AppendEvent(jobId, new ResearchEvent(DateTimeOffset.UtcNow, "search-progress",
                         $"Processed query '{query}' with {newUrls.Count} URLs"));
@@ -85,7 +85,7 @@ public class ResearchOrchestrator(ILlmClient llmClient, ISearchClient searchClie
             // Step 3: Synthesize final report, with clarifications
             _jobStore.AppendEvent(jobId, new ResearchEvent(DateTimeOffset.UtcNow, "summarizing", "Generating final report"));
 
-            var reportMarkdown = await WriteFinalReport(job.Query, clarifications, allLearnings.ToList(), visitedUrls.ToList(), ct);
+            var reportMarkdown = await WriteFinalReport(job.Query, clarifications, allLearnings, visitedUrls.ToList(), ct);
 
             var completedJob = runningJob with
             {
@@ -196,10 +196,11 @@ public class ResearchOrchestrator(ILlmClient llmClient, ISearchClient searchClie
         return sb.ToString().Trim();
     }
 
-    private async Task<IReadOnlyList<string>> ExtractLearnings(
+    private async Task<IReadOnlyList<Learning>> ExtractLearnings(
         string query,
         IEnumerable<Clarification> clarifications,
         string content,
+        IEnumerable<string> sourceUrls,
         CancellationToken ct)
     {
         var clarificationsText = FormatClarifications(clarifications);
@@ -216,6 +217,7 @@ public class ResearchOrchestrator(ILlmClient llmClient, ISearchClient searchClie
             .Split('\n')
             .Select(line => line.Trim())
             .Where(line => !string.IsNullOrEmpty(line))
+            .Select(text => new Learning(text, sourceUrls.FirstOrDefault() ?? "")) // Assign first URL to all learnings for now
             .ToList();
 
         return learnings;
@@ -224,12 +226,29 @@ public class ResearchOrchestrator(ILlmClient llmClient, ISearchClient searchClie
     private async Task<string> WriteFinalReport(
         string query,
         IEnumerable<Clarification> clarifications,
-        List<string> learnings,
+        List<Learning> learnings,
         List<string> visitedUrls,
         CancellationToken ct)
     {
         var clarificationsText = FormatClarifications(clarifications);
-        var learningsString = string.Join("\n", learnings.Select(l => $"<learning>\n{l}\n</learning>"));
+        
+        // Create a mapping from URL to citation index
+        var sourceIndexMap = new Dictionary<string, int>();
+        var currentIndex = 1;
+        foreach (var url in visitedUrls)
+        {
+            if (!sourceIndexMap.ContainsKey(url))
+            {
+                sourceIndexMap[url] = currentIndex++;
+            }
+        }
+
+        // Format learnings with citation tags
+        var formattedLearnings = learnings.Select(learning => {
+            var citationIndex = sourceIndexMap[learning.SourceUrl];
+            return $"<learning source=\"{learning.SourceUrl}\" citation=\"[{citationIndex}]\">{learning.Text}</learning>";
+        });
+        var learningsString = string.Join("\n", formattedLearnings);
 
         var prompt = SynthesisPromptFactory.Build(
             query,
@@ -238,7 +257,8 @@ public class ResearchOrchestrator(ILlmClient llmClient, ISearchClient searchClie
 
         var response = await _llmClient.CompleteAsync(prompt, ct);
 
-        var urlsSection = $"\n\n## Sources\n\n{string.Join("\n", visitedUrls.Select(url => $"- {url}"))}";
+        // Format sources section with citation indices
+        var urlsSection = "\n\n## Sources\n\n" + string.Join("\n", visitedUrls.Select(url => $"[{sourceIndexMap[url]}] {url}"));
         return response + urlsSection;
     }
 }
