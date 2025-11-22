@@ -1,3 +1,5 @@
+namespace ResearchApi.Endpoints.DTOs;
+
 public record AnswerDto(string Question, string Answer);
 
 public record RunRequest(

@@ -1,7 +1,4 @@
-using System;
-using System.Collections.Generic;
-
-namespace ResearchApi.Endpoints;
+namespace ResearchApi.Endpoints.DTOs;
 
 public record PlanRequest(string Query, int MaxQuestions = 3);
 

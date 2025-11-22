@@ -20,7 +20,6 @@ public class FirecrawlSearchClient(HttpClient httpClient, IOptions<FirecrawlOpti
     {
         var request = new HttpRequestMessage(HttpMethod.Post, $"{_options.BaseUrl}/v1/search");
         // request.Headers.Add("Authorization", $"Bearer {_apiKey}");
-        // request.Headers.Add("Content-Type", "application/json");
 
         var payload = new
         {
@@ -49,8 +48,7 @@ public class FirecrawlSearchClient(HttpClient httpClient, IOptions<FirecrawlOpti
     public async Task<string> FetchContentAsync(string url, CancellationToken ct = default)
     {
         var request = new HttpRequestMessage(HttpMethod.Post, $"{_options.BaseUrl}/v1/scrape");
-       // request.Headers.Add("Authorization", $"Bearer {_apiKey}");
-        //request.Headers.Add("Content-Type", "application/json");
+        // request.Headers.Add("Authorization", $"Bearer {_apiKey}");
 
         var payload = new
         {

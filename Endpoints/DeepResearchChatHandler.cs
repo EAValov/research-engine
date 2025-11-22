@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Http;
 using ResearchApi.Application;
 using ResearchApi.Domain;
 using ResearchApi.Endpoints;
+using ResearchApi.Endpoints.DTOs;
 
 public static class DeepResearchChatHandler
 {
@@ -13,7 +14,7 @@ public static class DeepResearchChatHandler
 
     public static async Task HandleChatCompletionsAsync(
         HttpContext httpContext,
-        OpenAiChatRequest request,
+        OpenAiChatRequestDto request,
         IResearchOrchestrator orchestrator,
         IResearchJobStore jobStore,
         ILlmClient llmClient,

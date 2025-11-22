@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 using ResearchApi.Configuration;
 using ResearchApi.Domain;
+using ResearchApi.Endpoints.DTOs;
 using ResearchApi.Prompts;
 
 public static class HealthEndpoints

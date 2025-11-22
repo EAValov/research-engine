@@ -1,3 +1,5 @@
+namespace ResearchApi.Endpoints.DTOs;
+
 public record DependencyHealth(
     bool IsHealthy,
     string? Message = null

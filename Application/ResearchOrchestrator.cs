@@ -113,8 +113,8 @@ public class ResearchOrchestrator(ILlmClient llmClient, ISearchClient searchClie
 
         var rawResponse = await _llmClient.CompleteAsync(prompt, ct);
 
-        // Strip <think> and any junk before first '{'
         var withoutThink = _llmClient.StripThinkBlock(rawResponse);
+
         var jsonStart = withoutThink.IndexOf('{');
         if (jsonStart > 0)
         {
@@ -157,8 +157,8 @@ public class ResearchOrchestrator(ILlmClient llmClient, ISearchClient searchClie
 
         var rawResponse = await _llmClient.CompleteAsync(prompt, ct);
 
-        // Strip <think> and any junk before first '{'
         var withoutThink = _llmClient.StripThinkBlock(rawResponse);
+        
         var jsonStart = withoutThink.IndexOf('{');
         if (jsonStart > 0)
         {
