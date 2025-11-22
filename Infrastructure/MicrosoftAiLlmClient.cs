@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using ResearchApi.Configuration;
 using ResearchApi.Domain;
@@ -13,6 +14,7 @@ namespace ResearchApi.Infrastructure;
 public class MicrosoftAiLlmClient : ILlmClient
 {
     private readonly HttpClient _httpClient;
+    private readonly ILogger<MicrosoftAiLlmClient> _logger;
 
     private readonly LlmOptions _options;
 
@@ -21,9 +23,10 @@ public class MicrosoftAiLlmClient : ILlmClient
         PropertyNameCaseInsensitive = true
     };
 
-    public MicrosoftAiLlmClient(HttpClient httpClient, IOptions<LlmOptions> options)
+    public MicrosoftAiLlmClient(HttpClient httpClient, IOptions<LlmOptions> options, ILogger<MicrosoftAiLlmClient> logger)
     {
         _httpClient = httpClient;
+        _logger = logger;
         _options = options.Value;
 
         if (string.IsNullOrWhiteSpace(_options.Endpoint) ||
@@ -49,6 +52,8 @@ public class MicrosoftAiLlmClient : ILlmClient
         };
 
         var jsonPayload = JsonSerializer.Serialize(payload, JsonOptions);
+
+        _logger.LogDebug("LLM Prompt:\n{Prompt}", prompt.userPrompt);
 
         using var request = new HttpRequestMessage(HttpMethod.Post, url)
         {
@@ -76,6 +81,8 @@ public class MicrosoftAiLlmClient : ILlmClient
         {
             throw new InvalidOperationException("LLM returned an empty or invalid completion.");
         }
+
+        _logger.LogDebug("LLM Raw Output:\n{Output}", text);
 
         return text;
     }

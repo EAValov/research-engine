@@ -12,7 +12,7 @@ public class InMemoryResearchJobStore : IResearchJobStore
     private readonly ConcurrentDictionary<Guid, ResearchJob> _jobs = new();
     private readonly ConcurrentDictionary<Guid, ConcurrentQueue<ResearchEvent>> _events = new();
 
-    public ResearchJob CreateJob(string query, IEnumerable<Clarification> clarifications, int breadth, int depth)
+    public ResearchJob CreateJob(string query, IEnumerable<Clarification> clarifications, int breadth, int depth, string language, string? region)
     {
         var job = new ResearchJob(
             Id: Guid.NewGuid(),
@@ -23,7 +23,9 @@ public class InMemoryResearchJobStore : IResearchJobStore
             Status: ResearchJobStatus.Pending,
             Events: new List<ResearchEvent>(),
             ReportMarkdown: null,
-            VisitedUrls: new List<string>()
+            VisitedUrls: new List<string>(),
+            TargetLanguage: language,
+            Region: region
         );
 
         _jobs.TryAdd(job.Id, job);

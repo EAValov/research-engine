@@ -6,25 +6,29 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 
+using Microsoft.Extensions.Logging;
 using ResearchApi.Domain;
 using ResearchApi.Prompts;
 
 namespace ResearchApi.Application;
 
-public class ResearchOrchestrator(ILlmClient llmClient, ISearchClient searchClient, ICrawlClient crawlClient, IResearchJobStore jobStore) 
+public class ResearchOrchestrator(ILlmClient llmClient, ISearchClient searchClient, ICrawlClient crawlClient, IResearchJobStore jobStore, ILogger<ResearchOrchestrator> logger) 
     : IResearchOrchestrator
 {
     private readonly ILlmClient _llmClient = llmClient;
     private readonly ISearchClient _searchClient = searchClient;
-
     private readonly ICrawlClient _crawlClient = crawlClient;
-
     private readonly IResearchJobStore _jobStore = jobStore;
-    private const int MaxConcurrentRequests = 2;
+    private readonly ILogger<ResearchOrchestrator> _logger = logger;
 
-    public ResearchJob StartJob(string query, IEnumerable<Clarification> clarifications, int breadth, int depth)
+
+    private const int MaxConcurrentRequests = 2;
+    private const int LimitSearches = 5;
+    private const int MaxLearningsPerSearchResult = 3;
+
+    public ResearchJob StartJob(string query, IEnumerable<Clarification> clarifications, int breadth, int depth, string language, string? region)
     {
-        var job = _jobStore.CreateJob(query, clarifications, breadth, depth);
+        var job = _jobStore.CreateJob(query, clarifications, breadth, depth, language, region);
         return job;
     }
 
@@ -46,7 +50,7 @@ public class ResearchOrchestrator(ILlmClient llmClient, ISearchClient searchClie
             var clarifications = job.Clarifications ?? new List<Clarification>();
 
             // Step 1: Generate SERP queries (now uses clarifications + depth)
-            var serpQueries = await GenerateSerpQueries(job.Query, clarifications, job.Depth, job.Breadth, ct);
+            var serpQueries = await GenerateSerpQueries(job.Query, clarifications, job.Depth, job.Breadth, ct, job.TargetLanguage);
 
             _jobStore.AppendEvent(jobId, new ResearchEvent(DateTimeOffset.UtcNow, "planning",
                 $"Generated {serpQueries.Count} queries based on clarifications and depth={job.Depth}"));
@@ -56,12 +60,19 @@ public class ResearchOrchestrator(ILlmClient llmClient, ISearchClient searchClie
             var allLearnings = new List<Learning>();
             var semaphore = new SemaphoreSlim(MaxConcurrentRequests);
 
-            var tasks = serpQueries.Select(async query =>
+            var tasks = serpQueries.Select(async (query, index) =>
             {
+                _logger.LogInformation("Processing SERP query {Index}: {Query}", index, query);
                 await semaphore.WaitAsync(ct);
                 try
                 {
-                    var searchResults = await _searchClient.SearchAsync(query, 5, ct: ct);
+                    var searchResults = await _searchClient.SearchAsync(
+                        query, 
+                        LimitSearches, 
+                        location: job.Region,
+                        ct: ct);
+
+                    _logger.LogInformation("Search results for query '{Query}': {Count} URLs found", query, searchResults.Count);
 
                     var newUrls = searchResults.Select(r => r.Url).Where(u => !string.IsNullOrEmpty(u)).ToList();
                     visitedUrls.UnionWith(newUrls);
@@ -71,7 +82,7 @@ public class ResearchOrchestrator(ILlmClient llmClient, ISearchClient searchClie
                     var contentString = string.Join("\n\n", contents.Where(c => !string.IsNullOrEmpty(c)));
 
                     // NOW pass clarifications into learning extraction as well
-                    var learnings = await ExtractLearnings(job.Query, clarifications, contentString, newUrls, ct);
+                    var learnings = await ExtractLearnings(job.Query, clarifications, contentString, newUrls, ct, job.TargetLanguage);
                     allLearnings.AddRange(learnings);
 
                     _jobStore.AppendEvent(jobId, new ResearchEvent(DateTimeOffset.UtcNow, "search-progress",
@@ -88,7 +99,7 @@ public class ResearchOrchestrator(ILlmClient llmClient, ISearchClient searchClie
             // Step 3: Synthesize final report, with clarifications
             _jobStore.AppendEvent(jobId, new ResearchEvent(DateTimeOffset.UtcNow, "summarizing", "Generating final report"));
 
-            var reportMarkdown = await WriteFinalReport(job.Query, clarifications, allLearnings, visitedUrls.ToList(), ct);
+            var reportMarkdown = await WriteFinalReport(job.Query, clarifications, allLearnings, visitedUrls.ToList(), ct, job.TargetLanguage);
 
             var completedJob = runningJob with
             {
@@ -148,7 +159,8 @@ public class ResearchOrchestrator(ILlmClient llmClient, ISearchClient searchClie
         IEnumerable<Clarification> clarifications,
         int depth,
         int breadth,
-        CancellationToken ct)
+        CancellationToken ct,
+        string targetLanguage)
     {
         var clarificationsText = FormatClarifications(clarifications);
 
@@ -156,9 +168,14 @@ public class ResearchOrchestrator(ILlmClient llmClient, ISearchClient searchClie
             query,
             clarificationsText: clarificationsText,
             breadth: breadth,
-            depth: depth);
+            depth: depth,
+            targetLanguage: targetLanguage);
+
+        _logger.LogDebug("LLM Prompt:\n{Prompt}", prompt.userPrompt);
 
         var rawResponse = await _llmClient.CompleteAsync(prompt, ct);
+
+        _logger.LogDebug("LLM Raw Output:\n{Output}", rawResponse);
 
         var withoutThink = _llmClient.StripThinkBlock(rawResponse);
         
@@ -178,6 +195,9 @@ public class ResearchOrchestrator(ILlmClient llmClient, ISearchClient searchClie
             .Select(q => q.Trim())
             .Take(breadth)
             .ToList() ?? new List<string>();
+
+        _logger.LogInformation("Generated {Count} SERP queries for query '{Query}' with depth={Depth}, breadth={Breadth}", 
+            queries.Count, query, depth, breadth);
 
         return queries;
     }
@@ -204,7 +224,8 @@ public class ResearchOrchestrator(ILlmClient llmClient, ISearchClient searchClie
         IEnumerable<Clarification> clarifications,
         string content,
         IEnumerable<string> sourceUrls,
-        CancellationToken ct)
+        CancellationToken ct,
+        string targetLanguage)
     {
         var clarificationsText = FormatClarifications(clarifications);
 
@@ -212,9 +233,14 @@ public class ResearchOrchestrator(ILlmClient llmClient, ISearchClient searchClie
             query,
             content,
             clarificationsText: clarificationsText,
-            maxLearnings: 3);
+            maxLearnings: MaxLearningsPerSearchResult,
+            targetLanguage: targetLanguage);
+
+        _logger.LogDebug("LLM Prompt:\n{Prompt}", prompt.userPrompt);
 
         var response = await _llmClient.CompleteAsync(prompt, ct);
+
+        _logger.LogDebug("LLM Raw Output:\n{Output}", response);
 
         var learnings = response
             .Split('\n')
@@ -222,6 +248,15 @@ public class ResearchOrchestrator(ILlmClient llmClient, ISearchClient searchClie
             .Where(line => !string.IsNullOrEmpty(line))
             .Select(text => new Learning(text, sourceUrls.FirstOrDefault() ?? "")) // Assign first URL to all learnings for now
             .ToList();
+
+        _logger.LogInformation("Extracted {Count} learnings from content of length {Length} for URL {Url}", 
+            learnings.Count, content.Length, sourceUrls.FirstOrDefault());
+
+        if (learnings.Count == 0)
+        {
+            _logger.LogWarning("No learnings extracted for URL {Url}; content length={Length}, query={Query}", 
+                sourceUrls.FirstOrDefault(), content.Length, query);
+        }
 
         return learnings;
     }
@@ -231,7 +266,8 @@ public class ResearchOrchestrator(ILlmClient llmClient, ISearchClient searchClie
         IEnumerable<Clarification> clarifications,
         List<Learning> learnings,
         List<string> visitedUrls,
-        CancellationToken ct)
+        CancellationToken ct,
+        string? targetLanguage = "en")
     {
         var clarificationsText = FormatClarifications(clarifications);
         
@@ -256,12 +292,22 @@ public class ResearchOrchestrator(ILlmClient llmClient, ISearchClient searchClie
         var prompt = SynthesisPromptFactory.Build(
             query,
             learningsString,
-            clarificationsText: clarificationsText);
+            clarificationsText: clarificationsText,
+            targetLanguage: targetLanguage);
+
+        _logger.LogDebug("LLM Prompt:\n{Prompt}", prompt.userPrompt);
 
         var response = await _llmClient.CompleteAsync(prompt, ct);
 
+        _logger.LogDebug("LLM Raw Output:\n{Output}", response);
+
         // Format sources section with citation indices
         var urlsSection = "\n\n## Sources\n\n" + string.Join("\n", visitedUrls.Select(url => $"[{sourceIndexMap[url]}] {url}"));
-        return response + urlsSection;
+        var finalResponse = response + urlsSection;
+
+        _logger.LogInformation("Final report generated with {LearningsCount} learnings from {UrlCount} URLs", 
+            learnings.Count, visitedUrls.Count);
+
+        return finalResponse;
     }
 }

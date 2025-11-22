@@ -11,7 +11,8 @@ public static class SynthesisPromptFactory
     public static Prompt Build(
         string query,
         string learningsBlock,
-        string? clarificationsText = null)
+        string? clarificationsText = null,
+        string? targetLanguage = "en")
     {
         var sb = new StringBuilder();
         sb.AppendLine("Using the provided learnings from web research, write a thorough, well-structured report");
@@ -49,6 +50,10 @@ public static class SynthesisPromptFactory
         sb.AppendLine("Each <learning> may contain a citation tag like [1], [2] indicating its source.");
         sb.AppendLine("Please use these citations in your final report where you reference the corresponding facts.");
         sb.AppendLine("Do NOT generate new citation tags - only use the ones already provided.");
+        sb.AppendLine();
+        sb.AppendLine($"You MUST write the final report in {targetLanguage}.");
+        sb.AppendLine("All headings, section titles, and paragraphs must be in this language.");
+        sb.AppendLine("Preserve citation tags [1], [2], etc. as provided in the input.");
         sb.AppendLine();
         sb.AppendLine("Now write the final report in Markdown. Include an executive summary at the top,");
         sb.AppendLine("followed by detailed sections. Do not include the raw <learnings> block in the output.");

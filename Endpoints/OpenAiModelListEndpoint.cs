@@ -15,7 +15,7 @@ public static class OpenAiModelListEndpoint
             {
                 new
                 {
-                    id      = "local-deep-research-debug", 
+                    id      = "Deep Research", 
                     @object = "model",
                     created = created,
                     owned_by = "local",

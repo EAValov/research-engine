@@ -6,6 +6,7 @@ using ResearchApi.Application;
 using ResearchApi.Domain;
 using ResearchApi.Endpoints;
 using ResearchApi.Endpoints.DTOs;
+using ResearchApi.Prompts;
 
 public static class DeepResearchChatHandler
 {
@@ -45,6 +46,8 @@ public static class DeepResearchChatHandler
 
         // --- читаем override через теги [DR_BREADTH=..][DR_DEPTH=..] (если есть) ---
         var (breadthOverride, depthOverride) = ResearchProtocolHelper.ExtractBreadthDepthFromMessages(request.Messages);
+        
+        var (langOverride, regionOverride) = ResearchProtocolHelper.ExtractLanguageRegionFromMessages(request.Messages);
 
         // --- проверяем /configure ---
         var configureRequested = request.Messages.Any(m =>
@@ -225,6 +228,21 @@ public static class DeepResearchChatHandler
                 ct);
         }
 
+        // ---------- выбираем breadth/depth ----------
+
+        string language;
+        string? region;
+
+        if (!string.IsNullOrWhiteSpace(langOverride) || !string.IsNullOrWhiteSpace(regionOverride))
+        {
+            language = langOverride ?? "en";
+            region = regionOverride;
+        }
+        else
+        {
+            (language, region) = await AutoSelectLanguageRegionAsync(initialQuery, clarifications, llmClient, ct);
+        }
+
         // ---------- think-header + запуск джобы ----------
 
         var thinkHeader = new StringBuilder();
@@ -270,7 +288,10 @@ public static class DeepResearchChatHandler
             initialQuery,
             clarifications,
             breadth: breadth,
-            depth: depth);
+            depth: depth,
+            language: language,
+            region: region
+        );
 
         _ = Task.Run(async () =>
         {
@@ -461,6 +482,42 @@ public static class DeepResearchChatHandler
             }
 
             return (defaultBreadth, defaultDepth);
+        }
+    }
+
+    private static async Task<(string language, string? region)> AutoSelectLanguageRegionAsync(
+        string query,
+        IReadOnlyList<Clarification> clarifications,
+        ILlmClient llmClient,
+        CancellationToken ct)
+    {
+        const string defaultLang = "en";
+        const string? defaultRegion = null;
+
+        var prompt = LanguageRegionSelectionPromptFactory.Build(query, clarifications);
+
+        var raw = await llmClient.CompleteAsync(prompt, ct);
+
+        raw = llmClient.StripThinkBlock(raw);
+
+        try
+        {
+            using var doc = JsonDocument.Parse(raw);
+            var root = doc.RootElement;
+
+            string lang = root.TryGetProperty("language", out var lProp) && lProp.ValueKind == JsonValueKind.String
+                ? lProp.GetString()!
+                : defaultLang;
+
+            string? region = root.TryGetProperty("region", out var rProp) && rProp.ValueKind == JsonValueKind.String
+                ? rProp.GetString()
+                : defaultRegion;
+
+            return (lang, region);
+        }
+        catch
+        {
+            return (defaultLang, defaultRegion);
         }
     }
 }

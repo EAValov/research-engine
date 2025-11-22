@@ -45,6 +45,42 @@ public static class ResearchProtocolHelper
         return (breadth, depth);
     }
 
+    public static (string? lang, string? region) ExtractLanguageRegionFromMessages(
+        IReadOnlyList<OpenAiChatMessageDto> messages)
+    {
+        string? lang = null;
+        string? region = null;
+
+        var langRegex   = new Regex(@"\[DR_LANG=([a-zA-Z]{2})\]", RegexOptions.IgnoreCase);
+        // Allow any characters except ']' so we can support spaces, commas, etc.
+        var regionRegex = new Regex(@"\[DR_REGION=([^\]]+)\]", RegexOptions.IgnoreCase);
+
+        foreach (var msg in messages)
+        {
+            if (string.IsNullOrWhiteSpace(msg.Content))
+                continue;
+
+            var content = msg.Content;
+
+            var m1 = langRegex.Match(content);
+            if (m1.Success)
+            {
+                // normalize to lower-case 2-letter code just in case
+                lang = m1.Groups[1].Value.Trim().ToLowerInvariant();
+            }
+
+            var m2 = regionRegex.Match(content);
+            if (m2.Success)
+            {
+                // keep region as-is but trim whitespace
+                region = m2.Groups[1].Value.Trim();
+            }
+        }
+
+        return (lang, region);
+    }
+
+
     /// <summary>
     /// Парсинг вопросов из содержимого с блоком кларификаций
     /// </summary>

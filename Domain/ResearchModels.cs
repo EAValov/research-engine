@@ -26,5 +26,7 @@ public record ResearchJob(
     ResearchJobStatus Status,
     List<ResearchEvent> Events,
     string? ReportMarkdown,
-    List<string> VisitedUrls
+    List<string> VisitedUrls,
+    string TargetLanguage = "en",
+    string? Region = null
 );

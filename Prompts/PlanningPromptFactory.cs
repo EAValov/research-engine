@@ -13,7 +13,8 @@ public static class PlanningPromptFactory
         string query,
         string? clarificationsText = null,
         int? breadth = null,
-        int? depth = null)
+        int? depth = null,
+        string? targetLanguage = "en")
     {
         var effectiveBreadth = breadth is > 0 ? breadth.Value : 3;
         var effectiveDepth = depth is > 0 ? depth.Value : 2;
@@ -70,6 +71,9 @@ public static class PlanningPromptFactory
             sb.AppendLine();
         }
 
+        sb.AppendLine($"The target language for SERP queries is {targetLanguage}.");
+        sb.AppendLine("Generate ALL search queries in this language unless a proper noun is normally written in English.");
+        sb.AppendLine();
         sb.AppendLine("Return your answer as a JSON object with this exact shape:");
         sb.AppendLine("{ \"queries\": [ \"first query here\", \"second query here\", \"third query here\" ] }");
         sb.AppendLine("Do not include any other keys, comments, or text outside this JSON object.");

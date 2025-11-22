@@ -32,24 +32,6 @@ builder.Services.PostConfigure<FirecrawlOptions>(options =>
     }
 });   
 
-// Configure SearxNg options
-builder.Services.Configure<SearxNgOptions>(
-    config.GetSection("SearxNgOptions"));
-
-builder.Services.PostConfigure<SearxNgOptions>(options =>
-{
-    var baseUrlFromEnv = config["SEARXNG_BASE_URL"];
-
-    if (string.IsNullOrWhiteSpace(baseUrlFromEnv))
-    {
-        Console.WriteLine($"SearxNg base url is not configured in env variables (SEARXNG_BASE_URL is empty). Used default value {options.BaseUrl}");
-    } 
-    else 
-    {
-        options.BaseUrl = baseUrlFromEnv;
-    }
-});   
-
 builder.Services.Configure<LlmOptions>(
     config.GetSection("LlmOptions"));
 
@@ -83,7 +65,7 @@ builder.Services.AddOpenApi();
 
 // Register services
 builder.Services.AddSingleton<ILlmClient, MicrosoftAiLlmClient>();
-builder.Services.AddSingleton<ISearchClient, SearxNgSearchClient>();
+builder.Services.AddSingleton<ISearchClient, FirecrawlClient>();
 builder.Services.AddSingleton<ICrawlClient, FirecrawlClient>();
 builder.Services.AddSingleton<IResearchJobStore, InMemoryResearchJobStore>();
 builder.Services.AddSingleton<IResearchOrchestrator, ResearchOrchestrator>();

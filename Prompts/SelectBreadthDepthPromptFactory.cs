@@ -1,6 +1,7 @@
 using System.Text;
 using ResearchApi.Domain;
-using ResearchApi.Prompts;
+
+namespace ResearchApi.Prompts;
 
 public static class SelectBreadthDepthPromptFactory
 {

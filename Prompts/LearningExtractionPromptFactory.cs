@@ -12,7 +12,8 @@ public static class LearningExtractionPromptFactory
         string query,
         string content,
         string? clarificationsText = null,
-        int? maxLearnings = null)
+        int? maxLearnings = null,
+        string? targetLanguage = "en")
     {
         var effectiveMaxLearnings = maxLearnings is > 0 ? maxLearnings.Value : 3;
 
@@ -65,6 +66,10 @@ public static class LearningExtractionPromptFactory
         sb.AppendLine("<contents>");
         sb.AppendLine(content);
         sb.AppendLine("</contents>");
+        sb.AppendLine();
+        sb.AppendLine($"Always write extracted learnings IN {targetLanguage}.");
+        sb.AppendLine("The content may be in another language; translate implicitly if necessary.");
+        sb.AppendLine("Return only the learnings, one per line, with no numbering.");
         sb.AppendLine();
         sb.AppendLine("Return ONLY the final learnings as a simple list, one per line.");
         sb.AppendLine("Do NOT add numbering, bullets, headings, labels, or any extra commentary.");
