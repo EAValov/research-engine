@@ -11,11 +11,14 @@ using ResearchApi.Prompts;
 
 namespace ResearchApi.Application;
 
-public class ResearchOrchestrator(ILlmClient llmClient, ISearchClient searchClient, IResearchJobStore jobStore) 
+public class ResearchOrchestrator(ILlmClient llmClient, ISearchClient searchClient, ICrawlClient crawlClient, IResearchJobStore jobStore) 
     : IResearchOrchestrator
 {
     private readonly ILlmClient _llmClient = llmClient;
     private readonly ISearchClient _searchClient = searchClient;
+
+    private readonly ICrawlClient _crawlClient = crawlClient;
+
     private readonly IResearchJobStore _jobStore = jobStore;
     private const int MaxConcurrentRequests = 2;
 
@@ -58,12 +61,12 @@ public class ResearchOrchestrator(ILlmClient llmClient, ISearchClient searchClie
                 await semaphore.WaitAsync(ct);
                 try
                 {
-                    var searchResults = await _searchClient.SearchAsync(query, 5, ct);
+                    var searchResults = await _searchClient.SearchAsync(query, 5, ct: ct);
 
                     var newUrls = searchResults.Select(r => r.Url).Where(u => !string.IsNullOrEmpty(u)).ToList();
                     visitedUrls.UnionWith(newUrls);
 
-                    var contentTasks = newUrls.Select(url => _searchClient.FetchContentAsync(url, ct));
+                    var contentTasks = newUrls.Select(url => _crawlClient.FetchContentAsync(url, ct));
                     var contents = await Task.WhenAll(contentTasks);
                     var contentString = string.Join("\n\n", contents.Where(c => !string.IsNullOrEmpty(c)));
 

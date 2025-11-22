@@ -17,7 +17,16 @@ public record SearchResult(string Url, string Title, string Snippet);
 
 public interface ISearchClient
 {
-    Task<IReadOnlyList<SearchResult>> SearchAsync(string query, int limit, CancellationToken ct = default);
+      Task<IReadOnlyList<SearchResult>> SearchAsync(
+        string query,
+        int limit,
+        string? languageCode = null,
+        string? regionCode = null,
+        CancellationToken ct = default);
+}
+
+public interface ICrawlClient
+{
     Task<string> FetchContentAsync(string url, CancellationToken ct = default);
 }
 

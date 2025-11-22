@@ -10,22 +10,22 @@ using ResearchApi.Domain;
 
 namespace ResearchApi.Infrastructure;
 
-public class FirecrawlSearchClient(HttpClient httpClient, IOptions<FirecrawlOptions> options)
-    : ISearchClient
+public class FirecrawlClient(HttpClient httpClient, IOptions<FirecrawlOptions> options)
+    : ISearchClient, ICrawlClient
 {
     private readonly HttpClient _httpClient = httpClient;
     private readonly FirecrawlOptions _options = options.Value;
 
-    public async Task<IReadOnlyList<SearchResult>> SearchAsync(string query, int limit, CancellationToken ct = default)
+    public async Task<IReadOnlyList<SearchResult>> SearchAsync(
+        string query,
+        int limit,
+        string? languageCode = null,
+        string? regionCode = null,
+        CancellationToken ct = default )
     {
         var request = new HttpRequestMessage(HttpMethod.Post, $"{_options.BaseUrl}/v1/search");
-        // request.Headers.Add("Authorization", $"Bearer {_apiKey}");
-
-        var payload = new
-        {
-            query = query,
-            limit = limit
-        };
+   
+        var payload = new { query, limit };
 
         var jsonPayload = JsonSerializer.Serialize(payload);
         request.Content = new StringContent(jsonPayload, Encoding.UTF8, "application/json");
