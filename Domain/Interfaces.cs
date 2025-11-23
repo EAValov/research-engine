@@ -10,6 +10,8 @@ public interface ILlmClient
 {
     Task<string> CompleteAsync(Prompt prompt, CancellationToken cancellationToken = default);
 
+    Task<int> CountTokensAsync(Prompt prompt, CancellationToken ct = default);
+
     string StripThinkBlock(string text);
 }
 

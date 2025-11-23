@@ -17,7 +17,7 @@ builder.Logging.AddFilter<Microsoft.Extensions.Logging.Console.ConsoleLoggerProv
     category: null,
     level: LogLevel.Information);
 
-builder.Logging.AddFile("logs/app-{Date}.log");
+builder.Logging.AddFile("logs/app-{Date}.log", LogLevel.Debug);
 
 IConfigurationRoot config = new ConfigurationBuilder()
     .AddJsonFile("appsettings.json")
@@ -70,7 +70,16 @@ builder.Services.PostConfigure<LlmOptions>(options =>
     {
         options.Model = llm_model;
     }
-});       
+});   
+
+// Add LLM chunking options
+builder.Services.Configure<LlmChunkingOptions>(
+    config.GetSection("LlmChunkingOptions"));
+
+builder.Services.PostConfigure<LlmChunkingOptions>(options =>
+{
+    // No additional post-configuration needed for now
+});
 
 // Add services to the container.
 builder.Services.AddOpenApi();
