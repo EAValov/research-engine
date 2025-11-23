@@ -67,26 +67,54 @@ public class ResearchOrchestrator(ILlmClient llmClient, ISearchClient searchClie
                 try
                 {
                     var searchResults = await _searchClient.SearchAsync(
-                        query, 
-                        LimitSearches, 
+                        query,
+                        LimitSearches,
                         location: job.Region,
                         ct: ct);
 
-                    _logger.LogInformation("Search results for query '{Query}': {Count} URLs found", query, searchResults.Count);
+                    _logger.LogInformation(
+                        "Search results for query '{Query}': {Count} URLs found",
+                        query,
+                        searchResults.Count);
 
-                    var newUrls = searchResults.Select(r => r.Url).Where(u => !string.IsNullOrEmpty(u)).ToList();
+                    var newUrls = searchResults
+                        .Select(r => r.Url)
+                        .Where(u => !string.IsNullOrWhiteSpace(u))
+                        .Distinct()
+                        .ToList();
+
                     visitedUrls.UnionWith(newUrls);
 
-                    var contentTasks = newUrls.Select(url => _crawlClient.FetchContentAsync(url, ct));
-                    var contents = await Task.WhenAll(contentTasks);
-                    var contentString = string.Join("\n\n", contents.Where(c => !string.IsNullOrEmpty(c)));
+                    foreach (var url in newUrls)
+                    {
+                        var content = await _crawlClient.FetchContentAsync(url, ct);
 
-                    // NOW pass clarifications into learning extraction as well
-                    var learnings = await ExtractLearnings(job.Query, clarifications, contentString, newUrls, ct, job.TargetLanguage);
-                    allLearnings.AddRange(learnings);
+                        if (string.IsNullOrWhiteSpace(content))
+                        {
+                            _logger.LogWarning("Empty content for URL {Url}, skipping learnings extraction.", url);
+                            continue;
+                        }
 
-                    _jobStore.AppendEvent(jobId, new ResearchEvent(DateTimeOffset.UtcNow, "search-progress",
-                        $"Processed query '{query}' with {newUrls.Count} URLs"));
+                        var learnings = await ExtractLearnings(
+                            job.Query,
+                            clarifications,
+                            content,
+                            url,   
+                            ct,
+                            job.TargetLanguage);
+
+                        lock (allLearnings)
+                        {
+                            allLearnings.AddRange(learnings);
+                        }
+                    }
+
+                    _jobStore.AppendEvent(
+                        jobId,
+                        new ResearchEvent(
+                            DateTimeOffset.UtcNow,
+                            "search-progress",
+                            $"Processed SERP query '{query}' with {newUrls.Count} URLs"));
                 }
                 finally
                 {
@@ -223,7 +251,7 @@ public class ResearchOrchestrator(ILlmClient llmClient, ISearchClient searchClie
         string query,
         IEnumerable<Clarification> clarifications,
         string content,
-        IEnumerable<string> sourceUrls,
+        string sourceUrl,
         CancellationToken ct,
         string targetLanguage)
     {
@@ -238,24 +266,28 @@ public class ResearchOrchestrator(ILlmClient llmClient, ISearchClient searchClie
 
         _logger.LogDebug("LLM Prompt:\n{Prompt}", prompt.userPrompt);
 
-        var response = await _llmClient.CompleteAsync(prompt, ct);
+        var rawResponse = await _llmClient.CompleteAsync(prompt, ct);
 
-        _logger.LogDebug("LLM Raw Output:\n{Output}", response);
+        _logger.LogDebug("LLM Raw Output:\n{Output}", rawResponse);
 
-        var learnings = response
+        var withoutThink = _llmClient.StripThinkBlock(rawResponse);
+
+        _logger.LogDebug("LLM output without <think>:\n{Output}", withoutThink);
+
+        var learnings = withoutThink
             .Split('\n')
             .Select(line => line.Trim())
             .Where(line => !string.IsNullOrEmpty(line))
-            .Select(text => new Learning(text, sourceUrls.FirstOrDefault() ?? "")) // Assign first URL to all learnings for now
+            .Select(text => new Learning(text, sourceUrl)) 
             .ToList();
 
         _logger.LogInformation("Extracted {Count} learnings from content of length {Length} for URL {Url}", 
-            learnings.Count, content.Length, sourceUrls.FirstOrDefault());
+            learnings.Count, content.Length, sourceUrl);
 
         if (learnings.Count == 0)
         {
             _logger.LogWarning("No learnings extracted for URL {Url}; content length={Length}, query={Query}", 
-                sourceUrls.FirstOrDefault(), content.Length, query);
+                sourceUrl, content.Length, query);
         }
 
         return learnings;

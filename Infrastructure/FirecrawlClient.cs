@@ -66,7 +66,6 @@ public class FirecrawlClient(HttpClient httpClient, IOptions<FirecrawlOptions> o
     public async Task<string> FetchContentAsync(string url, CancellationToken ct = default)
     {
         var request = new HttpRequestMessage(HttpMethod.Post, $"{_options.BaseUrl}/v1/scrape");
-        // request.Headers.Add("Authorization", $"Bearer {_apiKey}");
 
         var payload = new
         {
@@ -80,21 +79,44 @@ public class FirecrawlClient(HttpClient httpClient, IOptions<FirecrawlOptions> o
 
         _logger.LogDebug("Fetching content for URL: {Url}", url);
 
-       using var response = await _httpClient.SendAsync(request, ct);
+        using var response = await _httpClient.SendAsync(request, ct);
 
         if (!response.IsSuccessStatusCode)
         {
             var errorText = await response.Content.ReadAsStringAsync(ct);
-            _logger.LogError("Firecrawl error for URL {Url}: {(int)response.StatusCode} {ResponsePhrase}. Body: {ErrorText}", url, (int)response.StatusCode, response.ReasonPhrase, errorText);
+            _logger.LogError(
+                "Firecrawl error for URL {Url}: {StatusCode} {ReasonPhrase}. Body: {ErrorText}",
+                url,
+                (int)response.StatusCode,
+                response.ReasonPhrase,
+                errorText);
 
             return string.Empty;
         }
 
         var content = await response.Content.ReadAsStringAsync(ct);
-        var scrapeResponse = JsonSerializer.Deserialize<FirecrawlScrapeResponse>(content);
 
-        _logger.LogInformation("Fetched content from URL {Url} with length {Length}", url, content.Length);
-        return scrapeResponse?.markdown ?? string.Empty;
+        _logger.LogDebug("Raw Firecrawl scrape response for URL {Url} (length {Length})", url, content.Length);
+
+        FirecrawlScrapeResponse? scrapeResponse;
+        try
+        {
+            scrapeResponse = JsonSerializer.Deserialize<FirecrawlScrapeResponse>(content);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to deserialize Firecrawl scrape response for URL {Url}. Raw: {Raw}", url, content);
+            return string.Empty;
+        }
+
+        var markdown = scrapeResponse?.data?.markdown ?? string.Empty;
+
+        _logger.LogInformation(
+            "Fetched markdown content from URL {Url} with length {Length}",
+            url,
+            markdown.Length);
+
+        return markdown;
     }
 
     private class FirecrawlSearchResponse
@@ -110,6 +132,12 @@ public class FirecrawlClient(HttpClient httpClient, IOptions<FirecrawlOptions> o
     }
 
     private class FirecrawlScrapeResponse
+    {
+        public bool success { get; set; }
+        public FirecrawlScrapeData? data { get; set; }
+    }
+
+    private class FirecrawlScrapeData
     {
         public string? markdown { get; set; }
     }

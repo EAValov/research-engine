@@ -1,5 +1,6 @@
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 using ResearchApi.Domain;
 using ResearchApi.Infrastructure;
@@ -9,6 +10,14 @@ using ResearchApi.Configuration;
 
 
 var builder = WebApplication.CreateBuilder(args);
+
+builder.Logging.ClearProviders();
+builder.Logging.AddConsole();
+builder.Logging.AddFilter<Microsoft.Extensions.Logging.Console.ConsoleLoggerProvider>(
+    category: null,
+    level: LogLevel.Information);
+
+builder.Logging.AddFile("logs/app-{Date}.log");
 
 IConfigurationRoot config = new ConfigurationBuilder()
     .AddJsonFile("appsettings.json")
@@ -24,6 +33,7 @@ builder.Services.PostConfigure<FirecrawlOptions>(options =>
 
     if (string.IsNullOrWhiteSpace(baseUrlFromEnv))
     {
+        // Using Console.WriteLine for configuration warnings as requested in task
         Console.WriteLine($"Firecrawl base url is not configured in env variables (FIRECRAWL_BASE_URL is empty). Used default value {options.BaseUrl}");
     } 
     else 
@@ -41,6 +51,7 @@ builder.Services.PostConfigure<LlmOptions>(options =>
 
     if (string.IsNullOrWhiteSpace(llm_endpoint))
     {
+        // Using Console.WriteLine for configuration warnings as requested in task
         Console.WriteLine($"LLM api endpoint is not configured in env variables (LLM_ENDPOINT is empty). Used default value {options.Endpoint}");
     } 
     else 
@@ -52,6 +63,7 @@ builder.Services.PostConfigure<LlmOptions>(options =>
 
     if (string.IsNullOrWhiteSpace(llm_model))
     {
+        // Using Console.WriteLine for configuration warnings as requested in task
         Console.WriteLine($"LLM model is not configured in env variables (LLM_MODEL is empty). Used default value {options.Model}");
     } 
     else 
