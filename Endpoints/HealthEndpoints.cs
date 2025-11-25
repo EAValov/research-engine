@@ -3,17 +3,27 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 using ResearchApi.Configuration;
 using ResearchApi.Domain;
-using ResearchApi.Endpoints.DTOs;
 using ResearchApi.Prompts;
 
 public static class HealthEndpoints
 {
+    public record DependencyHealth(
+        bool IsHealthy,
+        string? Message = null
+    );
+
+    public record ResearchHealthResponse(
+        string Status,
+        DependencyHealth Llm,
+        DependencyHealth Firecrawl
+    );
+
     public static void MapHealthEndpoints(this WebApplication app)
     {
          app.MapGet("/api/health", async (
-            [FromServices] IOptions<LlmOptions> llmOptions,
+            [FromServices] IOptions<LlmServiceConfig> llmOptions,
             [FromServices] IOptions<FirecrawlOptions> firecrawlOptions,
-            [FromServices] ILlmClient llmClient,
+            [FromServices] ILlmService llmService,
             [FromServices] ISearchClient searchClient,
             CancellationToken ct) =>
         {
@@ -24,8 +34,8 @@ public static class HealthEndpoints
             var fcHealth   = new DependencyHealth(false, "Not checked");
 
             // 1. Check config presence
-            if (string.IsNullOrWhiteSpace(llm.Endpoint) ||
-                string.IsNullOrWhiteSpace(llm.Model))
+            if (string.IsNullOrWhiteSpace(llm.ChatEndpoint) ||
+                string.IsNullOrWhiteSpace(llm.EmbeddingEndpoint))
             {
                 llmHealth = new DependencyHealth(false, "LLM configuration is incomplete.");
             }
@@ -39,10 +49,10 @@ public static class HealthEndpoints
 
                     var prompt = new Prompt("You are a health check for a research API.", "Reply with a single word: OK.");
 
-                    var reply = await llmClient.CompleteAsync(prompt, linkedCts.Token);
+                    var reply = await llmService.ChatAsync(prompt, cancellationToken: linkedCts.Token);
 
-                    var ok = !string.IsNullOrWhiteSpace(reply)
-                             && reply.Contains("OK", StringComparison.OrdinalIgnoreCase);
+                    var ok = !string.IsNullOrWhiteSpace(reply.Text)
+                             && reply.Text.Contains("OK", StringComparison.OrdinalIgnoreCase);
 
                     llmHealth = new DependencyHealth(ok,
                         ok ? "LLM responded successfully." : "LLM responded, but unexpected content.");
@@ -66,7 +76,7 @@ public static class HealthEndpoints
                     linkedCts.CancelAfter(TimeSpan.FromSeconds(5));
 
                     // A tiny search just to see if it responds at all.
-                    var results = await searchClient.SearchAsync("health check", limit: 1, ct: linkedCts.Token);
+                    var results = await searchClient.SearchAsync("health check", limit: 1, "de", ct: linkedCts.Token);
                     var ok = results != null;
 
                     fcHealth = new DependencyHealth(ok,

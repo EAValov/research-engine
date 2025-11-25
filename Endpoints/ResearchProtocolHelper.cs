@@ -1,8 +1,7 @@
 using System.Text;
 using System.Text.RegularExpressions;
 using ResearchApi.Domain;
-using ResearchApi.Endpoints;
-using ResearchApi.Endpoints.DTOs;
+using ResearchApi.Infrastructure;
 
 public static class ResearchProtocolHelper
 {
@@ -14,7 +13,7 @@ public static class ResearchProtocolHelper
     /// Возвращает (null, null), если тегов нет.
     /// </summary>
     public static (int? breadth, int? depth) ExtractBreadthDepthFromMessages(
-        IReadOnlyList<OpenAiChatMessageDto> messages)
+        IReadOnlyList<ChatMessage> messages)
     {
         int? breadth = null;
         int? depth   = null;
@@ -46,7 +45,7 @@ public static class ResearchProtocolHelper
     }
 
     public static (string? lang, string? region) ExtractLanguageRegionFromMessages(
-        IReadOnlyList<OpenAiChatMessageDto> messages)
+        IReadOnlyList<ChatMessage> messages)
     {
         string? lang = null;
         string? region = null;

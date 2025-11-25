@@ -14,19 +14,20 @@ public class InMemoryResearchJobStore : IResearchJobStore
 
     public ResearchJob CreateJob(string query, IEnumerable<Clarification> clarifications, int breadth, int depth, string language, string? region)
     {
-        var job = new ResearchJob(
-            Id: Guid.NewGuid(),
-            Query: query,
-            Clarifications: clarifications.ToList(),
-            Breadth: breadth,
-            Depth: depth,
-            Status: ResearchJobStatus.Pending,
-            Events: new List<ResearchEvent>(),
-            ReportMarkdown: null,
-            VisitedUrls: new List<string>(),
-            TargetLanguage: language,
-            Region: region
-        );
+        var job = new ResearchJob()
+        {
+            Id = Guid.NewGuid(),
+            Query = query,
+            Clarifications = clarifications.ToList(),
+            Breadth = breadth,
+            Depth = depth,
+            Status = ResearchJobStatus.Pending,
+            Events = new List<ResearchEvent>(),
+            ReportMarkdown = null,
+            VisitedUrls = new List<VisitedUrl>(),
+            TargetLanguage = language,
+            Region = region
+        };
 
         _jobs.TryAdd(job.Id, job);
         _events.TryAdd(job.Id, new ConcurrentQueue<ResearchEvent>());

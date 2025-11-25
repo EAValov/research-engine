@@ -1,5 +1,3 @@
-using ResearchApi.Endpoints;
-
 public static class OpenAiModelEndpoints
 {
     public static void MapDeepResearchModel(this WebApplication app)

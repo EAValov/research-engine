@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 
 namespace ResearchApi.Prompts;
@@ -92,6 +93,55 @@ public static class SynthesisPromptFactory
         sb.AppendLine("- Always obey the local task instructions for the final answer: if the user wants a memo, slide-style bullets, or a specific structure, follow that.");
         sb.AppendLine("- Do NOT output JSON or machine formats unless explicitly requested for this stage.");
 
+        return sb.ToString();
+    }
+
+    public static string BuildSystemPrompt(string? targetLanguage = "en")
+    {
+        var dt = DateTime.UtcNow.ToString("s", CultureInfo.InvariantCulture);
+
+        var sb = new StringBuilder();
+        sb.AppendLine($"You are an expert research synthesizer. Today is {dt} (UTC).");
+        sb.AppendLine("You write structured, well-argued reports for an expert reader.");
+        sb.AppendLine();
+        sb.AppendLine("You have access to a tool called `get_similar_learnings` that returns concise evidence snippets");
+        sb.AppendLine("from a high-quality knowledge base, each already containing citation markers like [3], [5].");
+        sb.AppendLine();
+        sb.AppendLine("When you need specific evidence for a section or sub-question, you MUST call");
+        sb.AppendLine("`get_similar_learnings` instead of guessing or hallucinating.");
+        sb.AppendLine("Use focused queries for each call (e.g. 'impact of AI Act on Bavarian SMEs').");
+        sb.AppendLine();
+        sb.AppendLine("When you quote or use a fact from a learning, preserve the citation markers [n]");
+        sb.AppendLine("in your text so the final report can be traced back to sources.");
+        sb.AppendLine("Do not invent new citation numbers that are not provided in the learnings.");
+        sb.AppendLine();
+        sb.AppendLine($"Write the final report in language: {targetLanguage ?? "en"}.");
+
+        return sb.ToString();
+    }
+
+    public static string BuildUserPromptForTools(
+        string query,
+        string clarificationsText)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine("Main research query:");
+        sb.AppendLine(query.Trim());
+        sb.AppendLine();
+
+        if (!string.IsNullOrWhiteSpace(clarificationsText))
+        {
+            sb.AppendLine("Additional clarifications and context:");
+            sb.AppendLine(clarificationsText.Trim());
+            sb.AppendLine();
+        }
+
+        sb.AppendLine("Tasks:");
+        sb.AppendLine("1. Plan the report into logical sections (e.g. regulatory landscape, market dynamics, cost structures, risks).");
+        sb.AppendLine("2. For each section, if you need concrete facts, data points, or examples, call `get_similar_learnings`");
+        sb.AppendLine("   with a focused query for that section.");
+        sb.AppendLine("3. Write a cohesive, logically structured report, weaving in evidence and preserving [n] citations.");
+        sb.AppendLine("4. Do not include a separate sources list; the system will append it automatically.");
         return sb.ToString();
     }
 }

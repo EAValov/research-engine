@@ -10,17 +10,28 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using ResearchApi.Configuration;
 using ResearchApi.Domain;
+using ResearchApi.Infrastructure;
 using ResearchApi.Prompts;
 
 namespace ResearchApi.Application;
 
-public class ResearchOrchestrator(ILlmClient llmClient, ISearchClient searchClient, ICrawlClient crawlClient, IResearchJobStore jobStore, ILogger<ResearchOrchestrator> logger, IOptions<LlmChunkingOptions> chunkingOptions) 
+public class ResearchOrchestrator(
+    ILlmService llmService,
+    ISearchClient searchClient,
+    ICrawlClient crawlClient,
+    IResearchJobStore jobStore,
+    IResearchContentStore researchContentStore,
+    ILearningEmbeddingService learningEmbeddingService,
+    ILogger<ResearchOrchestrator> logger,
+    IOptions<LlmChunkingOptions> chunkingOptions) 
     : IResearchOrchestrator
 {
-    private readonly ILlmClient _llmClient = llmClient;
+    private readonly ILlmService _llmService = llmService;
     private readonly ISearchClient _searchClient = searchClient;
     private readonly ICrawlClient _crawlClient = crawlClient;
     private readonly IResearchJobStore _jobStore = jobStore;
+    private readonly IResearchContentStore _researchContentStore = researchContentStore;
+    private readonly ILearningEmbeddingService _learningEmbeddingService = learningEmbeddingService;
     private readonly ILogger<ResearchOrchestrator> _logger = logger;
     private readonly LlmChunkingOptions _chunkingOptions = chunkingOptions.Value;
 
@@ -42,8 +53,9 @@ public class ResearchOrchestrator(ILlmClient llmClient, ISearchClient searchClie
             throw new ArgumentException("Job not found", nameof(jobId));
         }
 
-        var runningJob = job with { Status = ResearchJobStatus.Running };
-        _jobStore.UpdateJob(runningJob);
+        job.Status = ResearchJobStatus.Running;
+
+        _jobStore.UpdateJob(job);
 
         try
         {
@@ -54,104 +66,264 @@ public class ResearchOrchestrator(ILlmClient llmClient, ISearchClient searchClie
             // Step 1: Generate SERP queries (now uses clarifications + depth)
             var serpQueries = await GenerateSerpQueries(job.Query, clarifications, job.Depth, job.Breadth, ct, job.TargetLanguage);
 
+            var queryHash = _researchContentStore.ComputeQueryHash(job.Query); 
+
             _jobStore.AppendEvent(jobId, new ResearchEvent(DateTimeOffset.UtcNow, "planning",
                 $"Generated {serpQueries.Count} queries based on clarifications and depth={job.Depth}"));
 
             // Step 2: Process each SERP query
             var visitedUrls = new HashSet<string>();
             var allLearnings = new List<Learning>();
-            var semaphore = new SemaphoreSlim(MaxConcurrentRequests);
 
-            var tasks = serpQueries.Select(async (query, index) =>
+            foreach(var query in serpQueries)
             {
-                _logger.LogInformation("Processing SERP query {Index}: {Query}", index, query);
-                await semaphore.WaitAsync(ct);
-                try
+                _logger.LogInformation("Processing SERP query: {Query}", query);
+
+                var searchResults = await _searchClient.SearchAsync(
+                    query,
+                    LimitSearches,
+                    location: job.Region,
+                    ct: ct);
+
+                _logger.LogInformation(
+                    "Search results for query '{Query}': {Count} URLs found",
+                    query,
+                    searchResults.Count);
+
+                var newUrls = searchResults
+                    .Select(r => r.Url)
+                    .Where(u => !string.IsNullOrWhiteSpace(u))
+                    .Distinct()
+                    .ToList();
+
+                visitedUrls.UnionWith(newUrls);
+
+                foreach (var url in newUrls)
                 {
-                    var searchResults = await _searchClient.SearchAsync(
-                        query,
-                        LimitSearches,
-                        location: job.Region,
-                        ct: ct);
+                    var content = await _crawlClient.FetchContentAsync(url, ct);
 
-                    _logger.LogInformation(
-                        "Search results for query '{Query}': {Count} URLs found",
-                        query,
-                        searchResults.Count);
-
-                    var newUrls = searchResults
-                        .Select(r => r.Url)
-                        .Where(u => !string.IsNullOrWhiteSpace(u))
-                        .Distinct()
-                        .ToList();
-
-                    visitedUrls.UnionWith(newUrls);
-
-                    foreach (var url in newUrls)
+                    if (string.IsNullOrWhiteSpace(content))
                     {
-                        var content = await _crawlClient.FetchContentAsync(url, ct);
-
-                        if (string.IsNullOrWhiteSpace(content))
-                        {
-                            _logger.LogWarning("Empty content for URL {Url}, skipping learnings extraction.", url);
-                            continue;
-                        }
-
-                        try
-                        {
-                            var learnings = await ExtractLearnings(
-                                job.Query,
-                                clarifications,
-                                content,
-                                url,   
-                                ct,
-                                job.TargetLanguage);
-
-                            lock (allLearnings)
-                            {
-                                allLearnings.AddRange(learnings);
-                            }
-                        }
-                        catch (Exception ex)
-                        {
-                             _logger.LogError(ex, "Error during learnings extraction. SKIPPING");
-                        }
+                        _logger.LogWarning("Empty content for URL {Url}, skipping learnings extraction.", url);
+                        continue;
                     }
 
-                    _jobStore.AppendEvent(
-                        jobId,
-                        new ResearchEvent(
-                            DateTimeOffset.UtcNow,
-                            "search-progress",
-                            $"Processed SERP query '{query}' with {newUrls.Count} URLs"));
-                }
-                finally
-                {
-                    semaphore.Release();
-                }
-            });
+                    var page = await _researchContentStore.UpsertScrapedPageAsync(
+                        url: url,
+                        content: content,
+                        language: job.TargetLanguage,
+                        region: job.Region,
+                        ct: ct);
 
-            await Task.WhenAll(tasks);
+                    // 1) Try to reuse existing learnings for (page, query)
+                    var cached = await _researchContentStore.GetLearningsForPageAndQueryAsync(
+                        page.Id,
+                        queryHash,
+                        ct);
+
+                    if (cached.Count > 0)
+                    {
+                        _logger.LogInformation(
+                            "Reusing {Count} cached learnings for URL {Url} (PageId={PageId}, QueryHash={QueryHash}).",
+                            cached.Count, url, page.Id, queryHash);
+
+                        lock (allLearnings)
+                        {
+                            allLearnings.AddRange(cached);
+                        }
+
+                        continue;
+                    }
+
+                    // 2) No cached learnings for this query → call LLM
+                    try
+                    {
+                        var extracted = await ExtractLearnings(
+                            job.Query,
+                            clarifications,
+                            page,
+                            url,
+                            ct,
+                            job.TargetLanguage);
+
+                        var newLearnings = extracted.Select (e => new Learning()
+                        {
+                            JobId = job.Id,
+                            PageId = page.Id,
+                            QueryHash = queryHash,
+                            SourceUrl = url,
+                            Text = e,
+                            CreatedAt = DateTime.UtcNow
+                        });
+
+                        await _learningEmbeddingService.PopulateEmbeddingsAsync(newLearnings, ct);
+
+                        // Persist with query hash
+                        await _researchContentStore.AddLearningsAsync(
+                            job.Id,
+                            page.Id,
+                            newLearnings,
+                            ct);
+
+                        lock (allLearnings)
+                        {
+                            allLearnings.AddRange(newLearnings);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(
+                            ex,
+                            "Error during learnings extraction for URL {Url}. SKIPPING",
+                            url);
+                    }
+                }
+
+                _jobStore.AppendEvent(
+                    jobId,
+                    new ResearchEvent(
+                        DateTimeOffset.UtcNow,
+                        "search-progress",
+                        $"Processed SERP query '{query}' with {newUrls.Count} URLs"));
+            }
+
+            // serpQueries.Select(async (query, index) =>
+            // {
+            //     _logger.LogInformation("Processing SERP query {Index}: {Query}", index, query);
+            //     await semaphore.WaitAsync(ct);
+            //     try
+            //     {
+            //         var searchResults = await _searchClient.SearchAsync(
+            //             query,
+            //             LimitSearches,
+            //             location: job.Region,
+            //             ct: ct);
+
+            //         _logger.LogInformation(
+            //             "Search results for query '{Query}': {Count} URLs found",
+            //             query,
+            //             searchResults.Count);
+
+            //         var newUrls = searchResults
+            //             .Select(r => r.Url)
+            //             .Where(u => !string.IsNullOrWhiteSpace(u))
+            //             .Distinct()
+            //             .ToList();
+
+            //         visitedUrls.UnionWith(newUrls);
+
+            //         foreach (var url in newUrls)
+            //         {
+            //             var content = await _crawlClient.FetchContentAsync(url, ct);
+
+            //             if (string.IsNullOrWhiteSpace(content))
+            //             {
+            //                 _logger.LogWarning("Empty content for URL {Url}, skipping learnings extraction.", url);
+            //                 continue;
+            //             }
+
+            //             var page = await _researchContentStore.UpsertScrapedPageAsync(
+            //                 url: url,
+            //                 content: content,
+            //                 language: job.TargetLanguage,
+            //                 region: job.Region,
+            //                 ct: ct);
+
+            //             // 1) Try to reuse existing learnings for (page, query)
+            //             var cached = await _researchContentStore.GetLearningsForPageAndQueryAsync(
+            //                 page.Id,
+            //                 queryHash,
+            //                 ct);
+
+            //             if (cached.Count > 0)
+            //             {
+            //                 _logger.LogInformation(
+            //                     "Reusing {Count} cached learnings for URL {Url} (PageId={PageId}, QueryHash={QueryHash}).",
+            //                     cached.Count, url, page.Id, queryHash);
+
+            //                 lock (allLearnings)
+            //                 {
+            //                     allLearnings.AddRange(cached);
+            //                 }
+
+            //                 continue;
+            //             }
+
+            //             // 2) No cached learnings for this query → call LLM
+            //             try
+            //             {
+            //                 var extracted = await ExtractLearnings(
+            //                     job.Query,
+            //                     clarifications,
+            //                     page,
+            //                     url,
+            //                     ct,
+            //                     job.TargetLanguage);
+
+            //                 var newLearnings = extracted.Select (e => new Learning()
+            //                 {
+            //                     JobId = job.Id,
+            //                     PageId = page.Id,
+            //                     QueryHash = queryHash,
+            //                     SourceUrl = url,
+            //                     Text = e,
+            //                     CreatedAt = DateTime.UtcNow
+            //                 });
+
+            //                 await _learningEmbeddingService.PopulateEmbeddingsAsync(newLearnings, ct);
+
+            //                 // Persist with query hash
+            //                 await _researchContentStore.AddLearningsAsync(
+            //                     job.Id,
+            //                     page.Id,
+            //                     newLearnings,
+            //                     ct);
+
+            //                 lock (allLearnings)
+            //                 {
+            //                     allLearnings.AddRange(newLearnings);
+            //                 }
+            //             }
+            //             catch (Exception ex)
+            //             {
+            //                 _logger.LogError(
+            //                     ex,
+            //                     "Error during learnings extraction for URL {Url}. SKIPPING",
+            //                     url);
+            //             }
+            //         }
+
+            //         _jobStore.AppendEvent(
+            //             jobId,
+            //             new ResearchEvent(
+            //                 DateTimeOffset.UtcNow,
+            //                 "search-progress",
+            //                 $"Processed SERP query '{query}' with {newUrls.Count} URLs"));
+            //     }
+            //     finally
+            //     {
+            //         semaphore.Release();
+            //     }
+            // });
+
+            // await Task.WhenAll(tasks);
 
             // Step 3: Synthesize final report, with clarifications
             _jobStore.AppendEvent(jobId, new ResearchEvent(DateTimeOffset.UtcNow, "summarizing", "Generating final report"));
 
             var reportMarkdown = await WriteFinalReport(job.Query, clarifications, allLearnings, visitedUrls.ToList(), ct, job.TargetLanguage);
 
-            var completedJob = runningJob with
-            {
-                Status = ResearchJobStatus.Completed,
-                ReportMarkdown = reportMarkdown,
-                VisitedUrls = visitedUrls.ToList()
-            };
+            job.Status = ResearchJobStatus.Completed;
+            job.ReportMarkdown = reportMarkdown;
+            job.VisitedUrls = visitedUrls.Select(u => new VisitedUrl() {Url = u }).ToList();
 
-            _jobStore.UpdateJob(completedJob);
+            _jobStore.UpdateJob(job);
             _jobStore.AppendEvent(jobId, new ResearchEvent(DateTimeOffset.UtcNow, "completed", "Research completed successfully"));
         }
         catch (Exception ex)
         {
-            var failedJob = runningJob with { Status = ResearchJobStatus.Failed };
-            _jobStore.UpdateJob(failedJob);
+             job.Status = ResearchJobStatus.Failed;
+            _jobStore.UpdateJob(job);
             _jobStore.AppendEvent(jobId, new ResearchEvent(DateTimeOffset.UtcNow, "failed",
                 $"Research failed: {ex.Message}"));
             throw;
@@ -162,9 +334,9 @@ public class ResearchOrchestrator(ILlmClient llmClient, ISearchClient searchClie
     {
         var prompt = FeedbackPromptFactory.Build(query, max, includeBreadthDepthQuestions);
 
-        var rawResponse = await _llmClient.CompleteAsync(prompt, ct);
+        var rawResponse = await _llmService.ChatAsync(prompt, cancellationToken:ct);
 
-        var withoutThink = _llmClient.StripThinkBlock(rawResponse);
+        var withoutThink = _llmService.StripThinkBlock(rawResponse.Text);
 
         var jsonStart = withoutThink.IndexOf('{');
         if (jsonStart > 0)
@@ -210,11 +382,11 @@ public class ResearchOrchestrator(ILlmClient llmClient, ISearchClient searchClie
 
         _logger.LogDebug("LLM Prompt:\n{Prompt}", prompt.userPrompt);
 
-        var rawResponse = await _llmClient.CompleteAsync(prompt, ct);
+        var rawResponse = await _llmService.ChatAsync(prompt, cancellationToken:ct);
 
-        _logger.LogDebug("LLM Raw Output:\n{Output}", rawResponse);
+        _logger.LogDebug("LLM Raw Output:\n{Output}", rawResponse.Text);
 
-        var withoutThink = _llmClient.StripThinkBlock(rawResponse);
+        var withoutThink = _llmService.StripThinkBlock(rawResponse.Text);
         
         var jsonStart = withoutThink.IndexOf('{');
         if (jsonStart > 0)
@@ -293,7 +465,7 @@ public class ResearchOrchestrator(ILlmClient llmClient, ISearchClient searchClie
 
         _logger.LogDebug("LLM Prompt:\n{Prompt}", prompt.userPrompt);
 
-        var response = await _llmClient.CompleteAsync(prompt, ct);
+        var response = await _llmService.ChatAsync(prompt, cancellationToken:ct);
 
         _logger.LogDebug("LLM Raw Output:\n{Output}", response);
 
@@ -307,10 +479,10 @@ public class ResearchOrchestrator(ILlmClient llmClient, ISearchClient searchClie
         return finalResponse;
     }
 
-    private async Task<IReadOnlyList<Learning>> ExtractLearnings(
+    private async Task<IReadOnlyList<string>> ExtractLearnings(
         string query,
         IEnumerable<Clarification> clarifications,
-        string content,
+        ScrapedPage page,
         string sourceUrl,
         CancellationToken ct,
         string targetLanguage)
@@ -318,9 +490,10 @@ public class ResearchOrchestrator(ILlmClient llmClient, ISearchClient searchClie
         var maxPromptTokens = _chunkingOptions.MaxPromptTokens;
 
         var pending = new Queue<string>();
-        pending.Enqueue(content ?? string.Empty);
+        
+        pending.Enqueue(page.Content ?? string.Empty);
 
-        var allLearnings = new List<Learning>();
+        var allLearnings = new List<string>();
         var clarificationsText = FormatClarifications(clarifications);
 
         while (pending.Count > 0)
@@ -339,20 +512,20 @@ public class ResearchOrchestrator(ILlmClient llmClient, ISearchClient searchClie
                 maxLearnings: MaxLearningsPerSearchResult,
                 targetLanguage: targetLanguage);
 
-            var tokenCount = await _llmClient.CountTokensAsync(prompt, ct);
+            var tokenCount = await _llmService.TokenizePromptAsync(prompt, cancellationToken:ct);
 
             _logger.LogDebug(
                 "Token count for learning-extraction segment (URL={Url}, length={Length} chars): {Tokens}",
                 sourceUrl, segment.Length, tokenCount);
 
-            if (tokenCount <= maxPromptTokens)
+            if (tokenCount.Count <= maxPromptTokens)
             {
                 // Safe to call LLM
-                var rawResponse = await _llmClient.CompleteAsync(prompt, ct);
+                var rawResponse = await _llmService.ChatAsync(prompt, cancellationToken:ct);
 
                 _logger.LogDebug("LLM Raw Output for chunk:\n{Output}", rawResponse);
 
-                var withoutThink = _llmClient.StripThinkBlock(rawResponse);
+                var withoutThink = _llmService.StripThinkBlock(rawResponse.Text);
 
                 _logger.LogDebug("LLM output without <think> block for chunk:\n{Output}", withoutThink);
 
@@ -360,16 +533,15 @@ public class ResearchOrchestrator(ILlmClient llmClient, ISearchClient searchClie
                     .Split('\n')
                     .Select(line => line.Trim())
                     .Where(line => !string.IsNullOrEmpty(line))
-                    .Select(text => new Learning(text, sourceUrl)) 
                     .ToList();
 
                 _logger.LogInformation("Extracted {Count} learnings from chunk of length {Length} for URL {Url}", 
-                    learnings.Count, content.Length, sourceUrl);
+                    learnings.Count, page.Content.Length, sourceUrl);
 
                 if (learnings.Count == 0)
                 {
                     _logger.LogWarning("No learnings extracted for chunk of URL {Url}; content length={Length}, query={Query}", 
-                        sourceUrl, content.Length, query);
+                        sourceUrl, page.Content.Length, query);
                 }                   
 
                 allLearnings.AddRange(learnings);
@@ -453,5 +625,96 @@ public class ResearchOrchestrator(ILlmClient llmClient, ISearchClient searchClie
         // 3) Fallback: hard split in the middle
         var midIndex = length / 2;
         return (segment[..midIndex], segment[midIndex..]);
+    }
+
+    
+    private async Task<string> WriteFinalReportWithToolsAsync(
+        ResearchJob job,
+        IEnumerable<Clarification> clarifications,
+        IEnumerable<Learning> allLearningsForJob, // optional: if you want to inject DB learnings for map
+        CancellationToken ct)
+    {
+        // 1) Build global citation map.
+        var visitedUrls = job.VisitedUrls?.Select(v => v.Url) ?? Enumerable.Empty<string>();
+        var sourceIndexMap = BuildSourceIndexMap(visitedUrls, allLearningsForJob);
+
+        // 2) Build initial messages.
+        var clarificationsText = FormatClarifications(clarifications);
+
+        var systemPrompt = SynthesisPromptFactory.BuildSystemPrompt(job.TargetLanguage);
+        var userPrompt   = SynthesisPromptFactory.BuildUserPromptForTools(
+            job.Query,
+            clarificationsText);
+
+        // var messages = new List<ChatMessage>
+        // {
+        //     new() { Role = "system", Content = systemPrompt },
+        //     new() { Role = "user",   Content = userPrompt   }
+        // };
+
+        var prompt = new Prompt(systemPrompt, userPrompt);
+
+        // 3) Create tool handler for this job/run.
+        var toolHandler = new SynthesisToolHandler(
+            learningEmbeddingService,
+            sourceIndexMap,
+            job.Id);
+
+        var tool = LlmService.CreateTool(toolHandler.HandleGetSimilarLearningsAsync, "get_similar_learnings");
+            
+        var result = await _llmService.ChatAsync(prompt, new [] { tool }, cancellationToken: ct );
+
+        // Append Sources section based on final sourceIndexMap
+        var sourcesSection = BuildSourcesSection(sourceIndexMap);
+        return result.Text + sourcesSection;
+    }
+
+    private static string BuildSourcesSection(Dictionary<string, int> sourceIndexMap)
+    {
+        if (sourceIndexMap.Count == 0)
+            return string.Empty;
+
+        var sb = new StringBuilder();
+        sb.AppendLine();
+        sb.AppendLine("## Sources");
+        sb.AppendLine();
+
+        foreach (var kvp in sourceIndexMap.OrderBy(k => k.Value))
+        {
+            sb.AppendLine($"[{kvp.Value}] {kvp.Key}");
+        }
+
+        return sb.ToString();
+    }
+
+    private Dictionary<string, int> BuildSourceIndexMap(
+        IEnumerable<string> visitedUrls,
+        IEnumerable<Learning>? learnings = null)
+    {
+        var map = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        var index = 1;
+
+        // 1) From visited URLs (if you still track them)
+        if (visitedUrls != null)
+        {
+            foreach (var url in visitedUrls.Where(u => !string.IsNullOrWhiteSpace(u)))
+            {
+                if (!map.ContainsKey(url))
+                    map[url] = index++;
+            }
+        }
+
+        // 2) From learnings (in case there are extra URLs not in visitedUrls)
+        if (learnings != null)
+        {
+            foreach (var l in learnings)
+            {
+                if (string.IsNullOrWhiteSpace(l.SourceUrl)) continue;
+                if (!map.ContainsKey(l.SourceUrl))
+                    map[l.SourceUrl] = index++;
+            }
+        }
+
+        return map;
     }
 }
