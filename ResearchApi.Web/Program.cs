@@ -10,8 +10,10 @@ using Serilog.Filters;
 // Configure Serilog with all settings in code
 Log.Logger = new LoggerConfiguration()
     .MinimumLevel.Debug()
+    .Enrich.FromLogContext()
     .WriteTo.File(
         "logs/app.log",
+        outputTemplate: "{Timestamp:dd/MM/yyyy HH:mm:ss ffff zzz} [{Level:u3}] {Message:lj}{NewLine}{Exception}",
         rollingInterval: RollingInterval.Hour,
         retainedFileCountLimit: 30)
     .WriteTo.Logger(lc => lc
@@ -46,7 +48,7 @@ builder.Services.AddHttpClient("Default")
 
 builder.Services
     .AddHttpClient<FirecrawlClient>()
-    .ConfigureHttpClient(c=> c.Timeout = TimeSpan.FromMinutes(2))
+    .ConfigureHttpClient(c=> c.Timeout = TimeSpan.FromMinutes(5))
     .AddHttpMessageHandler<HttpFileLoggingHandler>();
 
 builder.Services.Configure<FirecrawlOptions>(
@@ -84,7 +86,5 @@ using (var scope = app.Services.CreateScope())
     var db = scope.ServiceProvider.GetRequiredService<ResearchDbContext>();
     db.Database.Migrate(); 
 }
-
-Log.Logger.Information("Application started");
 
 app.Run();

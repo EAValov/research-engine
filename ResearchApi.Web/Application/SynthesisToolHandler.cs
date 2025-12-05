@@ -35,7 +35,7 @@ public class SynthesisToolHandler
             queryHash: null,
             language: language,
             region: region,
-            topK: 20,
+            topK: 6,
             ct: ct);
 
         Log.Logger.Information("[SynthesisTool] retrieved {learnings} learnings from DB.", learnings.Count);

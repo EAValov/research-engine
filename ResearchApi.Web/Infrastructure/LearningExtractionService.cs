@@ -1,4 +1,7 @@
 
+using System.ComponentModel;
+using System.Text.Json;
+using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Options;
 using ResearchApi.Configuration;
 using ResearchApi.Domain;
@@ -7,7 +10,7 @@ using ResearchApi.Prompts;
 namespace ResearchApi.Infrastructure;
 public interface ILearningExtractionService
 {
-    Task<IReadOnlyList<string>> ExtractLearningsAsync(
+    Task<IReadOnlyList<ExtractedLearningItem>> ExtractLearningsAsync(
         string query,
         string clarificationsText,
         ScrapedPage page,
@@ -22,9 +25,10 @@ public class LearningExtractionService(
     ILogger<LearningExtractionService> logger
 ) : ILearningExtractionService
 {
-     const int MaxLearningsPerSearchResult = 20;
+    private const int MaxLearningsPerSegment = 20;
+    private const int MinLearningsPerSegment = 5;
 
-    public async Task<IReadOnlyList<string>> ExtractLearningsAsync(
+    public async Task<IReadOnlyList<ExtractedLearningItem>> ExtractLearningsAsync(
         string query,
         string clarificationsText,
         ScrapedPage page,
@@ -35,10 +39,15 @@ public class LearningExtractionService(
         var maxPromptTokens = options.Value.MaxPromptTokens;
 
         var pending = new Queue<string>();
-        
         pending.Enqueue(page.Content ?? string.Empty);
 
-        var allLearnings = new List<string>();
+        var allLearnings = new List<ExtractedLearningItem>();
+
+        // we'll reuse Json options for deserialization
+        var jsonOptions = new JsonSerializerOptions
+        {
+            PropertyNameCaseInsensitive = true
+        };
 
         while (pending.Count > 0)
         {
@@ -48,15 +57,22 @@ public class LearningExtractionService(
             if (string.IsNullOrWhiteSpace(segment))
                 continue;
 
+            // --- adaptive max learnings for THIS segment ---
+            var adaptiveMaxLearnings = Math.Clamp(
+                ComputeAdaptiveMaxLearnings(segment.Length),
+                MinLearningsPerSegment,
+                MaxLearningsPerSegment
+            );
+
             // Build prompt for this segment
             var prompt = LearningExtractionPromptFactory.Build(
                 query,
                 segment,
                 clarificationsText: clarificationsText,
-                maxLearnings: MaxLearningsPerSearchResult,
+                maxLearnings: adaptiveMaxLearnings,
                 targetLanguage: targetLanguage);
 
-            var tokenCount = await llmService.TokenizePromptAsync(prompt, cancellationToken:ct);
+            var tokenCount = await llmService.TokenizePromptAsync(prompt, cancellationToken: ct);
 
             logger.LogDebug(
                 "Token count for learning-extraction segment (URL={Url}, length={Length} chars): {Tokens}",
@@ -64,30 +80,59 @@ public class LearningExtractionService(
 
             if (tokenCount.Count <= maxPromptTokens)
             {
-                // Safe to call LLM
-                var rawResponse = await llmService.ChatAsync(prompt, cancellationToken:ct);
+                // Safe to call LLM with structured JSON output
+                var responseFormat = LearningExtractionResponse.JsonResponseSchema(jsonOptions);
+                var rawResponse = await llmService.ChatAsync(
+                    prompt,
+                    tools: null,
+                    responseFormat: responseFormat,
+                    cancellationToken: ct);
 
-                var withoutThink = llmService.StripThinkBlock(rawResponse.Text);
+                var withoutThink = llmService.StripThinkBlock(rawResponse.Text).Trim();
 
-                var learnings = withoutThink
-                    .Split('\n')
-                    .Select(line => line.Trim())
-                    .Where(line => !string.IsNullOrEmpty(line))
-                    .ToList();
+                LearningExtractionResponse? parsed = null;
+                try
+                {
+                    parsed = JsonSerializer.Deserialize<LearningExtractionResponse>(withoutThink, jsonOptions);
+                }
+                catch (Exception ex)
+                {
+                    logger.LogError(ex,
+                        "Failed to deserialize learning extraction JSON for URL {Url}. Raw response: {Response}",
+                        sourceUrl,
+                        withoutThink);
+                }
 
-                if(page.Content is null)
+                var learnings = parsed?.Learnings
+                    ?.Where(l => !string.IsNullOrWhiteSpace(l.Text))
+                    .ToList()
+                    ?? new List<ExtractedLearningItem>();
+
+                if (page.Content is null)
                     continue;
 
-                logger.LogInformation("Extracted {Count} learnings from chunk of length {Length} for URL {Url}", 
-                    learnings.Count, page.Content.Length, sourceUrl);
+                logger.LogInformation(
+                    "Extracted {Count} structured learnings from chunk of length {Length} for URL {Url}",
+                    learnings.Count,
+                    page.Content.Length,
+                    sourceUrl);
 
                 if (learnings.Count == 0)
                 {
-                    logger.LogWarning("No learnings extracted for chunk of URL {Url}; content length={Length}, query={Query}", 
-                        sourceUrl, page.Content.Length, query);
-                }                   
+                    logger.LogWarning(
+                        "No learnings extracted for chunk of URL {Url}; content length={Length}, query={Query}",
+                        sourceUrl,
+                        page.Content.Length,
+                        query);
+                }
 
-                allLearnings.AddRange(learnings);
+                // Optionally sort by importance descending and enforce adaptiveMaxLearnings again
+                var finalLearnings = learnings
+                    .OrderByDescending(l => l.Importance)
+                    .Take(adaptiveMaxLearnings)
+                    .ToList();
+
+                allLearnings.AddRange(finalLearnings);
             }
             else
             {
@@ -118,6 +163,21 @@ public class LearningExtractionService(
         }
 
         return allLearnings;
+    }
+
+    /// <summary>
+    /// Simple heuristic: more content → slightly more allowed learnings,
+    /// but always clamped between Min and Max.
+    /// </summary>
+    private static int ComputeAdaptiveMaxLearnings(int segmentLengthChars)
+    {
+        // very short chunk → few learnings
+        if (segmentLengthChars <= 2000) return 5;
+        if (segmentLengthChars <= 6000) return 8;
+        if (segmentLengthChars <= 15000) return 12;
+
+        // really long segments hit the cap
+        return MaxLearningsPerSegment;
     }
 
     /// <summary>
@@ -170,3 +230,28 @@ public class LearningExtractionService(
         return (segment[..midIndex], segment[midIndex..]);
     }
 };
+
+public sealed class ExtractedLearningItem
+{
+    [Description("Single, self-contained learning text in the target language, highly relevant to the user's query.")]
+    public required string Text { get; init; }
+
+    [Description("Importance score between 0.0 (barely relevant) and 1.0 (critical for answering the query).")]
+    public required float Importance { get; init; }
+}
+
+public sealed class LearningExtractionResponse
+{
+    [Description("Array of extracted learnings.")]
+    public required List<ExtractedLearningItem> Learnings { get; init; }
+
+    public static ChatResponseFormat JsonResponseSchema(JsonSerializerOptions? jsonSerializerOptions = default)
+    {
+        var jsonElement = AIJsonUtilities.CreateJsonSchema(
+            typeof(LearningExtractionResponse),
+            description: "Structured learnings extraction result",
+            serializerOptions: jsonSerializerOptions);
+
+        return new ChatResponseFormatJson(jsonElement);
+    }
+}

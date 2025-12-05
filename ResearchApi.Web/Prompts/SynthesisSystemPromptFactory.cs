@@ -1,9 +1,7 @@
 using System.Globalization;
 using System.Text;
 
-namespace ResearchApi.Prompts;
-
-public static class SynthesisPromptFactory
+public static class SynthesisSystemPromptFactory
 {
     public static string BuildSystemPrompt(string? targetLanguage = "en")
     {
@@ -11,16 +9,15 @@ public static class SynthesisPromptFactory
         var sb = new StringBuilder();
 
         sb.AppendLine($"You are an expert research synthesizer. Today is {dt} (UTC).");
-        sb.AppendLine("Your task is to write structured, well-supported analytical reports.");
+        sb.AppendLine("Your task is to write structured, well-supported analytical text.");
         sb.AppendLine();
         sb.AppendLine("You can call the tool `get_similar_learnings` to retrieve evidence snippets");
         sb.AppendLine("that already contain citation markers like [3], [7]. These snippets come from");
         sb.AppendLine("a vetted knowledge base and must be treated as authoritative evidence.");
         sb.AppendLine();
         sb.AppendLine("TOOL USAGE RULES:");
-        sb.AppendLine("- First, plan the report into clear sections (typically 3–7).");
-        sb.AppendLine("- For EACH substantive section (all except the final conclusion),");
-        sb.AppendLine("  you MUST issue at least one `get_similar_learnings` call with a focused query.");
+        sb.AppendLine("- For each substantive section you write, you MUST call `get_similar_learnings`");
+        sb.AppendLine("  at least once with a focused query relevant to that section.");
         sb.AppendLine("- Prefer several small, focused queries over one broad query.");
         sb.AppendLine("- Do not guess facts that could be retrieved through the tool.");
         sb.AppendLine();
@@ -40,40 +37,19 @@ public static class SynthesisPromptFactory
         sb.AppendLine("    'Have I already called `get_similar_learnings` with a focused query for this section?'");
         sb.AppendLine("  If the answer is no, you MUST call `get_similar_learnings` for that section BEFORE");
         sb.AppendLine("  you start writing its content.");
-        sb.AppendLine("- If you produce a report where any non-conclusion section contains factual claims");
-        sb.AppendLine("  but you never called the tool for that section, you are failing the task.");
+        sb.AppendLine("- If you produce a section that contains factual claims but you never called the tool");
+        sb.AppendLine("  for that section, you are failing the task.");
         sb.AppendLine();
-        sb.AppendLine($"Write the final report in: {targetLanguage ?? "en"}.");
+        sb.AppendLine("OUTPUT FORMAT (IMPORTANT):");
+        sb.AppendLine("- Your output MUST be valid GitHub-Flavored Markdown text.");
+        sb.AppendLine("- Do NOT use any HTML tags (e.g. <references>, <sup>, <br>).");
+        sb.AppendLine("- Do NOT use reference-style links like [text][1] or trailing reference blocks.");
+        sb.AppendLine("- Citations must appear only as simple numeric markers like [1], [2], [3].");
+        sb.AppendLine("- When you need multiple citations, use the form: [1], [3], [5].");
+        sb.AppendLine("- Never write [1][3][5]; this pattern is forbidden.");
+        sb.AppendLine();
+        sb.AppendLine($"Write the final text in: {targetLanguage ?? "en"}.");
 
         return sb.ToString();
     }
-
-    public static string BuildUserPromptForTools(
-        string query,
-        string clarificationsText)
-    {
-        var sb = new StringBuilder();
-
-        sb.AppendLine("Main research query:");
-        sb.AppendLine(query.Trim());
-        sb.AppendLine();
-
-        if (!string.IsNullOrWhiteSpace(clarificationsText))
-        {
-            sb.AppendLine("Additional clarifications:");
-            sb.AppendLine(clarificationsText.Trim());
-            sb.AppendLine();
-        }
-
-        sb.AppendLine("Your tasks:");
-        sb.AppendLine("1. Plan the report into logical sections relevant to this topic.");
-        sb.AppendLine("2. For EACH non-conclusion section, if you need facts, data, or examples,");
-        sb.AppendLine("   make at least one focused call to `get_similar_learnings`.");
-        sb.AppendLine("3. After collecting evidence, write a clear, structured report using the");
-        sb.AppendLine("   planned sections and preserve all [n] citations from tool outputs.");
-        sb.AppendLine("4. Do not add your own citation numbers. The system will append sources automatically.");
-
-        return sb.ToString();
-    }
-
 }

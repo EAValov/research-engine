@@ -13,37 +13,37 @@ data:
     webui.llm.local:8443 {
       tls internal
       encode zstd gzip
-      reverse_proxy 127.0.0.1:8081
+      reverse_proxy open-webui:8081
     }
     api.llm.local:8443 {
       tls internal
       encode zstd gzip
-      reverse_proxy 127.0.0.1:8000
+      reverse_proxy vllm:8000
     }
     crawl.llm.local:8443 {
       tls internal
       encode zstd gzip
-      reverse_proxy 127.0.0.1:3002
+      reverse_proxy firecrawl:3002
     }
     search.llm.local:8443 {
       tls internal
       encode zstd gzip
-      reverse_proxy 127.0.0.1:8085
+      reverse_proxy searxng:8085
     }
     embedding.llm.local:8443 {
       tls internal
       encode zstd gzip
-      reverse_proxy 127.0.0.1:8001
+      reverse_proxy vllm-embeddings:8001
     }
 ---
 apiVersion: v1
 kind: Pod
 metadata:
-  name: llm-stack
+  name: llm-core
   annotations:
-    io.podman.annotations.networks: '["llm-net"]'
+    io.podman.annotations.networks: '["llm-int"]'
 spec:
-  hostname: llm-stack
+  hostname: llm-core
   containers:
     - name: caddy
       image: caddy:2.8
@@ -133,7 +133,7 @@ spec:
         - name: HOST
           value: "0.0.0.0"
         - name: OPENAI_API_BASE_URL
-          value: http://127.0.0.1:8000/v1
+          value: http://vllm:8000/v1
         - name: OPENAI_API_KEY
           value: "local"
         - name: ENABLE_MODEL_SELECTOR
@@ -145,17 +145,21 @@ spec:
         - name: WEB_SEARCH_ENGINE
           value: "searxng"
         - name: SEARXNG_QUERY_URL
-          value: "http://127.0.0.1:8085/search?q=<query>"
+          value: "http://searxng:8085/search?q=<query>"
         - name: WEB_SEARCH_RESULT_COUNT
           value: "4"
         - name: RAG_WEB_LOADER_ENGINE
           value: "firecrawl"
         - name: FIRE_CRAWL_API_BASE_URL
-          value: "http://127.0.0.1:3002/v1"
-        - name: FIRE_CRAWL_API_KEY
-          value: ""  
+          value: "http://firecrawl:3002/v1"
         - name: WEB_LOADER_CONCURRENT_REQUESTS
           value: "4"
+        # 🔐 from Secret
+        - name: FIRE_CRAWL_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: llm-secrets
+              key: FIRE_CRAWL_API_KEY
       volumeMounts:
         - name: openwebui-data
           mountPath: /app/backend/data
@@ -165,17 +169,6 @@ spec:
       command: ["redis-server","--bind","0.0.0.0"]
       ports:
         - containerPort: 6379
-        
-    - name: firecrawl-playwright
-      image: ghcr.io/firecrawl/playwright-service@sha256:0ac30dd57bc3f47a9de8c2bbf77876f3ad521f951c05cdf659954dbee272e7ec
-      ports:
-        - containerPort: 3000
-      env:
-        - name: PORT
-          value: "3000"
-      volumeMounts:
-        - name: playwright-data
-          mountPath: /app/data
 
     - name: nuq-postgres
       image: localhost/nuq-postgres:latest
@@ -192,49 +185,6 @@ spec:
       volumeMounts:
         - name: postgres-data
           mountPath: /var/lib/postgresql/data
-          
-    - name: firecrawl
-      image: ghcr.io/firecrawl/firecrawl@sha256:0cf3939787471e93e9321383c630dc21e0de4d6021c7d2a92d3e7ce5fb015d54
-      ports:
-        - containerPort: 3002
-      env:
-        - name: PORT
-          value: "3002"
-        - name: HOST
-          value: "0.0.0.0"
-        - name: USE_DB_AUTHENTICATION
-          value: "false"
-        - name: BULL_AUTH_KEY
-          value: "CHANGEME"
-        - name: REDIS_URL
-          value: "redis://127.0.0.1:6379"
-        - name: REDIS_RATE_LIMIT_URL
-          value: "redis://127.0.0.1:6379"
-        - name: PLAYWRIGHT_MICROSERVICE_URL
-          value: "http://127.0.0.1:3000/scrape"
-        - name: SEARXNG_ENDPOINT
-          value: "http://127.0.0.1:8085"
-        - name: NUQ_DATABASE_URL
-          value: "postgresql://firecrawl:firecrawl@127.0.0.1:5432/firecrawl?sslmode=disable"
-        - name: DATABASE_URL
-          value: "postgresql://firecrawl:firecrawl@127.0.0.1:5432/firecrawl?sslmode=disable"
-      volumeMounts:
-        - name: firecrawl-data
-          mountPath: /app/data
-
-    - name: searxng
-      image: searxng/searxng:latest
-      env:
-        - name: GRANIAN_HOST
-          value: "0.0.0.0"
-        - name: GRANIAN_PORT
-          value: "8085"
-      ports:
-        - containerPort: 8085        
-      volumeMounts:
-        - name: searxng-config
-          mountPath: /etc/searxng
-          readOnly: true
 
   volumes:
     - name: caddy-config
@@ -251,18 +201,6 @@ spec:
     - name: openwebui-data
       hostPath:
         path: /mnt/c/LLM/open-webui
-        type: DirectoryOrCreate
-    - name: firecrawl-data
-      hostPath:
-        path: /mnt/c/LLM/firecrawl
-        type: DirectoryOrCreate
-    - name: playwright-data
-      hostPath:
-        path: /mnt/c/LLM/playwright
-        type: DirectoryOrCreate
-    - name: searxng-config
-      hostPath:
-        path: /mnt/c/LLM/searxng
         type: DirectoryOrCreate
     - name: postgres-data
       persistentVolumeClaim:

@@ -99,6 +99,8 @@ public class ResearchOrchestrator(
                 "summarizing",
                 "Generating final report",
                 ct);
+            
+            job.VisitedUrls    = visitedUrls.Select(u => new VisitedUrl { Url = u }).ToList();
 
             var reportMarkdown = await _reportSvc
                 .WriteFinalReportAsync(job, clarificationsText, allLearnings, ct);
@@ -107,7 +109,7 @@ public class ResearchOrchestrator(
 
             job.Status         = ResearchJobStatus.Completed;
             job.ReportMarkdown = reportMarkdown;
-            job.VisitedUrls    = visitedUrls.Select(u => new VisitedUrl { Url = u }).ToList();
+
 
             await _jobStore.UpdateJobAsync(job, ct);
 
@@ -378,13 +380,14 @@ public class ResearchOrchestrator(
                 return new UrlProcessingResult(Array.Empty<Learning>(), UsedCache: false, HadError: false);
             }
 
-            var newLearnings = extractedTexts.Select(text => new Learning
+            var newLearnings = extractedTexts.Select(el => new Learning
             {
                 JobId     = job.Id,
                 PageId    = page.Id,
                 QueryHash = queryHash,
                 SourceUrl = url,
-                Text      = text,
+                Text      = el.Text,
+                ImportanceScore = el.Importance,
                 CreatedAt = DateTime.UtcNow
             }).ToList();
             

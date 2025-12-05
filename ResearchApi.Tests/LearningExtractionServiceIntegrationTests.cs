@@ -67,12 +67,12 @@ public sealed class LearningExtractionServiceIntegrationTests : IClassFixture<Ll
 
         foreach (var l in learnings)
         {
-            Assert.False(string.IsNullOrWhiteSpace(l));
+            Assert.False(string.IsNullOrWhiteSpace(l.Text));
         }
 
         // Sanity-check: at least one learning should mention KI or Bayern
         Assert.Contains(learnings, l =>
-            l.Contains("KI", StringComparison.OrdinalIgnoreCase) ||
-            l.Contains("Bayern", StringComparison.OrdinalIgnoreCase));
+            l.Text.Contains("KI", StringComparison.OrdinalIgnoreCase) ||
+            l.Text.Contains("Bayern", StringComparison.OrdinalIgnoreCase));
     }
 }

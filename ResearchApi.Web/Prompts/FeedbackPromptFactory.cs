@@ -11,7 +11,9 @@ public static class FeedbackPromptFactory
     {
         var sb = new StringBuilder();
 
-        sb.AppendLine("Given the following research query, ask up to {MaxQuestions} clarification questions that help disambiguate the user's intent, scope, constraints, or assumptions.");
+        var MaxQuestions = 5;
+
+        sb.AppendLine($"Given the following research query, ask up to {MaxQuestions} clarification questions that help disambiguate the user's intent, scope, constraints, or assumptions.");
         sb.AppendLine("Ask ONLY questions the user must answer, not questions that require external research.");
         sb.AppendLine();
         sb.AppendLine("The user's research query is:");

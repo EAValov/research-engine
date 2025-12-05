@@ -153,6 +153,7 @@ public sealed class LlmService : IDisposable, ILlmService
             options.Tools = tools is IList<AITool> list
                 ? list
                 : [.. tools];
+            options.ToolMode = ChatToolMode.RequireSpecific(tools.First().Name);
         }
 
         if (responseFormat is not null)

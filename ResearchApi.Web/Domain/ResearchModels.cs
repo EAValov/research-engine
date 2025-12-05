@@ -96,6 +96,7 @@ public class Learning
     public string QueryHash { get; set; } = null!;
     public string Text { get; set; } = null!;
     public string SourceUrl { get; set; } = null!;
+    public float? ImportanceScore { get; set; }
 
     public Vector? Embedding { get; set; }
     public ResearchJob Job { get; set; } = null!;
