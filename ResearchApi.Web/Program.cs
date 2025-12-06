@@ -4,7 +4,6 @@ using ResearchApi.Application;
 using ResearchApi.Configuration;
 using Microsoft.EntityFrameworkCore;
 using Serilog;
-using Serilog.Core;
 using Serilog.Filters;
 
 // Configure Serilog with all settings in code
