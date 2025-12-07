@@ -1,6 +1,8 @@
 using System.Globalization;
 using System.Text;
 
+namespace ResearchApi.Prompts;
+
 public static class SynthesisSystemPromptFactory
 {
     public static string BuildSystemPrompt(string? targetLanguage = "en")

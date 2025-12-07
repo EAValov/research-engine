@@ -1,12 +1,14 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using Pgvector.EntityFrameworkCore;
+using ResearchApi.Configuration;
 using ResearchApi.Domain; 
 
 namespace ResearchApi.Infrastructure;
 
 public class ResearchDbContext : DbContext
 {
-    public const int EmbeddingDimensions = 1024; // adjust later if needed
+    private readonly int _embeddingDimensions;
 
     public DbSet<ResearchJob> ResearchJobs => Set<ResearchJob>();
     public DbSet<Clarification> Clarifications => Set<Clarification>();
@@ -15,14 +17,16 @@ public class ResearchDbContext : DbContext
     public DbSet<ScrapedPage> ScrapedPages => Set<ScrapedPage>();
     public DbSet<Learning> Learnings => Set<Learning>();
 
-    public ResearchDbContext(DbContextOptions<ResearchDbContext> options)
+    public ResearchDbContext(
+        DbContextOptions<ResearchDbContext> options,
+        IOptions<EmbeddingConfig> embeddingOptions)
         : base(options)
     {
+        _embeddingDimensions = embeddingOptions.Value.Dimension;
     }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
-        // enable pgvector extension
         modelBuilder.HasPostgresExtension("vector");
 
         ConfigureResearchJob(modelBuilder);
@@ -33,7 +37,7 @@ public class ResearchDbContext : DbContext
         ConfigureLearning(modelBuilder);
     }
 
-    private static void ConfigureResearchJob(ModelBuilder modelBuilder)
+    private void ConfigureResearchJob(ModelBuilder modelBuilder)
     {
         var entity = modelBuilder.Entity<ResearchJob>();
 
@@ -62,7 +66,7 @@ public class ResearchDbContext : DbContext
             .HasDefaultValueSql("now() at time zone 'utc'");
     }
 
-    private static void ConfigureClarification(ModelBuilder modelBuilder)
+    private void ConfigureClarification(ModelBuilder modelBuilder)
     {
         var entity = modelBuilder.Entity<Clarification>();
 
@@ -83,7 +87,7 @@ public class ResearchDbContext : DbContext
             .OnDelete(DeleteBehavior.Cascade);
     }
 
-    private static void ConfigureEvent(ModelBuilder modelBuilder)
+    private void ConfigureEvent(ModelBuilder modelBuilder)
     {
         var entity = modelBuilder.Entity<ResearchEvent>();
 
@@ -104,7 +108,7 @@ public class ResearchDbContext : DbContext
             .OnDelete(DeleteBehavior.Cascade);
     }
 
-    private static void ConfigureVisitedUrl(ModelBuilder modelBuilder)
+    private void ConfigureVisitedUrl(ModelBuilder modelBuilder)
     {
         var entity = modelBuilder.Entity<VisitedUrl>();
 
@@ -123,7 +127,7 @@ public class ResearchDbContext : DbContext
             .OnDelete(DeleteBehavior.Cascade);
     }
 
-    private static void ConfigureScrapedPage(ModelBuilder modelBuilder)
+    private void ConfigureScrapedPage(ModelBuilder modelBuilder)
     {
         var entity = modelBuilder.Entity<ScrapedPage>();
 
@@ -154,7 +158,7 @@ public class ResearchDbContext : DbContext
         entity.HasIndex(p => p.ContentHash);
     }
 
-    private static void ConfigureLearning(ModelBuilder modelBuilder)
+    private void ConfigureLearning(ModelBuilder modelBuilder)
     {
         var entity = modelBuilder.Entity<Learning>();
 
@@ -169,9 +173,9 @@ public class ResearchDbContext : DbContext
         entity.Property(l => l.SourceUrl)
             .IsRequired()
             .HasMaxLength(2000);
-            
+
         entity.Property(l => l.Embedding)
-            .HasColumnType($"vector({EmbeddingDimensions})");
+            .HasColumnType($"vector({_embeddingDimensions})");
 
         entity.Property(l => l.CreatedAt)
             .HasDefaultValueSql("now() at time zone 'utc'");

@@ -1,27 +1,13 @@
 
-using System.ComponentModel;
 using System.Text.Json;
-using Microsoft.Extensions.AI;
-using Microsoft.Extensions.Options;
-using ResearchApi.Configuration;
 using ResearchApi.Domain;
 using ResearchApi.Prompts;
 
 namespace ResearchApi.Infrastructure;
-public interface ILearningExtractionService
-{
-    Task<IReadOnlyList<ExtractedLearningItem>> ExtractLearningsAsync(
-        string query,
-        string clarificationsText,
-        ScrapedPage page,
-        string sourceUrl,
-        string targetLanguage,
-        CancellationToken ct);
-}
 
 public class LearningExtractionService(
-    ILlmService llmService,
-    IOptions<LlmChunkingOptions> options,
+    IChatModel chatModel,
+    ITokenizer tokenizer,
     ILogger<LearningExtractionService> logger
 ) : ILearningExtractionService
 {
@@ -36,8 +22,6 @@ public class LearningExtractionService(
         string targetLanguage,
         CancellationToken ct)
     {
-        var maxPromptTokens = options.Value.MaxPromptTokens;
-
         var pending = new Queue<string>();
         pending.Enqueue(page.Content ?? string.Empty);
 
@@ -72,23 +56,23 @@ public class LearningExtractionService(
                 maxLearnings: adaptiveMaxLearnings,
                 targetLanguage: targetLanguage);
 
-            var tokenCount = await llmService.TokenizePromptAsync(prompt, cancellationToken: ct);
+            var tokenizeResult = await tokenizer.TokenizePromptAsync(prompt, cancellationToken: ct);
 
             logger.LogDebug(
-                "Token count for learning-extraction segment (URL={Url}, length={Length} chars): {Tokens}",
-                sourceUrl, segment.Length, tokenCount);
+                "Token count for learning-extraction segment (URL={Url}, length={Length} chars): {Tokens} / {MaxLenght}",
+                sourceUrl, segment.Length, tokenizeResult.Count, tokenizeResult.MaxModelLen);
 
-            if (tokenCount.Count <= maxPromptTokens)
+            if (tokenizeResult.Count <= tokenizeResult.MaxModelLen)
             {
                 // Safe to call LLM with structured JSON output
                 var responseFormat = LearningExtractionResponse.JsonResponseSchema(jsonOptions);
-                var rawResponse = await llmService.ChatAsync(
+                var rawResponse = await chatModel.ChatAsync(
                     prompt,
                     tools: null,
                     responseFormat: responseFormat,
                     cancellationToken: ct);
 
-                var withoutThink = llmService.StripThinkBlock(rawResponse.Text).Trim();
+                var withoutThink = chatModel.StripThinkBlock(rawResponse.Text).Trim();
 
                 LearningExtractionResponse? parsed = null;
                 try
@@ -142,7 +126,7 @@ public class LearningExtractionService(
                     logger.LogWarning(
                         "Segment for URL {Url} still over token limit ({Tokens}) " +
                         "even though length={Length}; truncating.",
-                        sourceUrl, tokenCount, segment.Length);
+                        sourceUrl, tokenizeResult.Count, segment.Length);
 
                     var truncated = segment[..(segment.Length / 2)];
                     pending.Enqueue(truncated);
@@ -169,7 +153,7 @@ public class LearningExtractionService(
     /// Simple heuristic: more content → slightly more allowed learnings,
     /// but always clamped between Min and Max.
     /// </summary>
-    private static int ComputeAdaptiveMaxLearnings(int segmentLengthChars)
+    static int ComputeAdaptiveMaxLearnings(int segmentLengthChars)
     {
         // very short chunk → few learnings
         if (segmentLengthChars <= 2000) return 5;
@@ -184,7 +168,7 @@ public class LearningExtractionService(
     /// Splits a segment into two parts on a "nice" boundary (paragraph / sentence),
     /// roughly in the middle. If no good boundary is found, falls back to a hard split.
     /// </summary>
-    private (string left, string right) SplitSegmentOnBoundary(string segment)
+    (string left, string right) SplitSegmentOnBoundary(string segment)
     {
         if (string.IsNullOrEmpty(segment))
             return (string.Empty, string.Empty);
@@ -231,27 +215,3 @@ public class LearningExtractionService(
     }
 };
 
-public sealed class ExtractedLearningItem
-{
-    [Description("Single, self-contained learning text in the target language, highly relevant to the user's query.")]
-    public required string Text { get; init; }
-
-    [Description("Importance score between 0.0 (barely relevant) and 1.0 (critical for answering the query).")]
-    public required float Importance { get; init; }
-}
-
-public sealed class LearningExtractionResponse
-{
-    [Description("Array of extracted learnings.")]
-    public required List<ExtractedLearningItem> Learnings { get; init; }
-
-    public static ChatResponseFormat JsonResponseSchema(JsonSerializerOptions? jsonSerializerOptions = default)
-    {
-        var jsonElement = AIJsonUtilities.CreateJsonSchema(
-            typeof(LearningExtractionResponse),
-            description: "Structured learnings extraction result",
-            serializerOptions: jsonSerializerOptions);
-
-        return new ChatResponseFormatJson(jsonElement);
-    }
-}

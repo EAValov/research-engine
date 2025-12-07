@@ -1,31 +1,23 @@
 using ResearchApi.Domain;
 using ResearchApi.Infrastructure;
 using ResearchApi.Application;
-using ResearchApi.Configuration;
 using Microsoft.EntityFrameworkCore;
 using Serilog;
 using Serilog.Filters;
-
-// Configure Serilog with all settings in code
-Log.Logger = new LoggerConfiguration()
-    .MinimumLevel.Debug()
-    .Enrich.FromLogContext()
-    .WriteTo.File(
-        "logs/app.log",
-        outputTemplate: "{Timestamp:dd/MM/yyyy HH:mm:ss ffff zzz} [{Level:u3}] {Message:lj}{NewLine}{Exception}",
-        rollingInterval: RollingInterval.Hour,
-        retainedFileCountLimit: 30)
-    .WriteTo.Logger(lc => lc
-        .Filter.ByIncludingOnly(Matching.FromSource("ResearchApi"))
-        .MinimumLevel.Information()
-        .WriteTo.Console())
-    .CreateLogger();
+using ResearchApi.Configuration;
+using Serilog.Events;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Configure logging to use Serilog
+Log.Logger = new LoggerConfiguration()
+    .ReadFrom.Configuration(builder.Configuration)
+    .Enrich.FromLogContext()
+    .CreateLogger();
+
 builder.Logging.ClearProviders();
-builder.Logging.AddSerilog(Log.Logger);
+builder.Host.UseSerilog();
 
 IConfigurationRoot config = new ConfigurationBuilder()
     .AddJsonFile("appsettings.json")
@@ -34,34 +26,55 @@ IConfigurationRoot config = new ConfigurationBuilder()
 
 builder.Services.AddDbContextFactory<ResearchDbContext>(options =>
 {
-    options.UseNpgsql(builder.Configuration.GetConnectionString("ResearchDb"),
-        npgsql =>
-        {
-            npgsql.UseVector();
-        });
+    options.UseNpgsql(
+    builder.Configuration.GetConnectionString("ResearchDb"),
+    npgsql =>
+    {
+        npgsql.UseVector();
+        npgsql.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery);
+    });
 });
 
-builder.Services.AddTransient<HttpFileLoggingHandler>();
-builder.Services.AddHttpClient("Default")
-    .AddHttpMessageHandler<HttpFileLoggingHandler>();
-
-builder.Services
-    .AddHttpClient<FirecrawlClient>()
-    .ConfigureHttpClient(c=> c.Timeout = TimeSpan.FromMinutes(5))
-    .AddHttpMessageHandler<HttpFileLoggingHandler>();
+builder.Services.AddHttpClient();
 
 builder.Services.Configure<FirecrawlOptions>(
     config.GetSection(nameof(FirecrawlOptions)));
 
-builder.Services.Configure<LlmServiceConfig>(
-    config.GetSection(nameof(LlmServiceConfig)));
+var firecrawlOptions = config.GetSection(nameof(FirecrawlOptions)).Get<FirecrawlOptions>()!;
 
-// Add LLM chunking options
-builder.Services.Configure<LlmChunkingOptions>(
-    config.GetSection(nameof(LlmChunkingOptions)));
+builder.Services
+    .AddHttpClient<FirecrawlClient>()
+    .ConfigureHttpClient(c => c.Timeout = TimeSpan.FromSeconds(firecrawlOptions.HttpClientTimeoutSeconds));
+
+builder.Services.Configure<ChatConfig>(
+    config.GetSection(nameof(ChatConfig)));
+
+var chatConfig = config.GetSection(nameof(ChatConfig)).Get<ChatConfig>()!;
+
+builder.Services.Configure<EmbeddingConfig>(
+    config.GetSection(nameof(EmbeddingConfig)));
+
+var embeddingConfig = config.GetSection(nameof(EmbeddingConfig)).Get<EmbeddingConfig>()!;
+
+builder.Services.Configure<TokenizerConfig>(
+    config.GetSection(nameof(TokenizerConfig)));
+
+builder.Services.Configure<ResearchOrchestratorConfig>(
+    config.GetSection(nameof(ResearchOrchestratorConfig)));
+
+builder.Services
+    .AddOptions<LearningSimilarityOptions>()
+    .Bind(builder.Configuration.GetSection(nameof(LearningSimilarityOptions)))
+    .ValidateDataAnnotations()
+    .Validate(options => options.LocalMinImportance <= options.GlobalMinImportance,
+        "LocalMinImportance must be <= GlobalMinImportance")
+    .ValidateOnStart();
 
 // Register services
-builder.Services.AddScoped<ILlmService, LlmService>();
+builder.Services.AddSingleton<IChatModel, OpenAiChatModel>();
+builder.Services.AddSingleton<IEmbeddingModel, OpenAiEmbeddingModel>();
+builder.Services.AddSingleton<ITokenizer, VllmTokenizer>();
+
 builder.Services.AddScoped<ISearchClient>(sp => sp.GetRequiredService<FirecrawlClient>());
 builder.Services.AddScoped<ICrawlClient>(sp => sp.GetRequiredService<FirecrawlClient>());
 
@@ -74,10 +87,23 @@ builder.Services.AddScoped<ILearningExtractionService, LearningExtractionService
 builder.Services.AddScoped<IReportSynthesisService, ReportSynthesisService>();
 
 
+builder.Services.AddHealthChecks()
+    .AddCheck("self", () => HealthCheckResult.Healthy(), tags: ["ready"])
+   // .AddUrlGroup(new Uri($"{firecrawlOptions.BaseUrl}/health"), "firecrawl", tags: ["ready", "search", "crawl"])
+    .AddUrlGroup(new Uri($"{chatConfig.Endpoint}/models"), "chat", tags: ["ready", "llm", "chat"])
+    .AddUrlGroup(new Uri($"{embeddingConfig.Endpoint}/models"), "embedding", tags: ["ready", "llm", "embedding"])
+    .AddNpgSql(
+        builder.Configuration.GetConnectionString("ResearchDb")!,
+        name: "postgres",
+        tags: ["ready", "db"]
+    );
+
 var app = builder.Build();
 
+app.MapHealthChecks("/health/live", new HealthCheckOptions {Predicate = check => check.Name == "self"}); // only the app
+app.MapHealthChecks("/health/ready", new HealthCheckOptions { Predicate = check => check.Tags.Contains("ready")}); // everything else
+
 // Map custom endpoints
-app.MapHealthEndpoints();
 app.MapDeepResearchModel();
 
 using (var scope = app.Services.CreateScope())

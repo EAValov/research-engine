@@ -1,6 +1,7 @@
 using System.Text;
-using ResearchApi.Infrastructure;
-using ResearchApi.Prompts;
+using ResearchApi.Domain;
+
+namespace ResearchApi.Prompts;
 
 public static class SectionPlanningPromptFactory
 {
@@ -45,32 +46,5 @@ public static class SectionPlanningPromptFactory
         var userPrompt = userSb.ToString();
 
         return new Prompt(systemPrompt, userPrompt);
-    }
-
-    public static IReadOnlyList<SectionPlan> ToSectionPlans(SectionPlanningResponse response)
-    {
-        var result = new List<SectionPlan>();
-
-        if (response.Sections is null || response.Sections.Count == 0)
-            return result;
-
-        foreach (var item in response.Sections)
-        {
-            if (string.IsNullOrWhiteSpace(item.Title))
-                continue;
-
-            result.Add(new SectionPlan
-            {
-                Title       = item.Title,
-                Description = item.Description ?? string.Empty
-            });
-        }
-
-        if (result.Count > 0)
-        {
-            result[^1].IsConclusion = true;
-        }
-
-        return result;
     }
 }

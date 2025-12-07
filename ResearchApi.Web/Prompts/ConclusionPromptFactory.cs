@@ -1,6 +1,7 @@
 using System.Text;
-using ResearchApi.Infrastructure;
-using ResearchApi.Prompts;
+using ResearchApi.Domain;
+
+namespace ResearchApi.Prompts;
 
 public static class ConclusionPromptFactory
 {

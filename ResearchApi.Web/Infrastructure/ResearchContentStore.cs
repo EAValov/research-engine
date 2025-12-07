@@ -1,22 +1,12 @@
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Logging;
 using ResearchApi.Domain;
 
 namespace ResearchApi.Infrastructure;
 
-public class ResearchContentStore : IResearchContentStore
+public class ResearchContentStore (IDbContextFactory<ResearchDbContext> dbContextFactory, ILogger<ResearchContentStore> logger) : IResearchContentStore
 {
-    private readonly IDbContextFactory<ResearchDbContext> _dbContextFactory;
-    private readonly ILogger<ResearchContentStore> _logger;
-
-    public ResearchContentStore(IDbContextFactory<ResearchDbContext> dbContextFactory, ILogger<ResearchContentStore> logger)
-    {
-        _dbContextFactory = dbContextFactory;
-        _logger = logger;
-    }
-
     public async Task<ScrapedPage> UpsertScrapedPageAsync(
         string url,
         string content,
@@ -33,7 +23,7 @@ public class ResearchContentStore : IResearchContentStore
         var normalizedUrl = url.Trim();
         var contentHash = ComputeSha256(content);
     
-        await using var _db = await _dbContextFactory.CreateDbContextAsync(ct);
+        await using var _db = await dbContextFactory.CreateDbContextAsync(ct);
 
         var existing = await _db.ScrapedPages
             .FirstOrDefaultAsync(p => p.Url == normalizedUrl, ct);
@@ -42,14 +32,14 @@ public class ResearchContentStore : IResearchContentStore
         {
             if (existing.ContentHash == contentHash)
             {
-                _logger.LogDebug(
+                logger.LogDebug(
                     "Scraped page for URL {Url} already up-to-date (same content hash).",
                     normalizedUrl);
                 return existing;
             }
 
             // Content changed → clear old learnings for this page
-            _logger.LogInformation(
+            logger.LogDebug(
                 "Content for URL {Url} changed (hash {Old} -> {New}), deleting stale learnings.",
                 normalizedUrl, existing.ContentHash, contentHash);
 
@@ -81,7 +71,7 @@ public class ResearchContentStore : IResearchContentStore
         _db.ScrapedPages.Add(page);
         await _db.SaveChangesAsync(ct);
 
-        _logger.LogInformation("Inserted new scraped page for URL {Url}.", normalizedUrl);
+        logger.LogInformation("Inserted new scraped page for URL {Url}.", normalizedUrl);
 
         return page;
     }
@@ -91,14 +81,14 @@ public class ResearchContentStore : IResearchContentStore
         string queryHash,
         CancellationToken ct = default)
     {  
-        await using var _db = await _dbContextFactory.CreateDbContextAsync(ct);
+        await using var _db = await dbContextFactory.CreateDbContextAsync(ct);
 
         var list = await _db.Learnings
             .Where(l => l.PageId == pageId && l.QueryHash == queryHash)
             .OrderBy(l => l.CreatedAt)
             .ToListAsync(ct);
 
-        _logger.LogDebug(
+        logger.LogDebug(
             "Loaded {Count} learnings from DB for Page {PageId} and QueryHash={QueryHash}.",
             list.Count, pageId, queryHash);
 
@@ -112,7 +102,7 @@ public class ResearchContentStore : IResearchContentStore
         CancellationToken ct)
     {
         
-        await using var _db = await _dbContextFactory.CreateDbContextAsync(ct);
+        await using var _db = await dbContextFactory.CreateDbContextAsync(ct);
         var jobExists = await _db.ResearchJobs.AnyAsync(j => j.Id == jobId, ct);
         if (!jobExists)
             throw new InvalidOperationException($"ResearchJob {jobId} does not exist.");
@@ -124,7 +114,7 @@ public class ResearchContentStore : IResearchContentStore
         _db.Learnings.AddRange(learnings);
         await _db.SaveChangesAsync(ct);
 
-        _logger.LogInformation(
+        logger.LogInformation(
             "Persisted {Count} learnings for Job {JobId} and Page {PageId}.",
             learnings.Count(), jobId, pageId);
     }

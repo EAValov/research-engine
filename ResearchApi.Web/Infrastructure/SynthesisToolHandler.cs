@@ -1,44 +1,27 @@
-using System.Text.Json;
 using ResearchApi.Domain;
-using ResearchApi.Infrastructure;
-using Serilog;
 
-namespace ResearchApi.Application;
+namespace ResearchApi.Infrastructure;
 
-public class SynthesisToolHandler
+public class SynthesisToolHandler(
+    ILearningEmbeddingService retrieval,
+    Dictionary<string, int> sourceIndexMap,
+    Guid jobId
+)
 {
-    private readonly ILearningEmbeddingService _retrieval;
-    private readonly Dictionary<string, int> _sourceIndexMap;
-    private readonly Guid _jobId;
-
-    public SynthesisToolHandler(
-        ILearningEmbeddingService retrieval,
-        Dictionary<string, int> sourceIndexMap,
-        Guid jobId)
-    {
-        _retrieval      = retrieval;
-        _sourceIndexMap = sourceIndexMap;
-        _jobId          = jobId;
-    }
-
     public async Task<GetSimilarLearningsToolResult> HandleGetSimilarLearningsAsync(
         string queryText,
         string? language = null,
         string? region = null,
         CancellationToken ct = default)
     {
-        Log.Logger.Information("[SynthesisTool] get_similar_learnings called. jobId={_jobId}, query='{queryText}', lang={language}, region={region}", _jobId, queryText, language, region);
-
-        var learnings = await _retrieval.GetSimilarLearningsAsync(
+        var learnings = await retrieval.GetSimilarLearningsAsync(
             queryText: queryText,
-            jobId: _jobId,
+            jobId: jobId,
             queryHash: null,
             language: language,
             region: region,
             topK: 6,
             ct: ct);
-
-        Log.Logger.Information("[SynthesisTool] retrieved {learnings} learnings from DB.", learnings.Count);
 
         return new GetSimilarLearningsToolResult
         {
@@ -46,13 +29,13 @@ public class SynthesisToolHandler
             Learnings = learnings
                 .Select(l =>
                 {
-                    if (!_sourceIndexMap.TryGetValue(l.SourceUrl, out var idx))
+                    if (!sourceIndexMap.TryGetValue(l.SourceUrl, out var idx))
                     {
                         // If URL not previously indexed, you can decide to:
                         // - ignore it, or
                         // - assign a new index and mutate _sourceIndexMap.
-                        idx = _sourceIndexMap.Count + 1;
-                        _sourceIndexMap[l.SourceUrl] = idx;
+                        idx = sourceIndexMap.Count + 1;
+                        sourceIndexMap[l.SourceUrl] = idx;
                     }
 
                     var citation = $"[{idx}]";

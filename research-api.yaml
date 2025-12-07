@@ -19,6 +19,18 @@ spec:
         - name: research-api-log
           mountPath: /app/logs
           readOnly: false
+      livenessProbe:
+      httpGet:
+        path: /health/live
+        port: 8080
+      initialDelaySeconds: 10
+      periodSeconds: 10
+      readinessProbe:
+        httpGet:
+          path: /health/ready
+          port: 8080
+        initialDelaySeconds: 5
+        periodSeconds: 10
 
   volumes:
     - name: research-api-log

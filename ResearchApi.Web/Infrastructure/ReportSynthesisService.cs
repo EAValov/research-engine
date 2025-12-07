@@ -1,30 +1,18 @@
-using System.ComponentModel;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
-using Microsoft.Extensions.AI;
-using ResearchApi.Application;
 using ResearchApi.Domain;
 using ResearchApi.Prompts;
 
 namespace ResearchApi.Infrastructure;
 
-public interface IReportSynthesisService
-{
-    Task<string> WriteFinalReportAsync(
-        ResearchJob job,
-        string clarificationsText,
-        IEnumerable<Learning> learnings,
-        CancellationToken ct);
-}
-
 public class ReportSynthesisService (
-    ILlmService llmService,
+    IChatModel chatModel,
+    ITokenizer tokenizer,
     ILearningEmbeddingService learningEmbeddingService,
     ILogger<ReportSynthesisService> logger
 ) : IReportSynthesisService
 {
-
     public async Task<string> WriteFinalReportAsync(
         ResearchJob job,
         string clarificationsText,
@@ -69,7 +57,7 @@ public class ReportSynthesisService (
             clarificationsText,
             job.TargetLanguage);
 
-        var tokens = await llmService.TokenizePromptAsync(planningPrompt, ct);
+        var tokens = await tokenizer.TokenizePromptAsync(planningPrompt, ct);
         logger.LogDebug("[ReportSynthesis] Planning prompt tokens: {count}/{max}",
             tokens.Count, tokens.MaxModelLen);
 
@@ -81,13 +69,13 @@ public class ReportSynthesisService (
 
         var responseFormat = SectionPlanningResponse.JsonResponseSchema(jsonOptions);
 
-        var response = await llmService.ChatAsync(
+        var response = await chatModel.ChatAsync(
             planningPrompt,
             tools: null,
             responseFormat: responseFormat,
             cancellationToken: ct);
 
-        var raw = llmService.StripThinkBlock(response.Text);
+        var raw = chatModel.StripThinkBlock(response.Text);
         logger.LogDebug("[ReportSynthesis] Planning raw response: {text}", raw);
 
         SectionPlanningResponse? structured = null;
@@ -101,7 +89,7 @@ public class ReportSynthesisService (
         }
 
         var sectionPlans = structured?.Sections is { Count: > 0 }
-            ? SectionPlanningPromptFactory.ToSectionPlans(structured)
+            ? structured.ToSectionPlans()
             : FallbackSectionPlans();
 
         return sectionPlans;
@@ -152,7 +140,7 @@ public class ReportSynthesisService (
                 job.TargetLanguage ?? "en",
                 section);
 
-            var tokens = await llmService.TokenizePromptAsync(prompt, ct);
+            var tokens = await tokenizer.TokenizePromptAsync(prompt, ct);
             logger.LogDebug("[ReportSynthesis] Section '{title}' prompt tokens: {count}/{max}",
                 section.Title, tokens.Count, tokens.MaxModelLen);
 
@@ -161,19 +149,16 @@ public class ReportSynthesisService (
                 sourceIndexMap,
                 job.Id);
 
-            var tool = LlmService.CreateTool(
+            var tool = chatModel.CreateTool(
                 toolHandler.HandleGetSimilarLearningsAsync,
                 "get_similar_learnings");
 
-            var response = await llmService.ChatAsync(
+            var response = await chatModel.ChatAsync(
                 prompt,
                 tools: [tool],
                 cancellationToken: ct);
 
-            logger.LogDebug("[ReportSynthesis] Raw section '{title}' response: {text}",
-                section.Title, response.Text);
-
-            var text = llmService.StripThinkBlock(response.Text).Trim();
+            var text = chatModel.StripThinkBlock(response.Text).Trim();
 
             results.Add(new SectionResult
             {
@@ -197,18 +182,16 @@ public class ReportSynthesisService (
             section.Text,
             targetLang);
 
-        var tokens = await llmService.TokenizePromptAsync(prompt, ct);
+        var tokens = await tokenizer.TokenizePromptAsync(prompt, ct);
         logger.LogDebug("[ReportSynthesis] Section '{title}' summary prompt tokens: {count}/{max}",
             section.Plan.Title, tokens.Count, tokens.MaxModelLen);
 
-        // если очень много токенов — можно в будущем добавить обрезку текста / extra guard
-
-        var response = await llmService.ChatAsync(
+        var response = await chatModel.ChatAsync(
             prompt,
             tools: null,
             cancellationToken: ct);
 
-        var summary = llmService.StripThinkBlock(response.Text).Trim();
+        var summary = chatModel.StripThinkBlock(response.Text).Trim();
         return summary;
     }
 
@@ -227,18 +210,18 @@ public class ReportSynthesisService (
             targetLang,
             sectionResults);
 
-        var tokens = await llmService.TokenizePromptAsync(prompt, ct);
+        var tokens = await tokenizer.TokenizePromptAsync(prompt, ct);
         logger.LogDebug("[ReportSynthesis] Conclusion prompt tokens: {count}/{max}",
             tokens.Count, tokens.MaxModelLen);
 
         // если вдруг близко к лимиту — можно здесь добавить логику "урезать summaries"
 
-        var response = await llmService.ChatAsync(
+        var response = await chatModel.ChatAsync(
             prompt,
             tools: null,
             cancellationToken: ct);
 
-        var conclusionText = llmService.StripThinkBlock(response.Text).Trim();
+        var conclusionText = chatModel.StripThinkBlock(response.Text).Trim();
         return conclusionText;
     }
 
@@ -321,8 +304,6 @@ public class ReportSynthesisService (
 
     private string FixChainedCitations(string text)
     {
-        // [6][8] -> [6], [8]
-        // [6][7][8] -> [6], [7], [8]
         return Regex.Replace(
             text,
             @"\[(\d+)\]\s*\[(\d+)\]",
@@ -350,53 +331,7 @@ public class ReportSynthesisService (
                 if (!indexToUrl.TryGetValue(idx, out var url))
                     return m.Value;
 
-                // превращаем [3] в [3](https://...)
                 return $"[{idx}]({url})";
             });
-    }
-}
-
-
-public sealed class SectionPlan
-{
-    public string Title { get; set; } = null!;
-    public string Description { get; set; } = string.Empty;
-
-    /// <summary>
-    /// Можно помечать, что эта секция — заключение (опционально).
-    /// Пока будем считать, что последняя секция — это conclusion.
-    /// </summary>
-    public bool IsConclusion { get; set; }
-}
-
-public sealed class SectionResult
-{
-    public required SectionPlan Plan { get; init; }
-    public required string Text { get; init; }
-    public string? Summary { get; set; }
-}
-
-public sealed class SectionPlanItem
-{
-    [Description("Short, informative title of the report section.")]
-    public required string Title { get; init; }
-
-    [Description("One or two sentences describing what this section should cover.")]
-    public required string Description { get; init; }
-}
-
-public sealed class SectionPlanningResponse
-{
-    [Description("Ordered list of planned sections for the report.")]
-    public required List<SectionPlanItem> Sections { get; init; }
-
-    public static ChatResponseFormat JsonResponseSchema(JsonSerializerOptions? jsonSerializerOptions = default)
-    {
-        var jsonElement = AIJsonUtilities.CreateJsonSchema(
-            typeof(SectionPlanningResponse),
-            description: "Structured section planning result for a research report",
-            serializerOptions: jsonSerializerOptions);
-
-        return new ChatResponseFormatJson(jsonElement);
     }
 }

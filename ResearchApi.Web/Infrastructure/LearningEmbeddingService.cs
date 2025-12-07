@@ -1,121 +1,107 @@
 using System.Text;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
+using Pgvector;
 using Pgvector.EntityFrameworkCore;
+using ResearchApi.Configuration;
 using ResearchApi.Domain;
 
 namespace ResearchApi.Infrastructure;
 
-public interface ILearningEmbeddingService
+public sealed class LearningEmbeddingService(
+    IEmbeddingModel embeddingModel,
+    IDbContextFactory<ResearchDbContext> dbContextFactory,
+    IOptions<LearningSimilarityOptions> similarityOptions,
+    ILogger<LearningEmbeddingService> logger)
+    : ILearningEmbeddingService
 {
-    /// <summary>
-    /// Ensures that all given learnings have embeddings.
-    /// Only computes embeddings for learnings with Embedding == null.
-    /// </summary>
-    Task<IReadOnlyList<Learning>> PopulateEmbeddingsAsync(
-        IEnumerable<Learning> learnings,
-        CancellationToken ct = default);
-
-    Task<IReadOnlyList<Learning>> GetSimilarLearningsAsync(
-        string queryText,
-        Guid? jobId          = null,
-        string? queryHash    = null,
-        string? language     = null,
-        string? region       = null,
-        int topK             = 20,
-        CancellationToken ct = default);
-}
-
-public class LearningEmbeddingService : ILearningEmbeddingService
-{
-    private readonly ILlmService _llmService;
-    private readonly IDbContextFactory<ResearchDbContext> _dbContextFactory;
-    private readonly ILogger<LearningEmbeddingService> _logger;
-
-    public LearningEmbeddingService(
-        ILlmService llmService,
-        IDbContextFactory<ResearchDbContext> dbContextFactory,
-        ILogger<LearningEmbeddingService> logger)
-    {
-        _llmService = llmService;
-        _dbContextFactory = dbContextFactory;
-        _logger = logger;
-    }
-
+    readonly LearningSimilarityOptions _options = similarityOptions.Value;
+    
     public async Task<IReadOnlyList<Learning>> PopulateEmbeddingsAsync(
         IEnumerable<Learning> learnings,
         CancellationToken ct = default)
     {
-        if (learnings == null || learnings.Count() == 0)
+        if (learnings is null)
             return Array.Empty<Learning>();
 
-        var toEmbed = learnings
-            .Where(l => l.Embedding == null)
+        var learningList = learnings as IList<Learning> ?? learnings.ToList();
+        if (learningList.Count == 0)
+            return Array.Empty<Learning>();
+
+        var toEmbed = learningList
+            .Where(l => l.Embedding is null)
             .ToList();
 
-        if (toEmbed.Count() == 0)
+        if (toEmbed.Count == 0)
         {
-            _logger.LogDebug("All {Count} learnings already have embeddings.", learnings.Count());
-            return toEmbed;
+            logger.LogDebug("All {Count} learnings already have embeddings.", learningList.Count);
+            return Array.Empty<Learning>();
         }
 
-        _logger.LogInformation("Computing embeddings for {Count} learnings.", toEmbed.Count);
+        logger.LogInformation("Computing embeddings for {Count} learnings.", toEmbed.Count);
 
-        // You can slice here if you want to limit batch size
-        var texts = toEmbed.Select(l => l.Text).ToList();
-        var vectors = await _llmService.GenerateEmbeddingsAsync(texts, ct);
+        var texts   = toEmbed.Select(l => l.Text).ToList();
+        var vectors = await embeddingModel.GenerateEmbeddingsAsync(texts, ct);
 
         var count = Math.Min(toEmbed.Count, vectors.Count);
-        for (int i = 0; i < count; i++)
+        for (var i = 0; i < count; i++)
         {
-            toEmbed[i].Embedding = new Pgvector.Vector(vectors[i].Vector);
+            toEmbed[i].Embedding = new Vector(vectors[i].Vector);
         }
 
-        _logger.LogInformation("Stored embeddings for {Count} learnings.", count);
+        logger.LogInformation("Stored embeddings for {Count} learnings.", count);
 
         return toEmbed;
     }
 
-   public async Task<IReadOnlyList<Learning>> GetSimilarLearningsAsync(
+    public async Task<IReadOnlyList<Learning>> GetSimilarLearningsAsync(
         string queryText,
         Guid? jobId          = null,
         string? queryHash    = null,
         string? language     = null,
         string? region       = null,
-        int topK             = 10,
+        int   topK           = 20,
         CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(queryText))
             return Array.Empty<Learning>();
 
-        var embeddingResult = await _llmService.GenerateEmbeddingAsync(queryText, ct);
+        var embeddingResult = await embeddingModel.GenerateEmbeddingAsync(queryText, ct);
         if (embeddingResult is null)
             return Array.Empty<Learning>();
 
-        var queryEmbedding = embeddingResult.Vector;
-        var maxK = Math.Clamp(topK, 1, 200);
-        var queryVector = new Pgvector.Vector(queryEmbedding);
+        var queryVector = new Vector(embeddingResult.Vector);
+        var maxK        = Math.Clamp(topK, 1, 200);
 
-        // Tunable knobs
-        const float  LocalMinImportance          = 0.4f; // “good enough” for current job
-        const float  GlobalMinImportance         = 0.65f; // only very strong items from other jobs
-        const double MinLocalFractionForNoGlobal = 0.75D;   // if we have ≥ 75% of topK locally, we skip global
+        var localMinImportance          = _options.LocalMinImportance;
+        var globalMinImportance         = _options.GlobalMinImportance;
+        var minLocalFractionForNoGlobal = _options.MinLocalFractionForNoGlobal;
 
-        await using var db = await _dbContextFactory.CreateDbContextAsync(ct);
+        await using var db = await dbContextFactory.CreateDbContextAsync(ct);
 
-        // -------- base queries --------
+        IQueryable<Learning> BaseLocalQuery()
+        {
+            var q = db.Learnings
+                .Include(l => l.Page)
+                .Where(l => l.Embedding != null);
 
-        IQueryable<Learning> BaseLocalQuery() =>
-            db.Learnings
-            .Include(l => l.Page)
-            .Where(l => l.Embedding != null)
-            .Where(l => jobId.HasValue ? l.JobId == jobId.Value : true)
-            .Where(l => string.IsNullOrWhiteSpace(queryHash) || l.QueryHash == queryHash);
+            if (jobId is Guid jid)
+            {
+                q = q.Where(l => l.JobId == jid);
+            }
+
+            if (!string.IsNullOrWhiteSpace(queryHash))
+            {
+                q = q.Where(l => l.QueryHash == queryHash);
+            }
+
+            return q;
+        }
 
         IQueryable<Learning> BaseGlobalQuery() =>
             db.Learnings
-            .Include(l => l.Page)
-            .Where(l => l.Embedding != null);
-            // note: no jobId / queryHash filter here – this is cross-job
+              .Include(l => l.Page)
+              .Where(l => l.Embedding != null);
 
         async Task<List<Learning>> RunQueryAsync(
             IQueryable<Learning> baseQuery,
@@ -137,12 +123,11 @@ public class LearningEmbeddingService : ILearningEmbeddingService
                 q = q.Where(l => l.Page.Region == region);
             }
 
-            // filter by importance
             q = q.Where(l => l.ImportanceScore >= minImportance);
 
             if (excludeIds is not null)
             {
-                var excluded = excludeIds.ToList();
+                var excluded = excludeIds as ICollection<Guid> ?? excludeIds.ToList();
                 if (excluded.Count > 0)
                 {
                     q = q.Where(l => !excluded.Contains(l.Id));
@@ -158,56 +143,51 @@ public class LearningEmbeddingService : ILearningEmbeddingService
             return await q.AsNoTracking().ToListAsync(ct);
         }
 
-        // ========== 1) LOCAL SEARCH: current job only ==========
-
-        var localQuery      = BaseLocalQuery();
         var useLangFilter   = !string.IsNullOrWhiteSpace(language);
         var useRegionFilter = !string.IsNullOrWhiteSpace(region);
 
-        // 1a) try with language + region (if provided)
-        var localResults = await RunQueryAsync(
+        // ========== 1) LOCAL SEARCH ==========
+
+        var localQuery  = BaseLocalQuery();
+        var localResults = new List<Learning>();
+
+        // 1a) with language + region (if provided)
+        localResults.AddRange(await RunQueryAsync(
             localQuery,
             useLanguageFilter: useLangFilter,
             useRegionFilter:   useRegionFilter,
-            minImportance:     LocalMinImportance,
-            limit:             maxK);
+            minImportance:     localMinImportance,
+            limit:             maxK));
 
-        // 1b) fallback: drop region, keep language (if region was specified)
+        // 1b) drop region
         if (localResults.Count < maxK && useRegionFilter)
         {
-            var moreLocal = await RunQueryAsync(
+            localResults.AddRange(await RunQueryAsync(
                 localQuery,
                 useLanguageFilter: useLangFilter,
                 useRegionFilter:   false,
-                minImportance:     LocalMinImportance,
+                minImportance:     localMinImportance,
                 limit:             maxK - localResults.Count,
-                excludeIds:        localResults.Select(l => l.Id));
-
-            if (moreLocal.Count > 0)
-                localResults.AddRange(moreLocal);
+                excludeIds:        localResults.Select(l => l.Id)));
         }
 
-        // 1c) fallback: drop language+region, keep only job/queryHash
+        // 1c) drop language too
         if (localResults.Count < maxK && useLangFilter)
         {
-            var moreLocal = await RunQueryAsync(
+            localResults.AddRange(await RunQueryAsync(
                 localQuery,
                 useLanguageFilter: false,
                 useRegionFilter:   false,
-                minImportance:     LocalMinImportance,
+                minImportance:     localMinImportance,
                 limit:             maxK - localResults.Count,
-                excludeIds:        localResults.Select(l => l.Id));
-
-            if (moreLocal.Count > 0)
-                localResults.AddRange(moreLocal);
+                excludeIds:        localResults.Select(l => l.Id)));
         }
 
-        // If we filled most of topK locally, we don't need global
-        var minLocalNeeded = (int)Math.Ceiling(maxK * MinLocalFractionForNoGlobal);
+        var minLocalNeeded = (int)Math.Ceiling(maxK * minLocalFractionForNoGlobal);
         if (localResults.Count >= minLocalNeeded)
             return ApplyDiversityFilter(localResults, topK);
 
-        // ========== 2) GLOBAL SEARCH: other jobs, same language by default ==========
+        // ========== 2) GLOBAL SEARCH ==========
 
         var remaining = maxK - localResults.Count;
         if (remaining <= 0)
@@ -215,35 +195,33 @@ public class LearningEmbeddingService : ILearningEmbeddingService
 
         var globalQuery = BaseGlobalQuery();
 
-        // For global: keep language filter (so we don't mix languages),
-        // but by default do NOT filter by region – the question may be cross-regional.
         var globalResults = await RunQueryAsync(
             globalQuery,
             useLanguageFilter: useLangFilter,
             useRegionFilter:   false,
-            minImportance:     GlobalMinImportance,
+            minImportance:     globalMinImportance,
             limit:             remaining,
             excludeIds:        localResults.Select(l => l.Id));
 
         if (globalResults.Count > 0)
             localResults.AddRange(globalResults);
 
-        // Finally apply diversity post-filter
         return ApplyDiversityFilter(localResults, topK);
     }
-    
-    private static IReadOnlyList<Learning> ApplyDiversityFilter(
+
+    IReadOnlyList<Learning> ApplyDiversityFilter(
         IReadOnlyList<Learning> orderedCandidates,
-        int topK,
-        int maxPerUrl = 3,
-        double maxTextSimilarity = 0.85)
+        int topK)
     {
         if (orderedCandidates.Count == 0)
             return orderedCandidates;
 
-        var selected   = new List<Learning>(capacity: topK);
-        var perUrl     = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-        var seenTexts  = new List<string>(); // normalized texts for similarity
+        var maxPerUrl        = _options.DiversityMaxPerUrl;
+        var maxTextSimilarity = _options.DiversityMaxTextSimilarity;
+
+        var selected  = new List<Learning>(capacity: topK);
+        var perUrl    = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        var seenTexts = new List<string>();
 
         foreach (var candidate in orderedCandidates)
         {
@@ -253,14 +231,8 @@ public class LearningEmbeddingService : ILearningEmbeddingService
             var url = candidate.SourceUrl ?? string.Empty;
             if (!string.IsNullOrWhiteSpace(url))
             {
-                if (!perUrl.TryGetValue(url, out var count))
-                    count = 0;
-
-                if (count >= maxPerUrl)
-                {
-                    // too many learnings from same URL
+                if (perUrl.TryGetValue(url, out var count) && count >= maxPerUrl)
                     continue;
-                }
             }
 
             var normText = NormalizeForSimilarity(candidate.Text);
@@ -273,7 +245,6 @@ public class LearningEmbeddingService : ILearningEmbeddingService
             if (isTooSimilar)
                 continue;
 
-            // accept
             selected.Add(candidate);
             seenTexts.Add(normText);
 
@@ -288,12 +259,11 @@ public class LearningEmbeddingService : ILearningEmbeddingService
         return selected;
     }
 
-    private static string NormalizeForSimilarity(string text)
+    static string NormalizeForSimilarity(string text)
     {
         if (string.IsNullOrWhiteSpace(text))
             return string.Empty;
 
-        // Lowercase, remove most punctuation, collapse whitespace.
         var sb = new StringBuilder(text.Length);
         foreach (var ch in text)
         {
@@ -305,7 +275,6 @@ public class LearningEmbeddingService : ILearningEmbeddingService
             {
                 sb.Append(ch);
             }
-            // ignore other punctuation
         }
 
         var normalized = sb.ToString();
@@ -314,13 +283,15 @@ public class LearningEmbeddingService : ILearningEmbeddingService
             normalized.Split(' ', StringSplitOptions.RemoveEmptyEntries));
     }
 
-    private static double ComputeJaccardSimilarity(string a, string b)
+    static double ComputeJaccardSimilarity(string a, string b)
     {
         if (string.IsNullOrWhiteSpace(a) || string.IsNullOrWhiteSpace(b))
             return 0.0;
 
-        var setA = a.Split(' ', StringSplitOptions.RemoveEmptyEntries).ToHashSet(StringComparer.Ordinal);
-        var setB = b.Split(' ', StringSplitOptions.RemoveEmptyEntries).ToHashSet(StringComparer.Ordinal);
+        var setA = a.Split(' ', StringSplitOptions.RemoveEmptyEntries)
+            .ToHashSet(StringComparer.Ordinal);
+        var setB = b.Split(' ', StringSplitOptions.RemoveEmptyEntries)
+            .ToHashSet(StringComparer.Ordinal);
 
         if (setA.Count == 0 || setB.Count == 0)
             return 0.0;

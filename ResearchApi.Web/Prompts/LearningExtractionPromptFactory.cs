@@ -1,4 +1,5 @@
 using System.Text;
+using ResearchApi.Domain;
 
 namespace ResearchApi.Prompts;
 

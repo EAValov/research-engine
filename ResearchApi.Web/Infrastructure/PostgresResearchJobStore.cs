@@ -4,18 +4,11 @@ using ResearchApi.Domain;
 
 namespace ResearchApi.Infrastructure;
 
-
-public class PostgresResearchJobStore : IResearchJobStore
+public class PostgresResearchJobStore (
+    IDbContextFactory<ResearchDbContext> dbContextFactory,
+    ILogger<IResearchJobStore> logger
+) : IResearchJobStore
 {
-    private readonly IDbContextFactory<ResearchDbContext> _dbContextFactory;
-    private readonly ILogger<IResearchJobStore> _logger;
-
-    public PostgresResearchJobStore(IDbContextFactory<ResearchDbContext> dbContextFactory, ILogger<IResearchJobStore> logger)
-    {
-        _dbContextFactory = dbContextFactory;
-        _logger = logger;
-    }
-
     public async Task<ResearchJob> CreateJobAsync(
         string query,
         IEnumerable<Clarification> clarifications,
@@ -45,19 +38,19 @@ public class PostgresResearchJobStore : IResearchJobStore
             }).ToList()
         };
 
-        await using var _db = await _dbContextFactory.CreateDbContextAsync(ct);
+        await using var _db = await dbContextFactory.CreateDbContextAsync(ct);
 
         _db.ResearchJobs.Add(jobEntity);
         await _db.SaveChangesAsync();
 
-        _logger.LogInformation("Job {Id} created", jobEntity.Id);
+        logger.LogInformation("Job {Id} created", jobEntity.Id);
 
         return jobEntity;
     }
 
     public async Task<ResearchJob?> GetJobAsync(Guid id, CancellationToken ct = default)
     {
-        await using var _db = await _dbContextFactory.CreateDbContextAsync(ct);
+        await using var _db = await dbContextFactory.CreateDbContextAsync(ct);
 
         return await _db.ResearchJobs
            .Include(j => j.Clarifications)
@@ -68,7 +61,7 @@ public class PostgresResearchJobStore : IResearchJobStore
 
     public async Task<int> UpdateJobAsync(ResearchJob job, CancellationToken ct = default)
     {
-        await using var _db = await _dbContextFactory.CreateDbContextAsync(ct);
+        await using var _db = await dbContextFactory.CreateDbContextAsync(ct);
 
         var entity = await _db.ResearchJobs
             .Include(j => j.Clarifications)
@@ -99,14 +92,14 @@ public class PostgresResearchJobStore : IResearchJobStore
             });
         }
 
-        _logger.LogInformation("job {Id} updated", entity.Id);
+        logger.LogInformation("job {Id} updated", entity.Id);
 
         return await _db.SaveChangesAsync();
     }
 
     public async Task<IReadOnlyList<ResearchEvent>> GetEventsAsync(Guid jobId, CancellationToken ct = default)
     {
-        await using var _db = await _dbContextFactory.CreateDbContextAsync(ct);
+        await using var _db = await dbContextFactory.CreateDbContextAsync(ct);
 
         return await _db.ResearchEvents
             .Where(e => e.JobId == jobId)
@@ -117,7 +110,7 @@ public class PostgresResearchJobStore : IResearchJobStore
 
     public async Task<int> AppendEventAsync(Guid jobId, ResearchEvent ev, CancellationToken ct = default)
     {
-        await using var _db = await _dbContextFactory.CreateDbContextAsync(ct);
+        await using var _db = await dbContextFactory.CreateDbContextAsync(ct);
         var entity = new ResearchEvent
         {
             JobId = jobId,
@@ -128,7 +121,7 @@ public class PostgresResearchJobStore : IResearchJobStore
 
         await _db.ResearchEvents.AddAsync(entity, ct);
 
-        _logger.LogInformation("Job {JobId} [{Stage}] {Message}", jobId, ev.Stage, ev.Message);
+        logger.LogInformation("Job {JobId} [{Stage}] {Message}", jobId, ev.Stage, ev.Message);
         return await _db.SaveChangesAsync(ct);
     }
 }

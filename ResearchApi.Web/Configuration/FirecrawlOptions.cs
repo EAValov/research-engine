@@ -1,6 +1,7 @@
 namespace ResearchApi.Configuration;
 
-public class FirecrawlOptions
+public record FirecrawlOptions 
 {
-    public string BaseUrl { get; set; } = string.Empty; 
-}
+    public string BaseUrl { get; init; } = default!;
+    public int HttpClientTimeoutSeconds { get; init; } = default!;
+};

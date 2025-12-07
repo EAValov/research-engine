@@ -24,8 +24,6 @@ public sealed class SseChunkWriter
         var json = JsonSerializer.Serialize(chunk, _serializerOptions);
         var line = $"data: {json}\n\n";
 
-       _logger.Information(line);
-
         var bytes = Encoding.UTF8.GetBytes(line);
         await _httpContext.Response.Body.WriteAsync(bytes, token);
         await _httpContext.Response.Body.FlushAsync(token);

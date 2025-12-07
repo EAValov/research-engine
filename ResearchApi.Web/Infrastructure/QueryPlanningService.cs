@@ -5,25 +5,8 @@ using ResearchApi.Prompts;
 
 namespace ResearchApi.Infrastructure;
 
-public interface IQueryPlanningService
+public class QueryPlanningService (IChatModel chatModel, ILogger<QueryPlanningService> logger) : IQueryPlanningService
 {
-    Task<IReadOnlyList<string>> GenerateSerpQueriesAsync(
-        string query,
-        string clarificationsText,
-        int depth,
-        int breadth,
-        string targetLanguage,
-        CancellationToken ct);
-}
-
-public class QueryPlanningService (
-    ILlmService llmService,
-    ILogger<QueryPlanningService> logger
-) : IQueryPlanningService
-{
-    private readonly ILlmService _llmService = llmService;
-    private readonly ILogger<QueryPlanningService> _logger = logger;
-
     public async Task<IReadOnlyList<string>> GenerateSerpQueriesAsync(
         string query,
         string clarificationsText,
@@ -39,9 +22,9 @@ public class QueryPlanningService (
             depth: depth,
             targetLanguage: targetLanguage);
 
-        var rawResponse = await _llmService.ChatAsync(prompt, cancellationToken:ct);
+        var rawResponse = await chatModel.ChatAsync(prompt, cancellationToken:ct);
 
-        var withoutThink = _llmService.StripThinkBlock(rawResponse.Text);
+        var withoutThink = chatModel.StripThinkBlock(rawResponse.Text);
         
         var jsonStart = withoutThink.IndexOf('{');
         if (jsonStart > 0)
@@ -60,14 +43,9 @@ public class QueryPlanningService (
             .Take(breadth)
             .ToList() ?? new List<string>();
 
-        _logger.LogInformation("Generated {Count} SERP queries for query '{Query}' with depth={Depth}, breadth={Breadth}", 
+        logger.LogInformation("Generated {Count} SERP queries for query '{Query}' with depth={Depth}, breadth={Breadth}", 
             queries.Count, query, depth, breadth);
 
         return queries;
     }
-}
-
-public sealed class SerpQueryPlan
-{
-    public List<string>? Queries { get; set; }
 }

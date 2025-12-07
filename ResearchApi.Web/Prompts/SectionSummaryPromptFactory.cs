@@ -1,5 +1,7 @@
 using System.Text;
-using ResearchApi.Prompts;
+using ResearchApi.Domain;
+
+namespace ResearchApi.Prompts;
 
 public static class SectionSummaryPromptFactory
 {
