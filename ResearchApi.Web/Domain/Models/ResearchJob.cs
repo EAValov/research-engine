@@ -1,5 +1,7 @@
 namespace ResearchApi.Domain;
 
+public enum ResearchJobStatus { Pending, Running, Completed, Failed }
+
 public class ResearchJob
 {
     public Guid Id { get; set; }

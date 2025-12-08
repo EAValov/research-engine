@@ -1,3 +1,4 @@
+using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Options;
@@ -6,158 +7,248 @@ using ResearchApi.Domain;
 
 namespace ResearchApi.Infrastructure;
 
-public class FirecrawlClient(HttpClient httpClient, IOptions<FirecrawlOptions> options, ILogger<FirecrawlClient> logger)
-    : ISearchClient, ICrawlClient
+public class FirecrawlClient : ISearchClient, ICrawlClient
 {
-   public async Task<IReadOnlyList<SearchResult>> SearchAsync(
+    private readonly HttpClient _httpClient;
+    private readonly FirecrawlOptions _options;
+    private readonly ILogger<FirecrawlClient> _logger;
+    private readonly JsonSerializerOptions _jsonOptions;
+
+    public FirecrawlClient(
+        HttpClient httpClient,
+        IOptions<FirecrawlOptions> options,
+        ILogger<FirecrawlClient> logger)
+    {
+        _httpClient = httpClient;
+        _options = options.Value;
+        _logger = logger;
+
+        _jsonOptions = new JsonSerializerOptions(JsonSerializerDefaults.Web)
+        {
+            PropertyNameCaseInsensitive = true
+        };
+    }
+
+    public async Task<IReadOnlyList<SearchResult>> SearchAsync(
         string query,
         int limit,
         string? location = null,
         CancellationToken ct = default)
     {
-        var url = $"{options.Value.BaseUrl}/v1/search";
+        if (string.IsNullOrWhiteSpace(query))
+            return Array.Empty<SearchResult>();
 
-        object payload;
+        // Firecrawl rejects limit <= 0
+        limit = Math.Max(1, limit);
 
-        logger.LogInformation("[SearchAsync]: query:{query}, limit:{limit}, location: {location}", query, limit, location);
+        var url = $"{_options.BaseUrl}/v1/search";
 
-        if (!string.IsNullOrWhiteSpace(location))
-        {
-            payload = new
-            {
-                query,
+        object payload = string.IsNullOrWhiteSpace(location) ?
+            new { query, limit } : 
+            new { query,
                 limit,
                 location,
                 ignoreInvalidURLs = true
-            };
-        }
-        else
-        {
-            payload = new
-            {
-                query,
-                limit
-            };
-        }
+                };
 
-        var jsonPayload = JsonSerializer.Serialize(payload);
-        var request = new HttpRequestMessage(HttpMethod.Post, url)
+        var jsonPayload = JsonSerializer.Serialize(payload, _jsonOptions);
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, url)
         {
             Content = new StringContent(jsonPayload, Encoding.UTF8, "application/json")
         };
 
-        logger.LogDebug(
-            "Executing search for query '{Query}' with limit {Limit}, location '{Location}'",
+        _logger.LogDebug(
+            "Firecrawl search: query='{Query}', limit={Limit}, location='{Location}'",
             query,
             limit,
             location);
 
-        var response = await httpClient.SendAsync(request, ct);
-
-        if (!response.IsSuccessStatusCode)
+        try
         {
-            var errorText = await response.Content.ReadAsStringAsync(ct);
-            logger.LogError(
-                "Search error for payload {Payload}: {(int)response.StatusCode} {ResponsePhrase}. Body: {ErrorText}",
-                jsonPayload,
-                (int)response.StatusCode,
-                response.ReasonPhrase,
-                errorText);
+            using var response = await _httpClient.SendAsync(request, ct);
 
+            if (!response.IsSuccessStatusCode)
+            {
+                var errorText = await response.Content.ReadAsStringAsync(ct);
+                _logger.LogWarning(
+                    "Firecrawl search error for query '{Query}': {StatusCode} {ReasonPhrase}. Body: {Body}",
+                    query,
+                    (int)response.StatusCode,
+                    response.ReasonPhrase,
+                    errorText);
+
+                return Array.Empty<SearchResult>();
+            }
+
+            var content = await response.Content.ReadAsStringAsync(ct);
+
+            FirecrawlSearchResponse? searchResponse;
+
+            try
+            {
+                searchResponse = JsonSerializer.Deserialize<FirecrawlSearchResponse>(content, _jsonOptions);
+            }
+            catch (JsonException ex)
+            {
+                _logger.LogError(ex,
+                    "Failed to deserialize Firecrawl search response for query '{Query}'. Raw: {Raw}",
+                    query,
+                    content);
+
+                return Array.Empty<SearchResult>();
+            }
+
+            if (searchResponse?.data == null || searchResponse.data.Length == 0)
+            {
+                _logger.LogInformation("Firecrawl search returned no data for query '{Query}'", query);
+                return Array.Empty<SearchResult>();
+            }
+
+            var results = searchResponse.data
+                .Select(d => new SearchResult(d.url, d.title, d.description))
+                .ToList();
+
+            _logger.LogInformation(
+                "Firecrawl search completed for query '{Query}': {Count} results",
+                query,
+                results.Count);
+
+            return results;
+        }
+        catch (OperationCanceledException oce) when (!ct.IsCancellationRequested)
+        {
+            _logger.LogWarning(oce,
+                "Firecrawl search request timed out for query '{Query}'",
+                query);
             return Array.Empty<SearchResult>();
         }
-
-        var content = await response.Content.ReadAsStringAsync(ct);
-        var searchResponse = JsonSerializer.Deserialize<FirecrawlSearchResponse>(content);
-
-        if (searchResponse?.data == null)
+        catch (HttpRequestException hre)
         {
-            logger.LogWarning("Search returned no data for query '{Query}'", query);
+            _logger.LogWarning(hre,
+                "Firecrawl search request failed for query '{Query}'",
+                query);
             return Array.Empty<SearchResult>();
         }
-
-        var results = searchResponse.data
-            .Select(d => new SearchResult(d.url, d.title, d.description))
-            .ToList();
-
-        logger.LogInformation("Search completed for query '{Query}': found {Count} results", query, results.Count);
-
-        return results;
+        catch (Exception ex)
+        {
+            _logger.LogError(ex,
+                "Unexpected error during Firecrawl search for query '{Query}'",
+                query);
+            return Array.Empty<SearchResult>();
+        }
     }
 
     public async Task<string> FetchContentAsync(string url, CancellationToken ct = default)
     {
-        var request = new HttpRequestMessage(HttpMethod.Post, $"{options.Value.BaseUrl}/v1/scrape");
+        if (string.IsNullOrWhiteSpace(url))
+            return string.Empty;
+
+        var endpoint = $"{_options.BaseUrl}/v1/scrape";
 
         var payload = new
         {
             url,
-            timeout = httpClient.Timeout.TotalMilliseconds,
-            formats = new[] { "markdown" }
+            timeout = (int)_httpClient.Timeout.TotalMilliseconds,
+            formats = new[]
+            {
+                new { type = "markdown" }
+            }
         };
 
-        var jsonPayload = JsonSerializer.Serialize(payload);
-        request.Content = new StringContent(jsonPayload, Encoding.UTF8, "application/json");
+        var jsonPayload = JsonSerializer.Serialize(payload, _jsonOptions);
 
-        logger.LogDebug("Fetching content for URL: {Url}", url);
-
-        using var response = await httpClient.SendAsync(request, ct);
-
-        if (!response.IsSuccessStatusCode)
+        using var request = new HttpRequestMessage(HttpMethod.Post, endpoint)
         {
-            var errorText = await response.Content.ReadAsStringAsync(ct);
-            logger.LogError(
-                "Firecrawl error for URL {Url}: {StatusCode} {ReasonPhrase}. Body: {ErrorText}",
-                url,
-                (int)response.StatusCode,
-                response.ReasonPhrase,
-                errorText);
+            Content = new StringContent(jsonPayload, Encoding.UTF8, "application/json")
+        };
 
-            return string.Empty;
-        }
+        _logger.LogDebug("Firecrawl scrape: url={Url}", url);
 
-        var content = await response.Content.ReadAsStringAsync(ct);
-
-        FirecrawlScrapeResponse? scrapeResponse;
         try
         {
-            scrapeResponse = JsonSerializer.Deserialize<FirecrawlScrapeResponse>(content);
+            using var response = await _httpClient.SendAsync(request, ct);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                var errorText = await response.Content.ReadAsStringAsync(ct);
+                _logger.LogWarning(
+                    "Firecrawl scrape error for URL {Url}: {StatusCode} {ReasonPhrase}. Body: {ErrorText}",
+                    url,
+                    (int)response.StatusCode,
+                    response.ReasonPhrase,
+                    errorText);
+
+                return string.Empty;
+            }
+
+            var content = await response.Content.ReadAsStringAsync(ct);
+
+            FirecrawlScrapeResponse? scrapeResponse;
+            try
+            {
+                scrapeResponse = JsonSerializer.Deserialize<FirecrawlScrapeResponse>(content, _jsonOptions);
+            }
+            catch (JsonException ex)
+            {
+                _logger.LogError(ex,
+                    "Failed to deserialize Firecrawl scrape response for URL {Url}. Raw: {Raw}",
+                    url,
+                    content);
+                return string.Empty;
+            }
+
+            var markdown = scrapeResponse?.data?.markdown ?? string.Empty;
+
+            _logger.LogInformation(
+                "Fetched markdown content from URL {Url} with length {Length}",
+                url,
+                markdown.Length);
+
+            return markdown;
+        }
+        catch (OperationCanceledException oce) when (!ct.IsCancellationRequested)
+        {
+            _logger.LogWarning(oce,
+                "Firecrawl scrape request timed out for URL {Url}",
+                url);
+            return string.Empty;
+        }
+        catch (HttpRequestException hre)
+        {
+            _logger.LogWarning(hre,
+                "Firecrawl scrape request failed for URL {Url}",
+                url);
+            return string.Empty;
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Failed to deserialize Firecrawl scrape response for URL {Url}. Raw: {Raw}", url, content);
+            _logger.LogError(ex,
+                "Unexpected error during Firecrawl scrape for URL {Url}",
+                url);
             return string.Empty;
         }
-
-        var markdown = scrapeResponse?.data?.markdown ?? string.Empty;
-
-        logger.LogInformation(
-            "Fetched markdown content from URL {Url} with length {Length}",
-            url,
-            markdown.Length);
-
-        return markdown;
     }
 
-    class FirecrawlSearchResponse
+    private sealed class FirecrawlSearchResponse
     {
         public FirecrawlSearchData[]? data { get; set; }
     }
 
-    class FirecrawlSearchData
+    private sealed class FirecrawlSearchData
     {
         public required string url { get; set; }
         public required string title { get; set; }
         public required string description { get; set; }
     }
 
-    class FirecrawlScrapeResponse
+    private sealed class FirecrawlScrapeResponse
     {
         public bool success { get; set; }
         public FirecrawlScrapeData? data { get; set; }
     }
 
-    class FirecrawlScrapeData
+    private sealed class FirecrawlScrapeData
     {
         public string? markdown { get; set; }
     }

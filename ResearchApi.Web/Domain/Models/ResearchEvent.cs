@@ -12,11 +12,10 @@ public class ResearchEvent
     }
 
     public int Id { get; set; }
-
-    public Guid JobId { get; set; }
-    public ResearchJob Job { get; set; } = null!;
-
     public DateTimeOffset Timestamp { get; set; }
     public string Stage { get; set; } = null!;
     public string Message { get; set; } = null!;
+
+    public Guid JobId { get; set; }
+    public ResearchJob Job { get; set; } = null!;
 }
