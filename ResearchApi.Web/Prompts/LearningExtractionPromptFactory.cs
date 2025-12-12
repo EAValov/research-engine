@@ -9,7 +9,7 @@ public static class LearningExtractionPromptFactory
     /// Builds a prompt to extract dense learnings from fetched page content for a given query.
     /// Clarifications are optional and will be used as extra context if present.
     /// </summary>
-       public static Prompt Build(
+    public static Prompt Build(
         string query,
         string content,
         int maxLearnings,
@@ -17,6 +17,7 @@ public static class LearningExtractionPromptFactory
         string? targetLanguage = "en")
     {
         var sb = new StringBuilder();
+
         sb.AppendLine("Your task is to read the provided content and extract concise, information-dense LEARNINGS that are directly useful for the research query.");
         sb.AppendLine();
         sb.AppendLine("You are NOT summarizing the whole text; you are cherry-picking the most valuable, concrete pieces of information.");
@@ -24,7 +25,7 @@ public static class LearningExtractionPromptFactory
         sb.AppendLine("You MUST follow these rules:");
         sb.AppendLine($"- Return up to {maxLearnings} learnings (use fewer if the content is repetitive, low-signal, or off-topic).");
         sb.AppendLine("- Each learning must be a single, self-contained sentence or very short paragraph.");
-        sb.AppendLine("- Each learning must make sense on its own without referring to “this article”, “the author”, or pronouns like “it/they/this” when they are ambiguous.");
+        sb.AppendLine("- Each learning must make sense on its own without referring to “this article”, “the author”, or ambiguous pronouns like “it/they/this”.");
         sb.AppendLine("- Make each learning as SPECIFIC and information-dense as possible.");
         sb.AppendLine("- Whenever available, preserve important metrics, numbers, percentages, time ranges, and dates EXACTLY as written.");
         sb.AppendLine("- Include key domain entities (e.g., regulations, organizations, products, regions, technologies) when they are relevant.");
@@ -32,7 +33,7 @@ public static class LearningExtractionPromptFactory
         sb.AppendLine("- Avoid restating the same idea in different words; each learning should add NEW information.");
         sb.AppendLine("- If large portions of the content are unrelated to the query, IGNORE them rather than extracting generic or off-topic learnings.");
         sb.AppendLine();
-        sb.AppendLine("In addition to the learning text, you must assign an IMPORTANCE SCORE between 0.0 and 1.0:");
+        sb.AppendLine("In addition to the learning text, you must assign an IMPORTANCE SCORE between 0.0 and 1.0, relative to how much it helps answer the user’s query:");
         sb.AppendLine("- 1.0 = absolutely critical for answering the user query.");
         sb.AppendLine("- 0.7–0.9 = very useful, core supporting information.");
         sb.AppendLine("- 0.4–0.6 = somewhat useful, secondary detail.");
@@ -43,7 +44,7 @@ public static class LearningExtractionPromptFactory
         sb.AppendLine("When extracting legal or regulatory penalties (fines, percentages of turnover, etc.):");
         sb.AppendLine("- Only extract a specific fine or percentage if it is clearly tied in the text to a particular law, article, or official guideline.");
         sb.AppendLine("- If the text presents speculative or proposed penalties (e.g., future drafts, hypothetical scenarios), describe them qualitatively rather than as current, precise law.");
-        sb.AppendLine("- If multiple conflicting numbers are given for the same penalty, either omit them or mention the existence of conflicting figures without choosing one as definitive.");
+        sb.AppendLine("- If multiple conflicting numbers are given for the same penalty, either omit them or mention that the text gives conflicting figures without choosing one as definitive.");
         sb.AppendLine("- If you are not confident that a numeric detail is precisely supported by the text, omit the number rather than guessing.");
         sb.AppendLine();
 
@@ -76,20 +77,10 @@ public static class LearningExtractionPromptFactory
         sb.AppendLine($"Always write extracted learnings IN {targetLanguage}.");
         sb.AppendLine("The content may be in another language; translate implicitly if necessary.");
         sb.AppendLine();
-
-        sb.AppendLine("You MUST return your answer as a single JSON object with the following shape:");
-        sb.AppendLine("{");
-        sb.AppendLine("  \"learnings\": [");
-        sb.AppendLine("    { \"text\": \"...\", \"importance\": 0.0–1.0 },");
-        sb.AppendLine("    ...");
-        sb.AppendLine("  ]");
-        sb.AppendLine("}");
-        sb.AppendLine();
-        sb.AppendLine($"- Include at most {maxLearnings} items in the \"learnings\" array.");
-        sb.AppendLine("- \"text\" MUST be the final learning sentence in the target language, self-contained and specific.");
-        sb.AppendLine("- \"importance\" MUST be a float between 0.0 and 1.0 as described above.");
-        sb.AppendLine("- Do NOT wrap the JSON in markdown code fences.");
-        sb.AppendLine("- Do NOT add any extra commentary, explanations, or fields; return ONLY valid JSON.");
+        sb.AppendLine("You will respond in a structured JSON format provided by the system.");
+        sb.AppendLine($"- Include at most {maxLearnings} learning items.");
+        sb.AppendLine("- Each learning must include the final learning text in the target language and its importance score as a float between 0.0 and 1.0.");
+        sb.AppendLine("- Do NOT add any extra commentary or fields; output only the JSON payload required by the system.");
 
         return new Prompt(GetSystemPrompt(), sb.ToString());
     }
@@ -117,8 +108,8 @@ public static class LearningExtractionPromptFactory
         sb.AppendLine("- For sensitive legal or financial penalties, be especially conservative: when in doubt, prefer omission over potentially wrong precision.");
         sb.AppendLine();
         sb.AppendLine("Format discipline:");
-        sb.AppendLine("- Always obey the local task instructions: if the prompt asks for 'one learning per line, no numbering', follow that exactly.");
-        sb.AppendLine("- Do NOT add headings, explanations, or commentary beyond what the task requires.");
+        sb.AppendLine("- The system defines the exact JSON schema for your response.");
+        sb.AppendLine("- You MUST output only that JSON structure, with no markdown fences, headings, or extra commentary.");
 
         return sb.ToString();
     }

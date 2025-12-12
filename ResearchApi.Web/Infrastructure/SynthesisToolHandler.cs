@@ -20,7 +20,7 @@ public class SynthesisToolHandler(
             queryHash: null,
             language: language,
             region: region,
-            topK: 6,
+            topK: 10,
             ct: ct);
 
         return new GetSimilarLearningsToolResult

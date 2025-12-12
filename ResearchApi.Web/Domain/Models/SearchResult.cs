@@ -1,3 +1,3 @@
 namespace ResearchApi.Domain;
 
-public record SearchResult(string Url, string Title, string Description);
+public record SearchResult(string Url, string Title, string Content);

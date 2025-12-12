@@ -183,7 +183,7 @@ public class ReportSynthesisService (
             targetLang);
 
         var tokens = await tokenizer.TokenizePromptAsync(prompt, ct);
-        logger.LogDebug("[ReportSynthesis] Section '{title}' summary prompt tokens: {count}/{max}",
+        logger.LogDebug("[ReportSynthesis] Section summary '{title}'  prompt tokens: {count}/{max}",
             section.Plan.Title, tokens.Count, tokens.MaxModelLen);
 
         var response = await chatModel.ChatAsync(

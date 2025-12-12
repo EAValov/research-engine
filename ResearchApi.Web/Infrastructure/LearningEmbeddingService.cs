@@ -63,6 +63,9 @@ public sealed class LearningEmbeddingService(
         int   topK           = 20,
         CancellationToken ct = default)
     {
+        logger.LogDebug("[GetSimilarLearningsAsync] Calling tool with parameters: queryText={queryText}, jobId={jobId}, language{language}, region={region}",
+             queryText, jobId, language, region);
+
         if (string.IsNullOrWhiteSpace(queryText))
             return Array.Empty<Learning>();
 
@@ -255,6 +258,8 @@ public sealed class LearningEmbeddingService(
                     : 1;
             }
         }
+
+        logger.LogDebug("[GetSimilarLearningsAsync] {number} Learnings retrieved: {learnings}", selected.Count, string.Join(",", selected.Select(g => g.ToString())));
 
         return selected;
     }

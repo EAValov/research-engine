@@ -15,11 +15,11 @@ public static class OpenAiModelListEndpoint
             {
                 new
                 {
-                    id      = "Deep Research", 
+                    id      = "Open Deep Research", 
                     @object = "model",
                     created = created,
                     owned_by = "local",
-                    description = "Local Deep Research wrapper model"
+                    description = "Open Deep Research wrapper model"
                 }
             }
         };

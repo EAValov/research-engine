@@ -150,10 +150,7 @@ public class FirecrawlClient : ISearchClient, ICrawlClient
         {
             url,
             timeout = (int)_httpClient.Timeout.TotalMilliseconds,
-            formats = new[]
-            {
-                new { type = "markdown" }
-            }
+            formats = new[] { "markdown" }
         };
 
         var jsonPayload = JsonSerializer.Serialize(payload, _jsonOptions);

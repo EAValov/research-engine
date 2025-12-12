@@ -19,4 +19,9 @@ public class Learning
     public ScrapedPage Page { get; set; } = null!;
 
     public DateTimeOffset CreatedAt { get; set; }
+
+    public override string ToString()
+    {
+        return $"Id={Id}, QueryHash={QueryHash}, Text={Text}, SourceUrl={SourceUrl}, ImportanceScore={ImportanceScore}";
+    }
 }

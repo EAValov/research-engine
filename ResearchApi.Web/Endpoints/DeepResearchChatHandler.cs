@@ -399,7 +399,7 @@ public static class DeepResearchChatHandler
 
             var finalContent =
                 $"\n</think>\n\n" +
-                $"### Local Deep Research\n\n" +
+                $"### Open Deep Research\n\n" +
                 $"**Job ID:** `{currentJob.Id}`  \n" +
                 $"**Status:** `{statusStr}`  \n" +
                 $"**Query:** {currentJob.Query}\n\n" +
@@ -443,51 +443,43 @@ public static class DeepResearchChatHandler
 
         var prompt = SelectBreadthDepthPromptFactory.Build(query, clarifications);
 
-        var raw = await chatModel.ChatAsync(prompt, cancellationToken: ct);
+        var jsonOptions = new JsonSerializerOptions
+        {
+            PropertyNameCaseInsensitive = true
+        };
+
+        var responseFormat = BreadthDepthSelection.JsonResponseSchema(jsonOptions);
+
+        var raw = await chatModel.ChatAsync(
+            prompt,
+            tools: null,
+            responseFormat: responseFormat,
+            cancellationToken: ct);
 
         if (string.IsNullOrWhiteSpace(raw.Text))
             return (defaultBreadth, defaultDepth);
 
-        var raw_text = chatModel.StripThinkBlock(raw.Text);
-        
-        // попытка распарсить JSON
+        var rawText = chatModel.StripThinkBlock(raw.Text).Trim();
+
+        BreadthDepthSelection? parsed = null;
+
         try
         {
-            using var doc = JsonDocument.Parse(raw_text);
-            var root = doc.RootElement;
-
-            int b = root.TryGetProperty("breadth", out var bProp) && bProp.ValueKind == JsonValueKind.Number
-                ? bProp.GetInt32()
-                : defaultBreadth;
-
-            int d = root.TryGetProperty("depth", out var dProp) && dProp.ValueKind == JsonValueKind.Number
-                ? dProp.GetInt32()
-                : defaultDepth;
-
-            b = Math.Clamp(b, 1, 8);
-            d = Math.Clamp(d, 1, 4);
-
-            return (b, d);
+            parsed = JsonSerializer.Deserialize<BreadthDepthSelection>(rawText, jsonOptions);
         }
         catch
         {
-            // fallback: выдёргиваем цифры регекспом
-            var match = Regex.Match(
-                raw_text,
-                @"breadth[^0-9]*(\d+).*depth[^0-9]*(\d+)",
-                RegexOptions.IgnoreCase | RegexOptions.Singleline);
-
-            if (match.Success &&
-                int.TryParse(match.Groups[1].Value, out var bVal) &&
-                int.TryParse(match.Groups[2].Value, out var dVal))
-            {
-                var b = Math.Clamp(bVal, 1, 8);
-                var d = Math.Clamp(dVal, 1, 4);
-                return (b, d);
-            }
-
+            // If the model somehow returns malformed JSON despite the schema, just fall back.
             return (defaultBreadth, defaultDepth);
         }
+
+        var breadth = parsed?.Breadth ?? defaultBreadth;
+        var depth   = parsed?.Depth   ?? defaultDepth;
+
+        breadth = Math.Clamp(breadth, 1, 8);
+        depth   = Math.Clamp(depth,   1, 4);
+
+        return (breadth, depth);
     }
 
     public static async Task<(string language, string? region)> AutoSelectLanguageRegionAsync(
@@ -496,58 +488,92 @@ public static class DeepResearchChatHandler
         IChatModel chatModel,
         CancellationToken ct)
     {
-        const string defaultLang = "en";
+        const string defaultLang   = "en";
         const string? defaultRegion = null;
 
         var prompt = LanguageRegionSelectionPromptFactory.Build(query, clarifications);
 
-        var raw = await chatModel.ChatAsync(prompt, cancellationToken: ct);
+        var jsonOptions = new JsonSerializerOptions
+        {
+            PropertyNameCaseInsensitive = true
+        };
 
-        var raw_text = chatModel.StripThinkBlock(raw.Text);
+        var responseFormat = LanguageRegionSelection.JsonResponseSchema(jsonOptions);
 
+        var raw = await chatModel.ChatAsync(
+            prompt,
+            tools: null,
+            responseFormat: responseFormat,
+            cancellationToken: ct);
+
+        if (string.IsNullOrWhiteSpace(raw.Text))
+            return (defaultLang, defaultRegion);
+
+        var rawText = chatModel.StripThinkBlock(raw.Text).Trim();
+
+        LanguageRegionSelection? parsed;
         try
-        {          
-            using var doc = JsonDocument.Parse(raw_text);
-            var root = doc.RootElement;
-
-            string lang = root.TryGetProperty("language", out var lProp) && lProp.ValueKind == JsonValueKind.String
-                ? lProp.GetString()!
-                : defaultLang;
-
-            string? region = root.TryGetProperty("region", out var rProp) && rProp.ValueKind == JsonValueKind.String
-                ? rProp.GetString()
-                : defaultRegion;
-
-            return (lang, region);
+        {
+            parsed = JsonSerializer.Deserialize<LanguageRegionSelection>(rawText, jsonOptions);
         }
         catch
         {
             return (defaultLang, defaultRegion);
         }
+
+        // Normalize language: lower-case, 2-letter, fallback if invalid
+        var language = parsed?.Language?.Trim().ToLowerInvariant();
+        if (string.IsNullOrWhiteSpace(language) || language!.Length != 2)
+        {
+            language = defaultLang;
+        }
+
+        // Normalize region: treat empty/whitespace as null
+        var region = parsed?.Region?.Trim();
+        if (string.IsNullOrWhiteSpace(region))
+        {
+            region = defaultRegion;
+        }
+
+        return (language!, region);
     }
 
-    public static async Task<IReadOnlyList<string>> GenerateFeedbackQueries(string query,  bool includeBreadthDepthQuestions, IChatModel chatModel, CancellationToken ct)
+
+    public static async Task<IReadOnlyList<string>> GenerateFeedbackQueries(
+        string query,
+        bool includeBreadthDepthQuestions,
+        IChatModel chatModel,
+        CancellationToken ct)
     {
         var prompt = FeedbackPromptFactory.Build(query, includeBreadthDepthQuestions);
 
-        var rawResponse = await chatModel.ChatAsync(prompt, cancellationToken:ct);
-
-        var json_str = chatModel.StripThinkBlock(rawResponse.Text);
-
-        var jsonStart = json_str.IndexOf('{');
-        var jsonEnd = json_str.LastIndexOf('}');
-
-        if (jsonStart >= 0 && jsonEnd >= jsonStart)
-        {
-            json_str = json_str[jsonStart..(jsonEnd + 1)];
-        }
-
-        var plan = JsonSerializer.Deserialize<SerpQueryPlan>(json_str, new JsonSerializerOptions
+        var jsonOptions = new JsonSerializerOptions
         {
             PropertyNameCaseInsensitive = true
-        });
+        };
 
-        var queries = plan?.Queries?
+        var responseFormat = ClarificationQuestionsResponse.JsonResponseSchema(jsonOptions);
+
+        var rawResponse = await chatModel.ChatAsync(
+            prompt,
+            tools: null,
+            responseFormat: responseFormat,
+            cancellationToken: ct);
+
+        var jsonText = chatModel.StripThinkBlock(rawResponse.Text).Trim();
+
+        ClarificationQuestionsResponse? parsed;
+        try
+        {
+            parsed = JsonSerializer.Deserialize<ClarificationQuestionsResponse>(jsonText, jsonOptions);
+        }
+        catch
+        {
+            // If the LLM somehow returns invalid JSON despite the schema, just fall back to an empty list.
+            return Array.Empty<string>();
+        }
+
+        var queries = parsed?.Queries?
             .Where(q => !string.IsNullOrWhiteSpace(q))
             .Select(q => q.Trim())
             .ToList() ?? new List<string>();

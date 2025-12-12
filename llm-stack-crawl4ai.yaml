@@ -23,7 +23,7 @@ data:
     crawl.llm.local:8443 {
       tls internal
       encode zstd gzip
-      reverse_proxy 127.0.0.1:3002
+      reverse_proxy 127.0.0.1:11235
     }
     search.llm.local:8443 {
       tls internal
@@ -150,34 +150,9 @@ spec:
           value: "http://127.0.0.1:8085/search?q=<query>"
         - name: WEB_SEARCH_RESULT_COUNT
           value: "4"
-        - name: RAG_WEB_LOADER_ENGINE
-          value: "firecrawl"
-        - name: FIRE_CRAWL_API_BASE_URL
-          value: "http://127.0.0.1:3002/v1"
-        - name: FIRE_CRAWL_API_KEY
-          value: ""  
-        - name: WEB_LOADER_CONCURRENT_REQUESTS
-          value: "4"
       volumeMounts:
         - name: openwebui-data
           mountPath: /app/backend/data
-
-    - name: redis
-      image: redis:7-alpine
-      command: ["redis-server","--bind","0.0.0.0"]
-      ports:
-        - containerPort: 6379
-        
-    - name: firecrawl-playwright
-      image: ghcr.io/firecrawl/playwright-service
-      ports:
-        - containerPort: 3000
-      env:
-        - name: PORT
-          value: "3000"
-      volumeMounts:
-        - name: playwright-data
-          mountPath: /app/data
 
     - name: nuq-postgres
       image: localhost/nuq-postgres:latest
@@ -195,41 +170,6 @@ spec:
         - name: postgres-data
           mountPath: /var/lib/postgresql/data
           
-    - name: firecrawl
-      image: ghcr.io/firecrawl/firecrawl
-      ports:
-        - containerPort: 3002
-      env:
-        - name: PORT
-          value: "3002"
-        - name: HOST
-          value: "0.0.0.0"
-        - name: USE_DB_AUTHENTICATION
-          value: "false"
-        - name: BULL_AUTH_KEY
-          value: "CHANGEME"
-        - name: REDIS_URL
-          value: "redis://127.0.0.1:6379"
-        - name: REDIS_RATE_LIMIT_URL
-          value: "redis://127.0.0.1:6379"
-        - name: PLAYWRIGHT_MICROSERVICE_URL
-          value: "http://127.0.0.1:3000/scrape"
-        - name: SEARXNG_ENDPOINT
-          value: "http://127.0.0.1:8085"
-        - name: NUQ_DATABASE_URL
-          value: "postgresql://firecrawl:firecrawl@127.0.0.1:5432/firecrawl?sslmode=disable"
-        - name: DATABASE_URL
-          value: "postgresql://firecrawl:firecrawl@127.0.0.1:5432/firecrawl?sslmode=disable"
-        - name: BLOCK_MEDIA
-          value: "true"
-        - name: MAX_CPU
-          value: "0.95"
-        - name: MAX_RAM
-          value: "0.95"
-      volumeMounts:
-        - name: firecrawl-data
-          mountPath: /app/data
-
     - name: searxng
       image: searxng/searxng:latest
       env:
@@ -243,7 +183,15 @@ spec:
         - name: searxng-config
           mountPath: /etc/searxng
           readOnly: true
-          
+
+    - name: crawl4ai
+      image: unclecode/crawl4ai:0.7.8
+      ports:
+        - containerPort: 11235
+      volumeMounts:
+        - name: crawl4ai-cache
+          mountPath: /root/.cache/crawl4ai
+
   volumes:
     - name: caddy-config
       configMap:
@@ -260,14 +208,6 @@ spec:
       hostPath:
         path: /mnt/c/LLM/open-webui
         type: DirectoryOrCreate
-    - name: firecrawl-data
-      hostPath:
-        path: /mnt/c/LLM/firecrawl
-        type: DirectoryOrCreate
-    - name: playwright-data
-      hostPath:
-        path: /mnt/c/LLM/playwright
-        type: DirectoryOrCreate
     - name: searxng-config
       hostPath:
         path: /mnt/c/LLM/searxng
@@ -282,3 +222,6 @@ spec:
     - name: vllm-compile-cache
       persistentVolumeClaim:
         claimName: vllm-compile-cache
+    - name: crawl4ai-cache
+      persistentVolumeClaim:
+        claimName: crawl4ai-cache

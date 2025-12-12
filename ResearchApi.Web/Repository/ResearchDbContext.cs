@@ -1,6 +1,5 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
-using Pgvector.EntityFrameworkCore;
 using ResearchApi.Configuration;
 using ResearchApi.Domain; 
 
