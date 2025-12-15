@@ -3,7 +3,7 @@ using System.Text.Json.Serialization;
 
 namespace ResearchApi.Configuration;
 
-public sealed class TypedConfig<T>
+public sealed record TypedConfig<T>
 {
     /// <summary>
     /// Name of the configuration type, e.g. "BrowserConfig" or "CrawlerRunConfig".

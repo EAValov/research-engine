@@ -1,6 +1,6 @@
 namespace ResearchApi.Configuration;
 
-public record ResearchOrchestratorConfig 
+public sealed record ResearchOrchestratorConfig 
 {
     public int LimitSearches { get; init; } = default!;
     public int MaxUrlParallelism { get; init; } = default!;

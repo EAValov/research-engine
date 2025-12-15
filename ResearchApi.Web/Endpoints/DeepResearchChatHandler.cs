@@ -21,6 +21,7 @@ public static class DeepResearchChatHandler
         IResearchOrchestrator orchestrator,
         IResearchJobStore jobStore,
         IChatModel chatModel,
+        IResearchProtocolService protocolService,
         CancellationToken ct)
     {
         httpContext.Response.StatusCode = StatusCodes.Status200OK;
@@ -102,7 +103,7 @@ public static class DeepResearchChatHandler
         if (!hasClarificationBlock)
         {
             // генерируем список вопросов (если /configure есть — включаем туда вопросы про breadth/depth)
-            var questions = await GenerateFeedbackQueries(initialQuery, configureRequested, chatModel, ct);
+            var questions = await protocolService.GenerateFeedbackQueriesAsync(initialQuery, configureRequested, ct);
 
             var sb = new StringBuilder();
             sb.AppendLine("To better focus the research, please answer the following clarification questions:");
@@ -223,10 +224,9 @@ public static class DeepResearchChatHandler
         else
         {
             // авто-режим: просим LLM подобрать параметры по запросу и кларификациям
-            (breadth, depth) = await AutoSelectBreadthDepthAsync(
+            (breadth, depth) = await protocolService.AutoSelectBreadthDepthAsync(
                 initialQuery,
                 clarifications,
-                chatModel,
                 ct);
         }
 
@@ -242,13 +242,13 @@ public static class DeepResearchChatHandler
         }
         else
         {
-            (language, region) = await AutoSelectLanguageRegionAsync(initialQuery, clarifications, chatModel, ct);
+            (language, region) = await protocolService.AutoSelectLanguageRegionAsync(initialQuery, clarifications, ct);
         }
 
         // ---------- think-header + запуск джобы ----------
 
         var thinkHeader = new StringBuilder();
-        thinkHeader.AppendLine("<think>");
+        thinkHeader.AppendLine(".");
         thinkHeader.AppendLine("Starting local deep research with clarifications.");
         thinkHeader.AppendLine();
         thinkHeader.AppendLine($"User query: \"{initialQuery}\"");
@@ -398,7 +398,7 @@ public static class DeepResearchChatHandler
             var report = chatModel.StripThinkBlock(rawReport);
 
             var finalContent =
-                $"\n</think>\n\n" +
+                $"\n.\n\n" +
                 $"### Open Deep Research\n\n" +
                 $"**Job ID:** `{currentJob.Id}`  \n" +
                 $"**Status:** `{statusStr}`  \n" +
@@ -426,158 +426,5 @@ public static class DeepResearchChatHandler
         }
 
         await chunkWriter.WriteDoneAsync(ct);
-    }
-
-    /// <summary>
-    /// Авто-режим: попросить LLM выбрать breadth/depth по запросу и кларификациям.
-    /// LLM должна вернуть чистый JSON: {"breadth":3,"depth":2}
-    /// </summary>
-    public static async Task<(int breadth, int depth)> AutoSelectBreadthDepthAsync(
-        string query,
-        IReadOnlyList<Clarification> clarifications,
-        IChatModel chatModel,
-        CancellationToken ct)
-    {
-        const int defaultBreadth = 2;
-        const int defaultDepth   = 2;
-
-        var prompt = SelectBreadthDepthPromptFactory.Build(query, clarifications);
-
-        var jsonOptions = new JsonSerializerOptions
-        {
-            PropertyNameCaseInsensitive = true
-        };
-
-        var responseFormat = BreadthDepthSelection.JsonResponseSchema(jsonOptions);
-
-        var raw = await chatModel.ChatAsync(
-            prompt,
-            tools: null,
-            responseFormat: responseFormat,
-            cancellationToken: ct);
-
-        if (string.IsNullOrWhiteSpace(raw.Text))
-            return (defaultBreadth, defaultDepth);
-
-        var rawText = chatModel.StripThinkBlock(raw.Text).Trim();
-
-        BreadthDepthSelection? parsed = null;
-
-        try
-        {
-            parsed = JsonSerializer.Deserialize<BreadthDepthSelection>(rawText, jsonOptions);
-        }
-        catch
-        {
-            // If the model somehow returns malformed JSON despite the schema, just fall back.
-            return (defaultBreadth, defaultDepth);
-        }
-
-        var breadth = parsed?.Breadth ?? defaultBreadth;
-        var depth   = parsed?.Depth   ?? defaultDepth;
-
-        breadth = Math.Clamp(breadth, 1, 8);
-        depth   = Math.Clamp(depth,   1, 4);
-
-        return (breadth, depth);
-    }
-
-    public static async Task<(string language, string? region)> AutoSelectLanguageRegionAsync(
-        string query,
-        IReadOnlyList<Clarification> clarifications,
-        IChatModel chatModel,
-        CancellationToken ct)
-    {
-        const string defaultLang   = "en";
-        const string? defaultRegion = null;
-
-        var prompt = LanguageRegionSelectionPromptFactory.Build(query, clarifications);
-
-        var jsonOptions = new JsonSerializerOptions
-        {
-            PropertyNameCaseInsensitive = true
-        };
-
-        var responseFormat = LanguageRegionSelection.JsonResponseSchema(jsonOptions);
-
-        var raw = await chatModel.ChatAsync(
-            prompt,
-            tools: null,
-            responseFormat: responseFormat,
-            cancellationToken: ct);
-
-        if (string.IsNullOrWhiteSpace(raw.Text))
-            return (defaultLang, defaultRegion);
-
-        var rawText = chatModel.StripThinkBlock(raw.Text).Trim();
-
-        LanguageRegionSelection? parsed;
-        try
-        {
-            parsed = JsonSerializer.Deserialize<LanguageRegionSelection>(rawText, jsonOptions);
-        }
-        catch
-        {
-            return (defaultLang, defaultRegion);
-        }
-
-        // Normalize language: lower-case, 2-letter, fallback if invalid
-        var language = parsed?.Language?.Trim().ToLowerInvariant();
-        if (string.IsNullOrWhiteSpace(language) || language!.Length != 2)
-        {
-            language = defaultLang;
-        }
-
-        // Normalize region: treat empty/whitespace as null
-        var region = parsed?.Region?.Trim();
-        if (string.IsNullOrWhiteSpace(region))
-        {
-            region = defaultRegion;
-        }
-
-        return (language!, region);
-    }
-
-
-    public static async Task<IReadOnlyList<string>> GenerateFeedbackQueries(
-        string query,
-        bool includeBreadthDepthQuestions,
-        IChatModel chatModel,
-        CancellationToken ct)
-    {
-        var prompt = FeedbackPromptFactory.Build(query, includeBreadthDepthQuestions);
-
-        var jsonOptions = new JsonSerializerOptions
-        {
-            PropertyNameCaseInsensitive = true
-        };
-
-        var responseFormat = ClarificationQuestionsResponse.JsonResponseSchema(jsonOptions);
-
-        var rawResponse = await chatModel.ChatAsync(
-            prompt,
-            tools: null,
-            responseFormat: responseFormat,
-            cancellationToken: ct);
-
-        var jsonText = chatModel.StripThinkBlock(rawResponse.Text).Trim();
-
-        ClarificationQuestionsResponse? parsed;
-        try
-        {
-            parsed = JsonSerializer.Deserialize<ClarificationQuestionsResponse>(jsonText, jsonOptions);
-        }
-        catch
-        {
-            // If the LLM somehow returns invalid JSON despite the schema, just fall back to an empty list.
-            return Array.Empty<string>();
-        }
-
-        var queries = parsed?.Queries?
-            .Where(q => !string.IsNullOrWhiteSpace(q))
-            .Select(q => q.Trim())
-            .ToList() ?? new List<string>();
-
-        return queries;
     }
 }

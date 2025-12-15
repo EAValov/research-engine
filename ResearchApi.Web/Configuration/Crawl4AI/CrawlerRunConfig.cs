@@ -7,7 +7,7 @@ namespace ResearchApi.Configuration.Crawl4AI;
 /// Configuration controlling how the crawler runs each operation.
 /// Mirrors Crawl4AI's CrawlerRunConfig.
 /// </summary>
-public sealed class CrawlerRunConfig
+public sealed record CrawlerRunConfig
 {
     // ---------- Content Processing ----------
 

@@ -1,0 +1,22 @@
+@baseUrl = http://localhost:5000
+@token = CHANGEME
+
+### List models (OpenAI compatible)
+GET {{baseUrl}}/v1/models
+Authorization: Bearer {{token}}
+
+### Chat completions (OpenAI compatible)
+POST {{baseUrl}}/v1/chat/completions
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "model": "local-deep-research",
+  "messages": [
+    {
+      "role": "user",
+      "content": "What are the latest developments in AI research?"
+    }
+  ],
+  "stream": true
+}

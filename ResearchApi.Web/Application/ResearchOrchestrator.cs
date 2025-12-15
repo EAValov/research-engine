@@ -49,7 +49,7 @@ public class ResearchOrchestrator(
             await ReportProgressAsync(
                 jobId,
                 metrics,
-                "planning",
+                ResearchEventStage.Planning,
                 "Starting research planning",
                 ct);
 
@@ -72,7 +72,7 @@ public class ResearchOrchestrator(
             await ReportProgressAsync(
                 jobId,
                 metrics,
-                "planning",
+                ResearchEventStage.Planning,
                 $"Generated {serpQueries.Count} queries based on clarifications and depth={job.Depth}",
                 ct);
 
@@ -86,7 +86,7 @@ public class ResearchOrchestrator(
             await ReportProgressAsync(
                 jobId,
                 metrics,
-                "summarizing",
+                ResearchEventStage.Summarizing,
                 "Generating final report",
                 ct);
             
@@ -109,14 +109,14 @@ public class ResearchOrchestrator(
             await ReportProgressAsync(
                 jobId,
                 metrics,
-                "metrics",
+                ResearchEventStage.Metrics,
                 metrics.ToString(),
                 ct);
 
             await ReportProgressAsync(
                 jobId,
                 metrics,
-                "completed",
+                ResearchEventStage.Completed,
                 "Research completed successfully",
                 ct);
         }
@@ -127,7 +127,7 @@ public class ResearchOrchestrator(
 
             await jobStore.AppendEventAsync(
                 jobId,
-                new ResearchEvent(DateTimeOffset.UtcNow, "failed", $"Research failed: {ex.Message}"),
+                new ResearchEvent(DateTimeOffset.UtcNow, ResearchEventStage.Failed, $"Research failed: {ex.Message}"),
                 ct);
 
             throw;
@@ -222,7 +222,7 @@ public class ResearchOrchestrator(
             await ReportProgressAsync(
                 job.Id,
                 metrics,
-                "search-progress",
+                ResearchEventStage.Searching,
                 $"Processed SERP query '{serpQuery}' with {newUrls.Count} URLs (all cached/duplicate).",
                 ct);
 
@@ -284,11 +284,10 @@ public class ResearchOrchestrator(
                     metrics.CompletedWorkUnits += 1;
                 }
 
-                // optional: per-URL progress ping, or throttle if too noisy
                 await ReportProgressAsync(
                     job.Id,
                     metrics,
-                    "url-progress",
+                    ResearchEventStage.LearningExtraction,
                     $"Processed URL {url}",
                     ct);
             }
@@ -303,7 +302,7 @@ public class ResearchOrchestrator(
         await ReportProgressAsync(
             job.Id,
             metrics,
-            "search-progress",
+            ResearchEventStage.Searching,
             $"Processed SERP query '{serpQuery}' with {newUrls.Count} URLs ({urlsToProcess.Count} newly processed).",
             ct);
 
@@ -463,7 +462,7 @@ public class ResearchOrchestrator(
     async Task ReportProgressAsync(
         Guid jobId,
         ResearchMetrics metrics,
-        string stage,
+        ResearchEventStage stage,
         string message,
         CancellationToken ct)
     {

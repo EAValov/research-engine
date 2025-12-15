@@ -95,6 +95,7 @@ public class ResearchDbContext : DbContext
 
         entity.Property(e => e.Stage)
             .IsRequired()
+            .HasConversion<string>()
             .HasMaxLength(200);
 
         entity.Property(e => e.Message)

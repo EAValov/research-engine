@@ -21,6 +21,8 @@
     <PackageReference Include="Microsoft.Extensions.AI" Version="10.0.1" />
     <PackageReference Include="Microsoft.Extensions.AI.OpenAI" Version="10.0.1-preview.1.25571.5" />
     <PackageReference Include="Serilog.Sinks.Console" Version="6.1.1" />
+    <PackageReference Include="StackExchange.Redis" Version="2.8.47" />
+    <PackageReference Include="Microsoft.Extensions.Http.Resilience" Version="8.0.0" />
   </ItemGroup>
 
 </Project>

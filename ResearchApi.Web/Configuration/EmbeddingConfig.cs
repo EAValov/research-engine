@@ -1,6 +1,6 @@
 namespace ResearchApi.Configuration;
 
-public record EmbeddingConfig
+public sealed record EmbeddingConfig
 {
     public string Endpoint { get; init; } = default!;
     public string ApiKey  { get; init; } = default!;

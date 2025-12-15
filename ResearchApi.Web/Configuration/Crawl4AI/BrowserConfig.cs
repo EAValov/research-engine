@@ -7,7 +7,7 @@ namespace ResearchApi.Configuration.Crawl4AI;
 /// Configuration for setting up a browser instance and its context in AsyncPlaywrightCrawlerStrategy.
 /// Mirrors Crawl4AI's BrowserConfig.
 /// </summary>
-public sealed class BrowserConfig
+public sealed record BrowserConfig
 {
     /// <summary>
     /// The type of browser to launch. Supported values: "chromium", "firefox", "webkit".

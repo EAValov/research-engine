@@ -2,7 +2,7 @@ using System.ComponentModel.DataAnnotations;
 
 namespace ResearchApi.Configuration;
 
-public sealed class LearningSimilarityOptions
+public sealed record LearningSimilarityOptions
 {
     // When searching in the current job only
     [Range(0.0, 1.0)]
