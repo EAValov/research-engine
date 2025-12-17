@@ -1,5 +1,3 @@
-using System;
-using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
@@ -10,6 +8,8 @@ using ResearchApi.Domain;
 using ResearchApi.Infrastructure;
 using ResearchApi.Infrastructure.Authentication;
 using Serilog;
+using StackExchange.Redis;
+using System.ComponentModel.DataAnnotations;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -21,7 +21,7 @@ Log.Logger = new LoggerConfiguration()
 builder.Logging.ClearProviders();
 builder.Host.UseSerilog();
 
-// Prefer using builder.Configuration everywhere; keep the root config for the existing pattern
+// Keep your existing pattern, but prefer builder.Configuration where possible
 IConfigurationRoot config = new ConfigurationBuilder()
     .AddJsonFile("appsettings.json", optional: true)
     .AddEnvironmentVariables()
@@ -53,9 +53,6 @@ builder.Services.Configure<TokenizerConfig>(config.GetSection(nameof(TokenizerCo
 
 builder.Services.Configure<ResearchOrchestratorConfig>(config.GetSection(nameof(ResearchOrchestratorConfig)));
 
-// ---------- Validation ----------
-builder.Services.AddValidation();
-
 builder.Services
     .AddOptions<LearningSimilarityOptions>()
     .Bind(builder.Configuration.GetSection(nameof(LearningSimilarityOptions)))
@@ -64,18 +61,57 @@ builder.Services
         "LocalMinImportance must be <= GlobalMinImportance")
     .ValidateOnStart();
 
-// ---------- Authentication ----------
+// ---------- Validation (Minimal APIs, .NET 10) ----------
+builder.Services.AddValidation();
+
+// ---------- Authentication + Authorization ----------
 builder.Services.AddAuthentication("Bearer")
     .AddScheme<BearerAuthenticationOptions, BearerAuthenticationHandler>("Bearer", options =>
     {
-        builder.Configuration.GetSection("Auth").Bind(options);
+        builder.Configuration.GetSection(nameof(BearerAuthenticationOptions)).Bind(options);
     });
 
-// ---------- Optional Webhooks + Event Streaming ----------
-var webhooksEnabled = builder.Services.AddOptionalWebhooks(builder.Configuration);
+builder.Services.AddAuthorization();
 
-// Configure IResearchJobStore as Postgres store, and decorate with PublishingResearchJobStore if webhooks are enabled
-builder.Services.ConfigureJobStore(webhooksEnabled);
+// ---------- Webhook / Redis ----------
+var webhookSection = builder.Configuration.GetSection(nameof(WebhookOptions));
+var webhookOptions = webhookSection.Get<WebhookOptions>()
+    ?? throw new InvalidOperationException("Missing required configuration section 'Webhook'.");
+
+var validationResults = new List<ValidationResult>();
+if (!Validator.TryValidateObject(webhookOptions, new ValidationContext(webhookOptions), validationResults, true))
+{
+    var msg = string.Join("; ", validationResults.Select(r => r.ErrorMessage));
+    throw new InvalidOperationException($"Invalid 'Webhook' configuration: {msg}");
+}
+
+ConfigurationOptions redisOptions;
+try
+{
+    redisOptions = ConfigurationOptions.Parse(webhookOptions.RedisConnectionString);
+}
+catch (Exception ex)
+{
+    throw new InvalidOperationException($"Invalid 'Webhook:RedisConnectionString': {ex.Message}", ex);
+}
+
+// Make webhook options available (direct injection)
+builder.Services.AddSingleton(webhookOptions);
+
+// Redis connection (shared)
+builder.Services.AddSingleton<IConnectionMultiplexer>(_ => ConnectionMultiplexer.Connect(redisOptions));
+
+// Webhook HttpClient (named client)
+builder.Services.AddHttpClient<WebhookDispatcher>()
+    .ConfigureHttpClient(client =>
+    {
+        client.Timeout = TimeSpan.FromSeconds(webhookOptions.HttpTimeoutSeconds);
+    });
+
+// Webhook services
+builder.Services.AddSingleton<IResearchEventBus, RedisResearchEventBus>();
+builder.Services.AddSingleton<IWebhookSubscriptionStore, RedisWebhookSubscriptionStore>();
+builder.Services.AddSingleton<IWebhookDispatcher, WebhookDispatcher>();
 
 // ---------- Search & Crawl ----------
 builder.Services.AddSearchAndCrawlClients(config);
@@ -93,16 +129,20 @@ builder.Services.AddScoped<IQueryPlanningService, QueryPlanningService>();
 builder.Services.AddScoped<ILearningExtractionService, LearningExtractionService>();
 builder.Services.AddScoped<IReportSynthesisService, ReportSynthesisService>();
 
+// ---------- Job store (Postgres + decorator publishing to event bus) ----------
+builder.Services.AddScoped<IResearchJobStore, PostgresResearchJobStore>();
+
 // ---------- Health checks ----------
 builder.Services.AddHealthChecks()
-    .AddCheck("self", () => HealthCheckResult.Healthy(), tags: new[] { "ready" })
-    .AddUrlGroup(new Uri($"{chatConfig.Endpoint.TrimEnd('/')}/models"), "chat", tags: new[] { "ready", "llm", "chat" })
-    .AddUrlGroup(new Uri($"{embeddingConfig.Endpoint.TrimEnd('/')}/models"), "embedding", tags: new[] { "ready", "llm", "embedding" })
+    .AddCheck("self", () => HealthCheckResult.Healthy(), tags: ["ready"])
+    .AddUrlGroup(new Uri($"{chatConfig.Endpoint.TrimEnd('/')}/models"), "chat", tags: ["ready", "llm", "chat"])
+    .AddUrlGroup(new Uri($"{embeddingConfig.Endpoint.TrimEnd('/')}/models"), "embedding", tags: ["ready", "llm", "embedding"])
     .AddNpgSql(
         builder.Configuration.GetConnectionString("ResearchDb")!,
         name: "postgres",
-        tags: new[] { "ready", "db" })
-    .AddSearchAndCrawlHealthChecks(config);
+        tags: ["ready", "db"])
+    .AddSearchAndCrawlHealthChecks(config)
+    .AddRedis(webhookOptions.RedisConnectionString, name: "redis", tags: new[] { "ready", "cache" });
 
 var app = builder.Build();
 

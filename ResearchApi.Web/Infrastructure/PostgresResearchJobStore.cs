@@ -1,11 +1,11 @@
-
 using Microsoft.EntityFrameworkCore;
 using ResearchApi.Domain;
 
 namespace ResearchApi.Infrastructure;
 
-public class PostgresResearchJobStore (
+public sealed class PostgresResearchJobStore(
     IDbContextFactory<ResearchDbContext> dbContextFactory,
+    IResearchEventBus eventBus,
     ILogger<IResearchJobStore> logger
 ) : IResearchJobStore
 {
@@ -38,32 +38,38 @@ public class PostgresResearchJobStore (
             }).ToList()
         };
 
-        await using var _db = await dbContextFactory.CreateDbContextAsync(ct);
+        await using var db = await dbContextFactory.CreateDbContextAsync(ct);
 
-        _db.ResearchJobs.Add(jobEntity);
-        await _db.SaveChangesAsync();
+        db.ResearchJobs.Add(jobEntity);
+        await db.SaveChangesAsync(ct);
 
         logger.LogInformation("Job {Id} created", jobEntity.Id);
+
+        // Optional: emit Created event right away (nice for webhook/SSE clients)
+        await AppendEventAsync(
+            jobEntity.Id,
+            new ResearchEvent(DateTimeOffset.UtcNow, ResearchEventStage.Created, "Job created"),
+            ct);
 
         return jobEntity;
     }
 
     public async Task<ResearchJob?> GetJobAsync(Guid id, CancellationToken ct = default)
     {
-        await using var _db = await dbContextFactory.CreateDbContextAsync(ct);
+        await using var db = await dbContextFactory.CreateDbContextAsync(ct);
 
-        return await _db.ResearchJobs
-           .Include(j => j.Clarifications)
-           .Include(j => j.Events)
-           .Include(j => j.VisitedUrls)
-           .FirstOrDefaultAsync(j => j.Id == id, ct);
+        return await db.ResearchJobs
+            .Include(j => j.Clarifications)
+            .Include(j => j.Events)
+            .Include(j => j.VisitedUrls)
+            .FirstOrDefaultAsync(j => j.Id == id, ct);
     }
 
     public async Task<int> UpdateJobAsync(ResearchJob job, CancellationToken ct = default)
     {
-        await using var _db = await dbContextFactory.CreateDbContextAsync(ct);
+        await using var db = await dbContextFactory.CreateDbContextAsync(ct);
 
-        var entity = await _db.ResearchJobs
+        var entity = await db.ResearchJobs
             .Include(j => j.Clarifications)
             .Include(j => j.Events)
             .Include(j => j.VisitedUrls)
@@ -81,9 +87,8 @@ public class PostgresResearchJobStore (
         entity.Region = job.Region;
         entity.UpdatedAt = DateTimeOffset.UtcNow;
 
-        // Visited URLs: simple re-sync
         entity.VisitedUrls.Clear();
-        foreach (var url in job.VisitedUrls.Distinct())
+        foreach (var url in job.VisitedUrls.DistinctBy(u => u.Url))
         {
             entity.VisitedUrls.Add(new VisitedUrl
             {
@@ -92,36 +97,43 @@ public class PostgresResearchJobStore (
             });
         }
 
-        logger.LogInformation("job {Id} updated", entity.Id);
+        logger.LogInformation("Job {Id} updated", entity.Id);
 
-        return await _db.SaveChangesAsync();
+        return await db.SaveChangesAsync(ct);
     }
 
     public async Task<IReadOnlyList<ResearchEvent>> GetEventsAsync(Guid jobId, CancellationToken ct = default)
     {
-        await using var _db = await dbContextFactory.CreateDbContextAsync(ct);
+        await using var db = await dbContextFactory.CreateDbContextAsync(ct);
 
-        return await _db.ResearchEvents
+        return await db.ResearchEvents
             .Where(e => e.JobId == jobId)
-            .OrderBy(e => e.Timestamp)
-            .Select(e => new ResearchEvent(e.Timestamp, e.Stage, e.Message))
+            .OrderBy(e => e.Id) // stable order for replay
             .ToListAsync(ct);
     }
 
     public async Task<int> AppendEventAsync(Guid jobId, ResearchEvent ev, CancellationToken ct = default)
     {
-        await using var _db = await dbContextFactory.CreateDbContextAsync(ct);
-        var entity = new ResearchEvent
-        {
-            JobId = jobId,
-            Timestamp = ev.Timestamp,
-            Stage = ev.Stage,
-            Message = ev.Message
-        };
+        await using var db = await dbContextFactory.CreateDbContextAsync(ct);
 
-        await _db.ResearchEvents.AddAsync(entity, ct);
+        // Persist
+        ev.JobId = jobId;
+        await db.ResearchEvents.AddAsync(ev, ct);
 
         logger.LogInformation("Job {JobId} [{Stage}] {Message}", jobId, ev.Stage, ev.Message);
-        return await _db.SaveChangesAsync(ct);
+
+        var saved = await db.SaveChangesAsync(ct);
+
+        // Publish AFTER save (so ev.Id is populated by EF)
+        try
+        {
+            await eventBus.PublishAsync(jobId, ev, ct);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed to publish event for job {JobId}", jobId);
+        }
+
+        return saved;
     }
 }

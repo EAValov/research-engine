@@ -12,29 +12,22 @@ public static class DeepResearchJobsApi
             .RequireAuthorization();
 
         api.MapPost("/jobs", CreateJobAsync);
-
         api.MapGet("/jobs/{jobId:guid}", GetJobAsync);
-
         api.MapGet("/jobs/{jobId:guid}/events", ListEventsAsync);
-
         api.MapGet("/jobs/{jobId:guid}/events/stream", StreamEventsAsync);
     }
 
-  private static async Task<IResult> CreateJobAsync(
-        HttpContext httpContext,
+    private static async Task<IResult> CreateJobAsync(
         [FromBody] CreateResearchJobRequest request,
         IResearchOrchestrator orchestrator,
         IResearchProtocolService protocolService,
         IResearchJobStore jobStore,
+        IWebhookSubscriptionStore webhookStore,
+        IWebhookDispatcher webhookDispatcher,
+        IResearchEventBus eventBus,
         CancellationToken ct)
     {
-        // Optional services (present only when Webhook section is configured)
-        var webhookStore = httpContext.RequestServices.GetService<IWebhookSubscriptionStore>();
-        var webhookDispatcher = httpContext.RequestServices.GetService<IWebhookDispatcher>();
-        var streamingConfigured = httpContext.RequestServices.GetService<IResearchEventBus>() is not null;
-
-        var warnings = new List<string>();
-        // If breadth/depth/language/region not provided, compute them via protocol service
+        // Compute missing protocol params
         int? breadth = request.Breadth;
         int? depth = request.Depth;
         string? language = request.Language;
@@ -42,23 +35,20 @@ public static class DeepResearchJobsApi
 
         if (!breadth.HasValue || !depth.HasValue || string.IsNullOrEmpty(language))
         {
-            var clarifications = request.Clarifications?.Select(c => new Clarification {
+            var clarifications = request.Clarifications?.Select(c => new Clarification
+            {
                 Question = c.Question,
                 Answer = c.Answer
             }).ToList() ?? new List<Clarification>();
 
             if (!breadth.HasValue || !depth.HasValue)
-            {
                 (breadth, depth) = await protocolService.AutoSelectBreadthDepthAsync(request.Query, clarifications, ct);
-            }
 
             if (string.IsNullOrEmpty(language))
-            {
                 (language, region) = await protocolService.AutoSelectLanguageRegionAsync(request.Query, clarifications, ct);
-            }
         }
 
-        // Create the job
+        // Create job
         var job = await orchestrator.StartJobAsync(
             request.Query,
             request.Clarifications?.Select(c => new Clarification
@@ -72,7 +62,22 @@ public static class DeepResearchJobsApi
             region,
             ct);
 
-        // Trigger the job execution in background
+        // Persist webhook subscription if provided
+        if (request.Webhook is not null)
+        {
+            await SaveWebhookSubscriptionAsync(job.Id, request.Webhook, webhookStore, ct);
+
+            // Optional: immediate "Created" webhook delivery
+            await webhookDispatcher.EnqueueAsync(
+                new WebhookDeliveryRequest(
+                    job.Id,
+                    ResearchEventStage.Created,
+                    DateTimeOffset.UtcNow,
+                    new { jobId = job.Id, status = "Queued", created = job.CreatedAt }),
+                ct);
+        }
+
+        // Trigger job execution in background
         _ = Task.Run(async () =>
         {
             try
@@ -85,41 +90,17 @@ public static class DeepResearchJobsApi
             }
         });
 
-        if (request.Webhook is not null)
-        {
-            await HandleWebhookRequestedAsync(
-                jobId: job.Id,
-                createdUtc: job.CreatedAt,
-                webhook: request.Webhook,
-                webhookStore: webhookStore,
-                webhookDispatcher: webhookDispatcher,
-                warnings: warnings,
-                ct: ct);
-        }
-
-        // Build links; omit stream if not configured
-        var links = new Dictionary<string, string>
-        {
-            ["self"] = $"/api/research/jobs/{job.Id}",
-            ["events"] = $"/api/research/jobs/{job.Id}/events"
-        };
-
-        if (streamingConfigured)
-        {
-            links["stream"] = $"/api/research/jobs/{job.Id}/events/stream";
-        }
-        else
-        {
-            warnings.Add("Live event streaming is not configured on this server. Use the /events endpoint to poll events.");
-        }
-
         var response = new
         {
             jobId = job.Id,
             status = job.Status.ToString(),
             createdUtc = job.CreatedAt,
-            links,
-            warnings = warnings.Count == 0 ? null : warnings
+            links = new
+            {
+                self = $"/api/research/jobs/{job.Id}",
+                events = $"/api/research/jobs/{job.Id}/events",
+                stream = $"/api/research/jobs/{job.Id}/events/stream"
+            }
         };
 
         return Results.Ok(response);
@@ -131,7 +112,7 @@ public static class DeepResearchJobsApi
         CancellationToken ct)
     {
         var job = await jobStore.GetJobAsync(jobId, ct);
-        if (job == null)
+        if (job is null)
             return Results.NotFound();
 
         var response = new
@@ -157,9 +138,12 @@ public static class DeepResearchJobsApi
         IResearchJobStore jobStore,
         CancellationToken ct)
     {
-        var events = await jobStore.GetEventsAsync(jobId, ct);
-        if (events == null)
+        // (Optional) validate job exists
+        var job = await jobStore.GetJobAsync(jobId, ct);
+        if (job is null)
             return Results.NotFound();
+
+        var events = await jobStore.GetEventsAsync(jobId, ct);
 
         var response = events.Select(e => new
         {
@@ -176,16 +160,9 @@ public static class DeepResearchJobsApi
         HttpContext httpContext,
         Guid jobId,
         IResearchJobStore jobStore,
+        IResearchEventBus eventBus,
         CancellationToken ct)
     {
-        // If streaming/event bus isn't configured, return 404 (endpoint exists but feature disabled)
-        var eventBus = httpContext.RequestServices.GetService<IResearchEventBus>();
-        if (eventBus is null)
-        {
-            httpContext.Response.StatusCode = StatusCodes.Status404NotFound;
-            return;
-        }
-
         // Validate job exists
         var job = await jobStore.GetJobAsync(jobId, ct);
         if (job is null)
@@ -197,31 +174,21 @@ public static class DeepResearchJobsApi
         ConfigureSseHeaders(httpContext);
 
         var jsonOptions = CreateJsonOptions();
-        var lastEventId = GetLastEventId(httpContext);
+
+        // Last-Event-ID is the *int* ResearchEvent.Id
+        var lastId = GetLastEventIdAsInt(httpContext);
+
+        // Replay from store (id > lastId)
         var storedEvents = await jobStore.GetEventsAsync(jobId, ct);
-
-        var replayStart = FindReplayStartIndex(storedEvents, lastEventId, out var lastEventIdWasFound);
-
-        if (!string.IsNullOrWhiteSpace(lastEventId) && !lastEventIdWasFound)
+        foreach (var e in storedEvents.Where(e => e.Id > lastId))
         {
-            await WriteSseAsync(
-                httpContext,
-                jsonOptions,
-                eventName: "error",
-                id: "replay",
-                data: new
-                {
-                    message = "Last-Event-ID was not found in stored events; replaying full history.",
-                    lastEventId
-                },
-                ct);
-        }
+            await WriteEventAsync(httpContext, jsonOptions, e, ct);
 
-        var terminalStage = await ReplayStoredEventsAsync(httpContext, jsonOptions, jobId, storedEvents, replayStart, ct);
-        if (terminalStage is ResearchEventStage.Completed or ResearchEventStage.Failed)
-        {
-            await WriteDoneAsync(httpContext, jsonOptions, jobId, terminalStage.Value, ct);
-            return;
+            if (e.Stage is ResearchEventStage.Completed or ResearchEventStage.Failed)
+            {
+                await WriteDoneAsync(httpContext, jsonOptions, jobId, e.Stage, ct);
+                return;
+            }
         }
 
         using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(ct, httpContext.RequestAborted);
@@ -235,7 +202,7 @@ public static class DeepResearchJobsApi
             (ev, t) => OnLiveEventAsync(httpContext, jsonOptions, jobId, ev, doneTcs, t),
             token);
 
-        await WaitForCompletionOrDisconnectAsync(httpContext, doneTcs, token);
+        await WaitForCompletionOrDisconnectAsync(doneTcs, token);
 
         if (doneTcs.Task.IsCompletedSuccessfully && !token.IsCancellationRequested)
         {
@@ -243,55 +210,38 @@ public static class DeepResearchJobsApi
         }
     }
 
-    private static readonly ResearchEventStage[] DefaultWebhookStages = new[]
-    {
-        ResearchEventStage.Planning,
-        ResearchEventStage.Summarizing,
-        ResearchEventStage.Searching,
-        ResearchEventStage.LearningExtraction,
-        ResearchEventStage.Metrics,
-        ResearchEventStage.Completed,
-        ResearchEventStage.Failed
-    };
+    // ---------------- helpers ----------------
 
-    private static async Task HandleWebhookRequestedAsync(
+    private static async Task SaveWebhookSubscriptionAsync(
         Guid jobId,
-        DateTimeOffset createdUtc,
         WebhookDto webhook,
-        IWebhookSubscriptionStore? webhookStore,
-        IWebhookDispatcher? webhookDispatcher,
-        List<string> warnings,
+        IWebhookSubscriptionStore store,
         CancellationToken ct)
     {
-        if (webhookStore is null || webhookDispatcher is null)
-        {
-            warnings.Add("Webhook was requested but webhooks are not configured on this server. No webhook will be delivered.");
-            return;
-        }
-
+        // Validation should already run via .NET 10 minimal API validation, but keep parsing robust.
         if (!Uri.TryCreate(webhook.Url, UriKind.Absolute, out var uri))
-        {
-            warnings.Add("Webhook URL is invalid; webhook subscription was not saved.");
-            return;
-        }
+            throw new ArgumentException("Invalid webhook Url.", nameof(webhook));
 
-        var subscription = new WebhookSubscription(
+        var stages = new[]
+        {
+            ResearchEventStage.Created,
+            ResearchEventStage.Planning,
+            ResearchEventStage.Summarizing,
+            ResearchEventStage.Searching,
+            ResearchEventStage.LearningExtraction,
+            ResearchEventStage.Metrics,
+            ResearchEventStage.Completed,
+            ResearchEventStage.Failed
+        };
+
+        var sub = new WebhookSubscription(
             JobId: jobId,
             Url: uri,
             Secret: string.IsNullOrWhiteSpace(webhook.Secret) ? null : webhook.Secret,
-            Stages: DefaultWebhookStages,
+            Stages: stages,
             CreatedUtc: DateTimeOffset.UtcNow);
 
-        await webhookStore.SaveAsync(subscription, ct);
-
-        // Enqueue a Created notification immediately
-        var createdDelivery = new WebhookDeliveryRequest(
-            JobId: jobId,
-            Stage: ResearchEventStage.Created,
-            TimestampUtc: DateTimeOffset.UtcNow,
-            Data: new { jobId, status = "Queued", created = createdUtc });
-
-        await webhookDispatcher.EnqueueAsync(createdDelivery, ct);
+        await store.SaveAsync(sub, ct);
     }
 
     private static void ConfigureSseHeaders(HttpContext httpContext)
@@ -306,138 +256,10 @@ public static class DeepResearchJobsApi
     private static JsonSerializerOptions CreateJsonOptions()
         => new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
 
-    private static string GetLastEventId(HttpContext httpContext)
-        => httpContext.Request.Headers["Last-Event-ID"].ToString();
-
-    private static int FindReplayStartIndex(
-        IReadOnlyList<ResearchEvent> events,
-        string lastEventId,
-        out bool found)
+    private static int GetLastEventIdAsInt(HttpContext httpContext)
     {
-        found = false;
-
-        if (string.IsNullOrWhiteSpace(lastEventId))
-            return 0;
-
-        for (var i = 0; i < events.Count; i++)
-        {
-            if (events[i].Id.ToString().Equals(lastEventId, StringComparison.OrdinalIgnoreCase))
-            {
-                found = true;
-                return i + 1;
-            }
-        }
-
-        return 0; // not found -> replay all
-    }
-
-    private static async Task<ResearchEventStage?> ReplayStoredEventsAsync(
-        HttpContext httpContext,
-        JsonSerializerOptions jsonOptions,
-        Guid jobId,
-        IReadOnlyList<ResearchEvent> events,
-        int startIndex,
-        CancellationToken ct)
-    {
-        for (var i = startIndex; i < events.Count; i++)
-        {
-            var e = events[i];
-
-            await WriteSseAsync(
-                httpContext,
-                jsonOptions,
-                eventName: "event",
-                id: e.Id.ToString(),
-                data: new { id = e.Id, timestamp = e.Timestamp, stage = e.Stage, message = e.Message },
-                ct);
-
-            if (e.Stage is ResearchEventStage.Completed or ResearchEventStage.Failed)
-                return e.Stage;
-        }
-
-        return null;
-    }
-
-    private static async Task OnLiveEventAsync(
-        HttpContext httpContext,
-        JsonSerializerOptions jsonOptions,
-        Guid jobId,
-        ResearchEvent ev,
-        TaskCompletionSource<ResearchEventStage> doneTcs,
-        CancellationToken ct)
-    {
-        if (ct.IsCancellationRequested)
-            return;
-
-        await WriteSseAsync(
-            httpContext,
-            jsonOptions,
-            eventName: "event",
-            id: ev.Id.ToString(),
-            data: new { id = ev.Id, timestamp = ev.Timestamp, stage = ev.Stage, message = ev.Message },
-            ct);
-
-        if (ev.Stage is ResearchEventStage.Completed or ResearchEventStage.Failed)
-            doneTcs.TrySetResult(ev.Stage);
-    }
-
-    private static async Task WaitForCompletionOrDisconnectAsync(
-        HttpContext httpContext,
-        TaskCompletionSource<ResearchEventStage> doneTcs,
-        CancellationToken ct)
-    {
-        const bool EnableHeartbeat = true;
-        var heartbeatInterval = TimeSpan.FromSeconds(20);
-
-        var lastHeartbeat = DateTimeOffset.UtcNow;
-
-        try
-        {
-            while (!ct.IsCancellationRequested)
-            {
-                if (doneTcs.Task.IsCompleted)
-                    return;
-
-                if (EnableHeartbeat && DateTimeOffset.UtcNow - lastHeartbeat >= heartbeatInterval)
-                {
-                    await WriteHeartbeatAsync(httpContext, ct);
-                    lastHeartbeat = DateTimeOffset.UtcNow;
-                }
-
-                // Wake early if done arrives; otherwise tick every 1s
-                var delayTask = Task.Delay(TimeSpan.FromSeconds(1), ct);
-                var completed = await Task.WhenAny(doneTcs.Task, delayTask);
-                if (completed == doneTcs.Task)
-                    return;
-            }
-        }
-        catch (OperationCanceledException)
-        {
-            // disconnect/cancel
-        }
-    }
-
-    private static async Task WriteDoneAsync(
-        HttpContext httpContext,
-        JsonSerializerOptions jsonOptions,
-        Guid jobId,
-        ResearchEventStage stage,
-        CancellationToken ct)
-    {
-        await WriteSseAsync(
-            httpContext,
-            jsonOptions,
-            eventName: "done",
-            id: "done",
-            data: new { jobId, status = stage.ToString() },
-            ct);
-    }
-
-    private static async Task WriteHeartbeatAsync(HttpContext httpContext, CancellationToken ct)
-    {
-        var bytes = Encoding.UTF8.GetBytes(": heartbeat\n\n");
-        await httpContext.Response.Body.WriteAsync(bytes, ct);
-        await httpContext.Response.Body.FlushAsync(ct);
+        var raw = httpContext.Request.Headers["Last-Event-ID"].ToString();
+        return int.TryParse(raw, out var id) ? id : 0;
     }
 
     private static async Task WriteSseAsync(
@@ -446,7 +268,7 @@ public static class DeepResearchJobsApi
         string eventName,
         string id,
         object data,
-        CancellationToken ct)
+        CancellationToken token)
     {
         var sb = new StringBuilder();
         sb.Append("id: ").Append(id).Append('\n');
@@ -454,7 +276,68 @@ public static class DeepResearchJobsApi
         sb.Append("data: ").Append(JsonSerializer.Serialize(data, jsonOptions)).Append("\n\n");
 
         var bytes = Encoding.UTF8.GetBytes(sb.ToString());
-        await httpContext.Response.Body.WriteAsync(bytes, ct);
-        await httpContext.Response.Body.FlushAsync(ct);
+        await httpContext.Response.Body.WriteAsync(bytes, token);
+        await httpContext.Response.Body.FlushAsync(token);
+    }
+
+    private static Task WriteEventAsync(
+        HttpContext httpContext,
+        JsonSerializerOptions jsonOptions,
+        ResearchEvent e,
+        CancellationToken token)
+        => WriteSseAsync(
+            httpContext,
+            jsonOptions,
+            eventName: "event",
+            id: e.Id.ToString(),
+            data: new { id = e.Id, timestamp = e.Timestamp, stage = e.Stage, message = e.Message },
+            token: token);
+
+    private static Task WriteDoneAsync(
+        HttpContext httpContext,
+        JsonSerializerOptions jsonOptions,
+        Guid jobId,
+        ResearchEventStage status,
+        CancellationToken token)
+        => WriteSseAsync(
+            httpContext,
+            jsonOptions,
+            eventName: "done",
+            id: "done",
+            data: new { jobId, status = status.ToString() },
+            token: token);
+
+    private static async Task OnLiveEventAsync(
+        HttpContext httpContext,
+        JsonSerializerOptions jsonOptions,
+        Guid jobId,
+        ResearchEvent ev,
+        TaskCompletionSource<ResearchEventStage> doneTcs,
+        CancellationToken token)
+    {
+        await WriteEventAsync(httpContext, jsonOptions, ev, token);
+
+        if (ev.Stage is ResearchEventStage.Completed or ResearchEventStage.Failed)
+        {
+            doneTcs.TrySetResult(ev.Stage);
+        }
+    }
+
+    private static async Task WaitForCompletionOrDisconnectAsync(
+        TaskCompletionSource<ResearchEventStage> doneTcs,
+        CancellationToken token)
+    {
+        try
+        {
+            // Wait until Completed/Failed, or client disconnects
+            while (!token.IsCancellationRequested && !doneTcs.Task.IsCompleted)
+            {
+                await Task.Delay(500, token);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // client disconnected
+        }
     }
 }

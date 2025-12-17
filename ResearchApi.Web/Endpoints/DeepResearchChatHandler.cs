@@ -1,11 +1,6 @@
 using System.Text;
-using System.Text.Json;
-using System.Text.RegularExpressions;
-using ResearchApi.Application;
+using Microsoft.AspNetCore.Mvc;
 using ResearchApi.Domain;
-using ResearchApi.Infrastructure;
-using ResearchApi.Prompts;
-using Serilog;
 
 public sealed class ChatRequest { public string Model { get; set; } = default!; public bool Stream { get; set; } = true; public List<ChatMessage> Messages { get; set; } = new(); }
 public sealed class ChatMessage { public string Role { get; set; } = default!; public string Content { get; set; } = default!; }
@@ -22,42 +17,46 @@ public static class DeepResearchChatHandler
         IResearchJobStore jobStore,
         IChatModel chatModel,
         IResearchProtocolService protocolService,
+        IResearchEventBus eventBus,
         CancellationToken ct)
     {
-        httpContext.Response.StatusCode = StatusCodes.Status200OK;
-        httpContext.Response.Headers["Content-Type"]  = "text/event-stream";
-        httpContext.Response.Headers["Cache-Control"] = "no-cache";
-        httpContext.Response.Headers["Connection"]   = "keep-alive";
+        ConfigureOpenAiSseHeaders(httpContext);
 
-        await httpContext.Response.Body.FlushAsync(ct);
+        var sse    = new SseFrameWriter(httpContext);
+        var writer = new OpenAiChatStreamWriter(sse);
+
+        // Flush early so clients (Open-WebUI) switch into streaming mode
+        await sse.FlushAsync(ct);
 
         var requestId = $"ldr-{Guid.NewGuid():N}";
         var created   = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-        var modelName = string.IsNullOrWhiteSpace(request.Model)
-            ? "local-deep-research"
-            : request.Model;
+        var modelName = string.IsNullOrWhiteSpace(request.Model) ? "local-deep-research" : request.Model;
 
-        var chunkWriter = new SseChunkWriter(httpContext);
-
-        // ----------------- базовая валидация -------------------
-
-        if (request.Messages is null || request.Messages.Count == 0)
+        // Fail fast: this endpoint is streaming-only; no polling fallback
+        if (eventBus is null)
         {
-            await chunkWriter.WriteErrorChunkAsync("No messages supplied.", requestId, created, modelName, ct);
+            await writer.WriteErrorAsync(
+                requestId, created, modelName,
+                "Live event streaming is not configured on this server (IResearchEventBus is missing). " +
+                "Enable IResearchEventBus or use /api/research/jobs/{jobId}/events to poll.",
+                ct);
             return;
         }
 
-        // --- читаем override через теги [DR_BREADTH=..][DR_DEPTH=..] (если есть) ---
+        // ----------------- базовая валидация -------------------
+        if (request.Messages is null || request.Messages.Count == 0)
+        {
+            await writer.WriteErrorAsync(requestId, created, modelName, "No messages supplied.", ct);
+            return;
+        }
+
         var (breadthOverride, depthOverride) = ResearchProtocolHelper.ExtractBreadthDepthFromMessages(request.Messages);
-        
-        var (langOverride, regionOverride) = ResearchProtocolHelper.ExtractLanguageRegionFromMessages(request.Messages);
+        var (langOverride, regionOverride)   = ResearchProtocolHelper.ExtractLanguageRegionFromMessages(request.Messages);
 
-        // --- проверяем /configure ---
         var configureRequested = request.Messages.Any(m =>
-            !string.IsNullOrWhiteSpace(m.Content)
-            && m.Content.Contains("/configure", StringComparison.OrdinalIgnoreCase));
+            !string.IsNullOrWhiteSpace(m.Content) &&
+            m.Content.Contains("/configure", StringComparison.OrdinalIgnoreCase));
 
-        // все user-сообщения
         var userMessages = request.Messages
             .Select((m, idx) => new { m, idx })
             .Where(x => x.m.Role.Equals("user", StringComparison.OrdinalIgnoreCase))
@@ -65,22 +64,20 @@ public static class DeepResearchChatHandler
 
         if (userMessages.Count == 0)
         {
-            await chunkWriter.WriteErrorChunkAsync("No user message provided.", requestId, created, modelName, ct);
+            await writer.WriteErrorAsync(requestId, created, modelName, "No user message provided.", ct);
             return;
         }
 
-        var firstUser         = userMessages.First();
-        var latestUser        = userMessages.Last();
-        var initialQuery      = firstUser.m.Content?.Trim() ?? "";
-        var latestUserContent = latestUser.m.Content?.Trim() ?? "";
+        var firstUser    = userMessages.First();
+        var initialQuery = firstUser.m.Content?.Trim() ?? "";
 
         if (string.IsNullOrWhiteSpace(initialQuery))
         {
-            await chunkWriter.WriteErrorChunkAsync("Initial user message is empty.", requestId, created, modelName, ct);
+            await writer.WriteErrorAsync(requestId, created, modelName, "Initial user message is empty.", ct);
             return;
         }
 
-        // Ищем последнее assistant-сообщение с блоком кларификаций
+        // Find the latest assistant message that contains the clarification block
         var assistantWithClar = request.Messages
             .Select((m, idx) => new { m, idx })
             .LastOrDefault(x =>
@@ -98,23 +95,18 @@ public static class DeepResearchChatHandler
         }
 
         // =========================================================
-        // PHASE 1: планирование — задаём уточняющие вопросы
+        // PHASE 1: no block yet -> ask clarification questions
         // =========================================================
         if (!hasClarificationBlock)
         {
-            // генерируем список вопросов (если /configure есть — включаем туда вопросы про breadth/depth)
             var questions = await protocolService.GenerateFeedbackQueriesAsync(initialQuery, configureRequested, ct);
 
             var sb = new StringBuilder();
             sb.AppendLine("To better focus the research, please answer the following clarification questions:");
             sb.AppendLine();
             sb.AppendLine(ClarificationsBeginMarker);
-
             for (int i = 0; i < questions.Count; i++)
-            {
                 sb.AppendLine($"{i + 1}. {questions[i]}");
-            }
-
             sb.AppendLine(ClarificationsEndMarker);
             sb.AppendLine();
             sb.AppendLine("You can answer them in a numbered list, for example:");
@@ -122,73 +114,33 @@ public static class DeepResearchChatHandler
             sb.AppendLine("2) ...");
             sb.AppendLine("3) ...");
 
-            var chunk = new
-            {
-                id      = requestId,
-                @object = "chat.completion.chunk",
-                created,
-                model   = modelName,
-                choices = new[]
-                {
-                    new
-                    {
-                        index = 0,
-                        delta = new
-                        {
-                            role    = "assistant",
-                            content = sb.ToString()
-                        },
-                        finish_reason = (string?)null
-                    }
-                }
-            };
-
-            await chunkWriter.WriteChunkAsync(chunk, ct);
-            await chunkWriter.WriteDoneAsync(ct);
+            await writer.WriteTextDeltaAsync(requestId, created, modelName, role: "assistant", content: sb.ToString(), finishReason: null, ct);
+            await writer.WriteDoneAsync(ct);
             return;
         }
 
         // =========================================================
-        // PHASE 2: есть блок вопросов и есть ответ → запускаем ресёрч
+        // PHASE 2: clarification block exists but user hasn't answered yet
         // =========================================================
         if (!hasUserAfterClar)
         {
-            // На всякий случай: есть блок с вопросами, но пользователь ещё не ответил.
-            var repeatQuestionsChunk = new
-            {
-                id      = requestId,
-                @object = "chat.completion.chunk",
-                created,
-                model   = modelName,
-                choices = new[]
-                {
-                    new
-                    {
-                        index = 0,
-                        delta = new
-                        {
-                            role    = "assistant",
-                            content = assistantWithClar!.m.Content
-                        },
-                        finish_reason = (string?)null
-                    }
-                }
-            };
+            await writer.WriteTextDeltaAsync(
+                requestId, created, modelName,
+                role: "assistant",
+                content: assistantWithClar!.m.Content ?? "",
+                finishReason: null,
+                ct);
 
-            await chunkWriter.WriteChunkAsync(repeatQuestionsChunk, ct);
-            await chunkWriter.WriteDoneAsync(ct);
+            await writer.WriteDoneAsync(ct);
             return;
         }
 
-        // Парсим вопросы из assistantWithClar
+        // Parse questions from assistant block
         var clarificationQuestions = ResearchProtocolHelper.ExtractQuestionsFromContent(assistantWithClar!.m.Content ?? "");
 
-        // Последний user-пост после блока вопросов — это ответы
-        var answerUser = userMessages
-            .Where(um => um.idx > assistantWithClar.idx)
-            .Last();
-
-        var answersText   = answerUser.m.Content?.Trim() ?? "";
+        // Latest user message after the clarification block is treated as answers
+        var answerUser   = userMessages.Last(um => um.idx > assistantWithClar.idx);
+        var answersText  = answerUser.m.Content?.Trim() ?? "";
         var parsedAnswers = ResearchProtocolHelper.ParseAnswersFromUserText(answersText);
 
         var clarifications = new List<Clarification>();
@@ -200,231 +152,211 @@ public static class DeepResearchChatHandler
                 var q = clarificationQuestions[i];
                 var a = (i < parsedAnswers.Count && !string.IsNullOrWhiteSpace(parsedAnswers[i]))
                     ? parsedAnswers[i]
-                    : answersText; // fallback
+                    : answersText; // fallback to full text
 
-                clarifications.Add(new Clarification {Question = q, Answer = a});
+                clarifications.Add(new Clarification { Question = q, Answer = a });
             }
         }
         else
         {
-            clarifications.Add(new Clarification {Question = "User clarifications", Answer = answersText });
+            clarifications.Add(new Clarification { Question = "User clarifications", Answer = answersText });
         }
 
-        // ---------- выбираем breadth/depth ----------
-
-        int breadth;
-        int depth;
-
+        // ---------- choose breadth/depth ----------
+        int breadth, depth;
         if (breadthOverride.HasValue || depthOverride.HasValue)
         {
-            // ручной override через теги
             breadth = Math.Clamp(breadthOverride ?? 2, 1, 8);
             depth   = Math.Clamp(depthOverride ?? 2, 1, 4);
         }
         else
         {
-            // авто-режим: просим LLM подобрать параметры по запросу и кларификациям
-            (breadth, depth) = await protocolService.AutoSelectBreadthDepthAsync(
-                initialQuery,
-                clarifications,
-                ct);
+            (breadth, depth) = await protocolService.AutoSelectBreadthDepthAsync(initialQuery, clarifications, ct);
         }
 
-        // ---------- выбираем breadth/depth ----------
-
+        // ---------- choose language/region ----------
         string language;
         string? region;
 
         if (!string.IsNullOrWhiteSpace(langOverride) || !string.IsNullOrWhiteSpace(regionOverride))
         {
             language = langOverride ?? "en";
-            region = regionOverride;
+            region   = regionOverride;
         }
         else
         {
             (language, region) = await protocolService.AutoSelectLanguageRegionAsync(initialQuery, clarifications, ct);
         }
 
-        // ---------- think-header + запуск джобы ----------
+        // ---------- emit header chunk ----------
+        await writer.BeginThinkAsync(requestId, created, modelName, ct);
+        var thinkHeader = BuildThinkHeader(initialQuery, breadth, depth, language, region, clarifications);
+        await writer.WriteThinkAsync(requestId, created, modelName, thinkHeader, ct);
 
-        var thinkHeader = new StringBuilder();
-        thinkHeader.AppendLine(".");
-        thinkHeader.AppendLine("Starting local deep research with clarifications.");
-        thinkHeader.AppendLine();
-        thinkHeader.AppendLine($"User query: \"{initialQuery}\"");
-        thinkHeader.AppendLine();
-        thinkHeader.AppendLine($"Breadth: {breadth}, Depth: {depth}");
-        thinkHeader.AppendLine();
-        thinkHeader.AppendLine($"Region: {region}, Language: {language}");
-        thinkHeader.AppendLine();
-        thinkHeader.AppendLine("Clarifications:");
-        for (int i = 0; i < clarifications.Count; i++)
-        {
-            thinkHeader.AppendLine($"Q{i + 1}: {clarifications[i].Question}");
-            thinkHeader.AppendLine($"A{i + 1}: {clarifications[i].Answer}");
-            thinkHeader.AppendLine();
-        }
-
-        var firstChunk = new
-        {
-            id      = requestId,
-            @object = "chat.completion.chunk",
-            created,
-            model   = modelName,
-            choices = new[]
-            {
-                new
-                {
-                    index = 0,
-                    delta = new
-                    {
-                        role    = "assistant",
-                        content = thinkHeader.ToString()
-                    },
-                    finish_reason = (string?)null
-                }
-            }
-        };
-
-        await chunkWriter.WriteChunkAsync(firstChunk, ct);
-
-        var job =  await orchestrator.StartJobAsync(
+        // ---------- start job ----------
+        var job = await orchestrator.StartJobAsync(
             initialQuery,
             clarifications,
             breadth: breadth,
             depth: depth,
             language: language,
             region: region,
-            ct
-        );
+            ct);
 
         _ = Task.Run(async () =>
         {
-            try
-            {
-                await orchestrator.RunJobAsync(job.Id, CancellationToken.None);
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"[deep-research-model] Error in RunJobAsync: {ex}");
-            }
+            try { await orchestrator.RunJobAsync(job.Id, CancellationToken.None); }
+            catch (Exception ex) { Console.WriteLine($"[deep-research-model] Error in RunJobAsync: {ex}"); }
         });
 
-        var lastEventCount = 0;
-        ResearchJob? currentJob = null;
+        // ---------- stream events via bus (replay + live) ----------
+        await StreamViaEventBusAsync(
+            httpContext,
+            requestId,
+            created,
+            modelName,
+            writer,
+            jobStore,
+            eventBus,
+            job.Id,
+            ct);
 
-        try
-        {
-            while (!ct.IsCancellationRequested &&
-                   !httpContext.RequestAborted.IsCancellationRequested)
-            {
-                currentJob = await jobStore.GetJobAsync(job.Id, ct);
-                if (currentJob == null)
-                {
-                    var chunkInternal = new
-                    {
-                        id      = requestId,
-                        @object = "chat.completion.chunk",
-                        created,
-                        model   = modelName,
-                        choices = new[]
-                        {
-                            new
-                            {
-                                index = 0,
-                                delta = new { content = "\n[internal] Job not found.\n" },
-                                finish_reason = (string?)null
-                            }
-                        }
-                    };
-                    await chunkWriter.WriteChunkAsync(chunkInternal, ct);
-                    break;
-                }
+        await writer.EndThinkAsync(requestId, created, modelName, ct);
 
-                var status = currentJob.Status;
-
-                var events =  await jobStore.GetEventsAsync(job.Id, ct);
-                if (events.Count > lastEventCount)
-                {
-                    var newEvents = events.Skip(lastEventCount).ToList();
-                    lastEventCount = events.Count;
-
-                    foreach (var ev in newEvents)
-                    {
-                        var line = $"{ev.Stage}: {ev.Message}\n";
-                        var evChunk = new
-                        {
-                            id      = requestId,
-                            @object = "chat.completion.chunk",
-                            created,
-                            model   = modelName,
-                            choices = new[]
-                            {
-                                new
-                                {
-                                    index = 0,
-                                    delta = new { content = line },
-                                    finish_reason = (string?)null
-                                }
-                            }
-                        };
-
-                        await chunkWriter.WriteChunkAsync(evChunk, ct);
-                    }
-                }
-
-                if (status is ResearchJobStatus.Completed or ResearchJobStatus.Failed)
-                {
-                    break;
-                }
-
-                await Task.Delay(TimeSpan.FromSeconds(1), ct);
-            }
-        }
-        catch (OperationCanceledException)
-        {
-            // клиент отключился
-        }
-
-        // ---------- финальный отчёт ----------
-
-        currentJob ??=  await jobStore.GetJobAsync(job.Id, ct);
+        // ---------- final report ----------
+        var currentJob = await jobStore.GetJobAsync(job.Id, ct);
         if (currentJob != null)
         {
             var statusStr = currentJob.Status.ToString();
-            var rawReport = currentJob.ReportMarkdown ??
-                         "_No reportMarkdown was generated by the research API._";
-
-            var report = chatModel.StripThinkBlock(rawReport);
+            var rawReport = currentJob.ReportMarkdown ?? "_No reportMarkdown was generated by the research API._";
+            var report    = chatModel.StripThinkBlock(rawReport);
 
             var finalContent =
-                $"\n.\n\n" +
                 $"### Open Deep Research\n\n" +
                 $"**Job ID:** `{currentJob.Id}`  \n" +
                 $"**Status:** `{statusStr}`  \n" +
                 $"**Query:** {currentJob.Query}\n\n" +
                 report;
 
-            var finalChunk = new
-            {
-                id      = requestId,
-                @object = "chat.completion.chunk",
-                created,
-                model   = modelName,
-                choices = new[]
-                {
-                    new
-                    {
-                        index = 0,
-                        delta = new { content = finalContent },
-                        finish_reason = (string?)null
-                    }
-                }
-            };
-
-            await chunkWriter.WriteChunkAsync(finalChunk, ct);
+            await writer.WriteTextDeltaAsync(
+                requestId, created, modelName,
+                role: null,
+                content: finalContent,
+                finishReason: null,
+                ct);
         }
 
-        await chunkWriter.WriteDoneAsync(ct);
+        await writer.WriteStopAsync(requestId, created, modelName, ct); 
+        await writer.WriteDoneAsync(ct);
+    }
+
+    private static void ConfigureOpenAiSseHeaders(HttpContext httpContext)
+    {
+        httpContext.Response.StatusCode = StatusCodes.Status200OK;
+        httpContext.Response.Headers["Content-Type"]  = "text/event-stream";
+        httpContext.Response.Headers["Cache-Control"] = "no-cache";
+        httpContext.Response.Headers["Connection"]    = "keep-alive";
+        httpContext.Response.Headers["X-Accel-Buffering"] = "no";
+    }
+
+    private static string BuildThinkHeader(
+        string initialQuery, int breadth, int depth, string language, string? region,
+        List<Clarification> clarifications)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine("Starting local deep research with clarifications.");
+        sb.AppendLine();
+        sb.AppendLine($"User query: \"{initialQuery}\"");
+        sb.AppendLine();
+        sb.AppendLine($"Breadth: {breadth}, Depth: {depth}");
+        sb.AppendLine();
+        sb.AppendLine($"Region: {region}, Language: {language}");
+        sb.AppendLine();
+        sb.AppendLine("Clarifications:");
+        for (int i = 0; i < clarifications.Count; i++)
+        {
+            sb.AppendLine($"Q{i + 1}: {clarifications[i].Question}");
+            sb.AppendLine($"A{i + 1}: {clarifications[i].Answer}");
+            sb.AppendLine();
+        }
+        return sb.ToString();
+    }
+
+    private static async Task StreamViaEventBusAsync(
+        HttpContext httpContext,
+        string requestId, long created, string modelName,
+        OpenAiChatStreamWriter writer,
+        IResearchJobStore jobStore,
+        IResearchEventBus eventBus,
+        Guid jobId,
+        CancellationToken ct)
+    {
+        // 1) Replay stored events so the client sees progress immediately
+        var storedEvents = await jobStore.GetEventsAsync(jobId, ct);
+        foreach (var ev in storedEvents)
+        {
+            await writer.WriteTextDeltaAsync(
+                requestId, created, modelName,
+                role: null,
+                content: $"{ev.Stage}: {ev.Message}\n",
+                finishReason: null,
+                ct);
+
+            if (ev.Stage is ResearchEventStage.Completed or ResearchEventStage.Failed)
+                return;
+        }
+
+        // 2) Subscribe to live events
+        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(ct, httpContext.RequestAborted);
+        var token = linkedCts.Token;
+
+        var doneTcs = new TaskCompletionSource<ResearchEventStage>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        await using var sub = await eventBus.SubscribeAsync(
+            jobId,
+            async (ev, t) =>
+            {
+                if (t.IsCancellationRequested) return;
+                
+                await writer.WriteThinkAsync(
+                    requestId,
+                    created,
+                    modelName,
+                    $"{ev.Stage}: {ev.Message}\n", 
+                    ct
+                );
+
+                if (ev.Stage is ResearchEventStage.Completed or ResearchEventStage.Failed)
+                    doneTcs.TrySetResult(ev.Stage);
+            },
+            token);
+
+        // 3) Wait for completion OR disconnect, with heartbeat
+        var heartbeatEvery = TimeSpan.FromSeconds(20);
+        var lastBeat = DateTimeOffset.UtcNow;
+
+        try
+        {
+            while (!token.IsCancellationRequested)
+            {
+                if (doneTcs.Task.IsCompleted)
+                    return;
+
+                if (DateTimeOffset.UtcNow - lastBeat >= heartbeatEvery)
+                {
+                    // comment heartbeat keeps SSE connections alive through proxies
+                    var sse = new SseFrameWriter(httpContext);
+                    await sse.WriteCommentAsync("heartbeat", token);
+                    lastBeat = DateTimeOffset.UtcNow;
+                }
+
+                var delay = Task.Delay(TimeSpan.FromSeconds(1), token);
+                await Task.WhenAny(doneTcs.Task, delay);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // client disconnected
+        }
     }
 }
