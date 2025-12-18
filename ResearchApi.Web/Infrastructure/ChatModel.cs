@@ -6,7 +6,6 @@ using OpenAI;
 using OpenAI.Chat;
 using ResearchApi.Configuration;
 using ResearchApi.Domain;
-using ResearchApi.Prompts;
 
 namespace ResearchApi.Infrastructure;
 

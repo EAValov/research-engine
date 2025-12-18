@@ -1,23 +1,23 @@
 using System.Text.Json;
 using Microsoft.Extensions.Options;
+using ResearchApi.Configuration;
 using ResearchApi.Domain;
-using ResearchApi.Prompts;
 
 namespace ResearchApi.Infrastructure;
 
 public sealed class VllmTokenizer : ITokenizer, IDisposable
 {
     private readonly HttpClient _httpClient;
-    private readonly TokenizerConfig _config;
+    private readonly ChatConfig _config;
     private readonly Uri _baseUri;
 
     public VllmTokenizer(
-        IOptions<TokenizerConfig> options,
+        IOptions<ChatConfig> options,
         HttpClient? httpClient = null)
     {
         _config = options.Value ?? throw new ArgumentNullException(nameof(options));
 
-        _baseUri = new Uri(_config.BaseUrl, UriKind.Absolute);
+        _baseUri = new Uri(_config.Endpoint, UriKind.Absolute);
         _httpClient = httpClient ?? new HttpClient();
     }
 
@@ -33,7 +33,7 @@ public sealed class VllmTokenizer : ITokenizer, IDisposable
 
         var model = _config.ModelId
                     ?? throw new InvalidOperationException(
-                        "TokenizerConfig.ModelId must be set to use TokenizePromptAsync.");
+                        "ChatConfig.ModelId must be set to use TokenizePromptAsync.");
 
         var messages = new List<object>
         {

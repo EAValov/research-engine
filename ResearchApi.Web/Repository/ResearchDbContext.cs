@@ -174,6 +174,9 @@ public class ResearchDbContext : DbContext
             .IsRequired()
             .HasMaxLength(2000);
 
+        entity.Property(s => s.ImportanceScore)
+            .HasColumnType("real");
+
         entity.Property(l => l.Embedding)
             .HasColumnType($"vector({_embeddingDimensions})");
 

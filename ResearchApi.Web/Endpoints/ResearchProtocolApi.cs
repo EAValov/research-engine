@@ -1,12 +1,12 @@
 using Microsoft.AspNetCore.Mvc;
 using ResearchApi.Domain;
 
-public static class DeepResearchProtocolApi
+public static class ResearchProtocolApi
 {
-    public static void MapDeepResearchProtocolApi(this WebApplication app)
+    public static void MapResearchProtocolApi(this WebApplication app)
     {
         var api = app.MapGroup("/api/research/protocol")
-            .WithTags("Deep Research Protocol API")
+            .WithTags("Research Protocol API")
             .RequireAuthorization();
 
         api.MapPost("/clarifications", GenerateClarificationsAsync);

@@ -1,12 +1,11 @@
 using System.Text;
 using System.Text.RegularExpressions;
-using ResearchApi.Domain;
-using ResearchApi.Infrastructure;
+using static OpenAiModelEndpoints;
 
 public static class ResearchProtocolHelper
 {
-    private const string ClarificationsBeginMarker = "[LOCAL_DEEP_RESEARCH_CLARIFICATIONS_BEGIN]";
-    private const string ClarificationsEndMarker   = "[LOCAL_DEEP_RESEARCH_CLARIFICATIONS_END]";
+    public const string ClarificationsBeginMarker = "[LOCAL_DEEP_RESEARCH_CLARIFICATIONS_BEGIN]";
+    public const string ClarificationsEndMarker   = "[LOCAL_DEEP_RESEARCH_CLARIFICATIONS_END]";
 
     /// <summary>
     /// Читает [DR_BREADTH=3][DR_DEPTH=2] из любого сообщения.

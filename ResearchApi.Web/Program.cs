@@ -7,6 +7,7 @@ using ResearchApi.Configuration;
 using ResearchApi.Domain;
 using ResearchApi.Infrastructure;
 using ResearchApi.Infrastructure.Authentication;
+using Scalar.AspNetCore;
 using Serilog;
 using StackExchange.Redis;
 using System.ComponentModel.DataAnnotations;
@@ -48,8 +49,6 @@ var chatConfig = config.GetSection(nameof(ChatConfig)).Get<ChatConfig>()!;
 
 builder.Services.Configure<EmbeddingConfig>(config.GetSection(nameof(EmbeddingConfig)));
 var embeddingConfig = config.GetSection(nameof(EmbeddingConfig)).Get<EmbeddingConfig>()!;
-
-builder.Services.Configure<TokenizerConfig>(config.GetSection(nameof(TokenizerConfig)));
 
 builder.Services.Configure<ResearchOrchestratorConfig>(config.GetSection(nameof(ResearchOrchestratorConfig)));
 
@@ -129,7 +128,6 @@ builder.Services.AddScoped<IQueryPlanningService, QueryPlanningService>();
 builder.Services.AddScoped<ILearningExtractionService, LearningExtractionService>();
 builder.Services.AddScoped<IReportSynthesisService, ReportSynthesisService>();
 
-// ---------- Job store (Postgres + decorator publishing to event bus) ----------
 builder.Services.AddScoped<IResearchJobStore, PostgresResearchJobStore>();
 
 // ---------- Health checks ----------
@@ -142,7 +140,9 @@ builder.Services.AddHealthChecks()
         name: "postgres",
         tags: ["ready", "db"])
     .AddSearchAndCrawlHealthChecks(config)
-    .AddRedis(webhookOptions.RedisConnectionString, name: "redis", tags: new[] { "ready", "cache" });
+    .AddRedis(webhookOptions.RedisConnectionString, name: "redis", tags: ["ready", "cache"]);
+
+builder.Services.AddOpenApi();
 
 var app = builder.Build();
 
@@ -156,15 +156,20 @@ app.MapHealthChecks("/health/ready",
     new HealthCheckOptions { Predicate = check => check.Tags.Contains("ready") });
 
 // Map custom endpoints
-app.MapDeepResearchModel();
-app.MapDeepResearchJobsApi();
-app.MapDeepResearchProtocolApi();
+app.MapResearchModel();
+app.MapResearchJobsApi();
+app.MapResearchProtocolApi();
 
-// DB migration
-using (var scope = app.Services.CreateScope())
+app.MapOpenApi();
+app.MapScalarApiReference();
+
+if(!builder.Environment.IsEnvironment("Testing"))
 {
-    var db = scope.ServiceProvider.GetRequiredService<ResearchDbContext>();
-    db.Database.Migrate();
+    using (var scope = app.Services.CreateScope())
+    {
+        var db = scope.ServiceProvider.GetRequiredService<ResearchDbContext>();
+        db.Database.Migrate();
+    }
 }
 
 app.Run();

@@ -3,12 +3,12 @@ using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using ResearchApi.Domain;
 
-public static class DeepResearchJobsApi
+public static class ResearchJobsApi
 {
-    public static void MapDeepResearchJobsApi(this WebApplication app)
+    public static void MapResearchJobsApi(this WebApplication app)
     {
         var api = app.MapGroup("/api/research")
-            .WithTags("Deep Research Jobs API")
+            .WithTags("Research Jobs API")
             .RequireAuthorization();
 
         api.MapPost("/jobs", CreateJobAsync);
@@ -218,7 +218,6 @@ public static class DeepResearchJobsApi
         IWebhookSubscriptionStore store,
         CancellationToken ct)
     {
-        // Validation should already run via .NET 10 minimal API validation, but keep parsing robust.
         if (!Uri.TryCreate(webhook.Url, UriKind.Absolute, out var uri))
             throw new ArgumentException("Invalid webhook Url.", nameof(webhook));
 

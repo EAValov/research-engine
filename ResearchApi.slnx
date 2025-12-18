@@ -5,4 +5,5 @@
     <Platform Name="x86" />
   </Configurations>
   <Project Path="ResearchApi.Web/ResearchApi.csproj" />
+  <Project Path="ResearchApi.Tests/ResearchApi.Tests.csproj" />
 </Solution>

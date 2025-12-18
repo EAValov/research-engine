@@ -1,16 +1,42 @@
 using System.Text;
-using Microsoft.AspNetCore.Mvc;
 using ResearchApi.Domain;
 
-public sealed class ChatRequest { public string Model { get; set; } = default!; public bool Stream { get; set; } = true; public List<ChatMessage> Messages { get; set; } = new(); }
-public sealed class ChatMessage { public string Role { get; set; } = default!; public string Content { get; set; } = default!; }
-
-public static class DeepResearchChatHandler
+public static class OpenAiModelEndpoints
 {
-    private const string ClarificationsBeginMarker = "[LOCAL_DEEP_RESEARCH_CLARIFICATIONS_BEGIN]";
-    private const string ClarificationsEndMarker   = "[LOCAL_DEEP_RESEARCH_CLARIFICATIONS_END]";
+    public sealed class ChatRequest { public string Model { get; set; } = default!; public bool Stream { get; set; } = true; public List<ChatMessage> Messages { get; set; } = new(); }
+    public sealed class ChatMessage { public string Role { get; set; } = default!; public string Content { get; set; } = default!; }
 
-    public static async Task HandleChatCompletionsAsync(
+    public static void MapResearchModel(this WebApplication app)
+    {
+        app.MapGet("/v1/models", HandleGetModels);
+        app.MapPost("/v1/chat/completions", HandleChatCompletionsAsync);
+    }
+
+    private static IResult HandleGetModels()
+    {
+        var created = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+
+        var response = new
+        {
+            // OpenAI-style list wrapper
+            @object = "list",
+            data = new[]
+            {
+                new
+                {
+                    id      = "Open Deep Research", 
+                    @object = "model",
+                    created = created,
+                    owned_by = "local",
+                    description = "Open Deep Research wrapper model"
+                }
+            }
+        };
+
+        return Results.Json(response);
+    }
+
+    private static async Task HandleChatCompletionsAsync(
         HttpContext httpContext,
         ChatRequest request,
         IResearchOrchestrator orchestrator,
@@ -83,7 +109,7 @@ public static class DeepResearchChatHandler
             .LastOrDefault(x =>
                 x.m.Role.Equals("assistant", StringComparison.OrdinalIgnoreCase) &&
                 x.m.Content != null &&
-                x.m.Content.Contains(ClarificationsBeginMarker, StringComparison.Ordinal));
+                x.m.Content.Contains(ResearchProtocolHelper.ClarificationsBeginMarker, StringComparison.Ordinal));
 
         var hasClarificationBlock = assistantWithClar != null;
 
@@ -104,10 +130,10 @@ public static class DeepResearchChatHandler
             var sb = new StringBuilder();
             sb.AppendLine("To better focus the research, please answer the following clarification questions:");
             sb.AppendLine();
-            sb.AppendLine(ClarificationsBeginMarker);
+            sb.AppendLine(ResearchProtocolHelper.ClarificationsBeginMarker);
             for (int i = 0; i < questions.Count; i++)
                 sb.AppendLine($"{i + 1}. {questions[i]}");
-            sb.AppendLine(ClarificationsEndMarker);
+            sb.AppendLine(ResearchProtocolHelper.ClarificationsEndMarker);
             sb.AppendLine();
             sb.AppendLine("You can answer them in a numbered list, for example:");
             sb.AppendLine("1) ...");
