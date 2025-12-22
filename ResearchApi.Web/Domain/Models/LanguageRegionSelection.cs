@@ -2,6 +2,8 @@ using System.ComponentModel;
 using System.Text.Json;
 using Microsoft.Extensions.AI;
 
+namespace ResearchApi.Domain;
+
 public sealed class LanguageRegionSelection
 {
     [Description("2-letter ISO 639-1 language code in lowercase (e.g. \"en\", \"de\").")]

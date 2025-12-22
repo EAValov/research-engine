@@ -2,6 +2,21 @@ namespace ResearchApi.Domain;
 
 public interface IResearchOrchestrator
 {
-    Task<ResearchJob> StartJobAsync(string query, IEnumerable<Clarification> clarifications, int breadth, int depth, string language, string? region, CancellationToken ct = default);
-    Task RunJobAsync(Guid jobId, CancellationToken ct);
+    /// <summary>
+    /// Creates a job row and immediately starts running it in the background.
+    /// Returns the job id.
+    /// </summary>
+    Task<Guid> StartJobAsync(
+        string query,
+        IEnumerable<Clarification> clarifications,
+        int breadth,
+        int depth,
+        string language,
+        string? region,
+        CancellationToken ct = default);
+
+    /// <summary>
+    /// Worker entrypoint (used by background execution / tests).
+    /// </summary>
+    Task RunJobAsync(Guid jobId, CancellationToken ct = default);
 }

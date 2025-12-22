@@ -123,7 +123,7 @@ builder.Services.AddSingleton<ITokenizer, VllmTokenizer>();
 builder.Services.AddScoped<IResearchOrchestrator, ResearchOrchestrator>();
 builder.Services.AddScoped<IResearchProtocolService, ResearchProtocolService>();
 builder.Services.AddScoped<ILearningEmbeddingService, LearningEmbeddingService>();
-builder.Services.AddScoped<IResearchContentStore, ResearchContentStore>();
+builder.Services.AddScoped<ILearningIntelService, LearningIntelService>();
 builder.Services.AddScoped<IQueryPlanningService, QueryPlanningService>();
 builder.Services.AddScoped<ILearningExtractionService, LearningExtractionService>();
 builder.Services.AddScoped<IReportSynthesisService, ReportSynthesisService>();

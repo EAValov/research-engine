@@ -4,6 +4,11 @@ using Microsoft.Extensions.AI;
 
 namespace ResearchApi.Domain;
 
+public sealed record ExtractedLearningItemWithEvidence(
+    string Text,
+    float Importance,
+    string EvidenceText);
+
 public sealed class ExtractedLearningItem
 {
     [Description("Single, self-contained learning text in the target language, highly relevant to the user's query.")]

@@ -2,10 +2,10 @@ namespace ResearchApi.Domain;
 
 public interface ILearningExtractionService
 {
-    Task<IReadOnlyList<ExtractedLearningItem>> ExtractLearningsAsync(
+    Task<IReadOnlyList<ExtractedLearningItemWithEvidence>> ExtractLearningsAsync(
         string query,
         string clarificationsText,
-        ScrapedPage page,
+        string sourceContent,
         string sourceUrl,
         string targetLanguage,
         CancellationToken ct);

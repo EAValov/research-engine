@@ -5,16 +5,20 @@ using ResearchApi.Domain;
 
 namespace ResearchApi.Infrastructure;
 
-public class ResearchDbContext : DbContext
+
+public sealed class ResearchDbContext : DbContext
 {
     private readonly int _embeddingDimensions;
 
     public DbSet<ResearchJob> ResearchJobs => Set<ResearchJob>();
     public DbSet<Clarification> Clarifications => Set<Clarification>();
     public DbSet<ResearchEvent> ResearchEvents => Set<ResearchEvent>();
-    public DbSet<VisitedUrl> VisitedUrls => Set<VisitedUrl>();
-    public DbSet<ScrapedPage> ScrapedPages => Set<ScrapedPage>();
+    public DbSet<Source> Sources => Set<Source>();
     public DbSet<Learning> Learnings => Set<Learning>();
+    public DbSet<LearningEmbedding> LearningEmbeddings => Set<LearningEmbedding>();
+    public DbSet<Synthesis> Syntheses => Set<Synthesis>();
+    public DbSet<SynthesisSourceOverride> SynthesisSourceOverrides => Set<SynthesisSourceOverride>();
+    public DbSet<SynthesisLearningOverride> SynthesisLearningOverrides => Set<SynthesisLearningOverride>();
 
     public ResearchDbContext(
         DbContextOptions<ResearchDbContext> options,
@@ -26,17 +30,21 @@ public class ResearchDbContext : DbContext
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        // pgvector extension
         modelBuilder.HasPostgresExtension("vector");
 
         ConfigureResearchJob(modelBuilder);
         ConfigureClarification(modelBuilder);
         ConfigureEvent(modelBuilder);
-        ConfigureVisitedUrl(modelBuilder);
-        ConfigureScrapedPage(modelBuilder);
+        ConfigureSource(modelBuilder);
         ConfigureLearning(modelBuilder);
+        ConfigureLearningEmbedding(modelBuilder);
+        ConfigureSynthesis(modelBuilder);
+        ConfigureSynthesisSourceOverride(modelBuilder);
+        ConfigureSynthesisLearningOverride(modelBuilder);
     }
 
-    private void ConfigureResearchJob(ModelBuilder modelBuilder)
+    private static void ConfigureResearchJob(ModelBuilder modelBuilder)
     {
         var entity = modelBuilder.Entity<ResearchJob>();
 
@@ -48,7 +56,7 @@ public class ResearchDbContext : DbContext
             .HasMaxLength(4000);
 
         entity.Property(j => j.Status)
-            .HasConversion<string>() // store enum as text
+            .HasConversion<string>()
             .IsRequired();
 
         entity.Property(j => j.TargetLanguage)
@@ -63,9 +71,19 @@ public class ResearchDbContext : DbContext
 
         entity.Property(j => j.UpdatedAt)
             .HasDefaultValueSql("now() at time zone 'utc'");
+
+        entity.HasMany(j => j.Sources)
+            .WithOne(s => s.Job)
+            .HasForeignKey(s => s.JobId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        entity.HasMany(j => j.Syntheses)
+            .WithOne(sy => sy.Job)
+            .HasForeignKey(sy => sy.JobId)
+            .OnDelete(DeleteBehavior.Cascade);
     }
 
-    private void ConfigureClarification(ModelBuilder modelBuilder)
+    private static void ConfigureClarification(ModelBuilder modelBuilder)
     {
         var entity = modelBuilder.Entity<Clarification>();
 
@@ -80,13 +98,16 @@ public class ResearchDbContext : DbContext
             .IsRequired()
             .HasMaxLength(4000);
 
+        entity.Property(c => c.CreatedAt)
+            .HasDefaultValueSql("now() at time zone 'utc'");
+
         entity.HasOne(c => c.Job)
             .WithMany(j => j.Clarifications)
             .HasForeignKey(c => c.JobId)
             .OnDelete(DeleteBehavior.Cascade);
     }
 
-    private void ConfigureEvent(ModelBuilder modelBuilder)
+     private void ConfigureEvent(ModelBuilder modelBuilder)
     {
         var entity = modelBuilder.Entity<ResearchEvent>();
 
@@ -108,94 +129,215 @@ public class ResearchDbContext : DbContext
             .OnDelete(DeleteBehavior.Cascade);
     }
 
-    private void ConfigureVisitedUrl(ModelBuilder modelBuilder)
+    private static void ConfigureSource(ModelBuilder modelBuilder)
     {
-        var entity = modelBuilder.Entity<VisitedUrl>();
+        var entity = modelBuilder.Entity<Source>();
 
-        entity.ToTable("visited_urls");
-        entity.HasKey(v => v.Id);
+        entity.ToTable("sources");
+        entity.HasKey(s => s.Id);
 
-        entity.Property(v => v.Url)
+        entity.Property(s => s.Url)
             .IsRequired()
             .HasMaxLength(2000);
 
-        entity.HasIndex(v => new { v.JobId, v.Url }).IsUnique();
-
-        entity.HasOne(v => v.Job)
-            .WithMany(j => j.VisitedUrls)
-            .HasForeignKey(v => v.JobId)
-            .OnDelete(DeleteBehavior.Cascade);
-    }
-
-    private void ConfigureScrapedPage(ModelBuilder modelBuilder)
-    {
-        var entity = modelBuilder.Entity<ScrapedPage>();
-
-        entity.ToTable("scraped_pages");
-        entity.HasKey(p => p.Id);
-
-        entity.Property(p => p.Url)
-            .IsRequired()
-            .HasMaxLength(2000);
-
-        entity.Property(p => p.Content)
-            .IsRequired();
-
-        entity.Property(p => p.ContentHash)
+        entity.Property(s => s.ContentHash)
             .IsRequired()
             .HasMaxLength(128);
 
-        entity.Property(p => p.Language)
+        entity.Property(s => s.Title)
+            .HasMaxLength(1000);
+
+        entity.Property(s => s.Content)
+            .IsRequired();
+
+        entity.Property(s => s.Language)
             .HasMaxLength(20);
 
-        entity.Property(p => p.Region)
+        entity.Property(s => s.Region)
             .HasMaxLength(500);
 
-        entity.Property(p => p.CreatedAt)
+        entity.Property(s => s.CreatedAt)
             .HasDefaultValueSql("now() at time zone 'utc'");
 
-        entity.HasIndex(p => p.Url);
-        entity.HasIndex(p => p.ContentHash);
+        // Dedupe: the same URL should not be inserted twice for the same job.
+        entity.HasIndex(s => new { s.JobId, s.Url }).IsUnique();
+
+        // Useful for caching/dedupe by content.
+        entity.HasIndex(s => s.ContentHash);
+
+        entity.HasOne(s => s.Job)
+            .WithMany(j => j.Sources)
+            .HasForeignKey(s => s.JobId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        entity.HasMany(s => s.Learnings)
+            .WithOne(l => l.Source)
+            .HasForeignKey(l => l.SourceId)
+            .OnDelete(DeleteBehavior.Cascade);
     }
 
-    private void ConfigureLearning(ModelBuilder modelBuilder)
+    private static void ConfigureLearning(ModelBuilder modelBuilder)
     {
         var entity = modelBuilder.Entity<Learning>();
 
         entity.ToTable("learnings");
         entity.HasKey(l => l.Id);
 
-        entity.HasIndex(l => new { l.PageId, l.QueryHash });
+        entity.Property(l => l.QueryHash)
+            .IsRequired()
+            .HasMaxLength(128);
 
         entity.Property(l => l.Text)
             .IsRequired();
 
-        entity.Property(l => l.SourceUrl)
-            .IsRequired()
-            .HasMaxLength(2000);
+        entity.Property(l => l.ImportanceScore)
+            .HasColumnType("real")
+            .IsRequired();
 
-        entity.Property(s => s.ImportanceScore)
-            .HasColumnType("real");
-
-        entity.Property(l => l.Embedding)
-            .HasColumnType($"vector({_embeddingDimensions})");
+        entity.Property(l => l.EvidenceText)
+            .IsRequired();
 
         entity.Property(l => l.CreatedAt)
             .HasDefaultValueSql("now() at time zone 'utc'");
 
+        // Relationships
         entity.HasOne(l => l.Job)
-            .WithMany(j => j.Learnings)
+            .WithMany() // learnings reachable via Sources; not directly via Job collection
             .HasForeignKey(l => l.JobId)
             .OnDelete(DeleteBehavior.Cascade);
 
-        entity.HasOne(l => l.Page)
-            .WithMany(p => p.Learnings)
-            .HasForeignKey(l => l.PageId)
+        entity.HasOne(l => l.Source)
+            .WithMany(s => s.Learnings)
+            .HasForeignKey(l => l.SourceId)
             .OnDelete(DeleteBehavior.Cascade);
 
-        entity.HasIndex(i => i.Embedding)
+        // Indexing
+        entity.HasIndex(l => new { l.JobId, l.SourceId });
+        entity.HasIndex(l => new { l.SourceId, l.QueryHash });
+    }
+
+    private void ConfigureLearningEmbedding(ModelBuilder modelBuilder)
+    {
+        var entity = modelBuilder.Entity<LearningEmbedding>();
+
+        entity.ToTable("learning_embeddings");
+        entity.HasKey(e => e.Id);
+
+        entity.Property(e => e.Vector)
+            .IsRequired()
+            .HasColumnType($"vector({_embeddingDimensions})");
+
+        entity.Property(e => e.CreatedAt)
+            .HasDefaultValueSql("now() at time zone 'utc'");
+
+        entity.HasOne(e => e.Learning)
+            .WithOne(l => l.Embedding)
+            .HasForeignKey<LearningEmbedding>(e => e.LearningId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        // ivfflat index for vector search
+        entity.HasIndex(i => i.Vector)
             .HasMethod("ivfflat")
             .HasOperators("vector_cosine_ops")
             .HasStorageParameter("lists", 100);
+
+        entity.HasIndex(e => e.LearningId).IsUnique();
+    }
+
+    private static void ConfigureSynthesis(ModelBuilder modelBuilder)
+    {
+        var entity = modelBuilder.Entity<Synthesis>();
+
+        entity.ToTable("syntheses");
+        entity.HasKey(s => s.Id);
+
+        entity.Property(s => s.Status)
+            .HasConversion<string>()
+            .IsRequired()
+            .HasMaxLength(50);
+
+        entity.Property(s => s.Outline);
+        entity.Property(s => s.Instructions);
+
+        entity.Property(s => s.ReportMarkdown);
+
+        entity.Property(s => s.ErrorMessage)
+            .HasMaxLength(4000);
+
+        entity.Property(s => s.CreatedAt)
+            .HasDefaultValueSql("now() at time zone 'utc'");
+
+        entity.HasOne(s => s.Job)
+            .WithMany(j => j.Syntheses)
+            .HasForeignKey(s => s.JobId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        // self-referencing lineage
+        entity.HasOne(s => s.ParentSynthesis)
+            .WithMany(p => p.Children)
+            .HasForeignKey(s => s.ParentSynthesisId)
+            .OnDelete(DeleteBehavior.SetNull);
+
+        entity.HasIndex(s => new { s.JobId, s.CreatedAt });
+        entity.HasIndex(s => s.Status);
+    }
+
+    private static void ConfigureSynthesisSourceOverride(ModelBuilder modelBuilder)
+    {
+        var entity = modelBuilder.Entity<SynthesisSourceOverride>();
+
+        entity.ToTable("synthesis_source_overrides");
+        entity.HasKey(x => x.Id);
+
+        entity.Property(x => x.Excluded);
+        entity.Property(x => x.Pinned);
+
+        entity.Property(x => x.CreatedAt)
+            .HasDefaultValueSql("now() at time zone 'utc'");
+
+        // One row per (Synthesis, Source)
+        entity.HasIndex(x => new { x.SynthesisId, x.SourceId })
+            .IsUnique();
+
+        entity.HasOne(x => x.Synthesis)
+            .WithMany() // no nav required
+            .HasForeignKey(x => x.SynthesisId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        entity.HasOne(x => x.Source)
+            .WithMany() // no nav required
+            .HasForeignKey(x => x.SourceId)
+            .OnDelete(DeleteBehavior.Cascade);
+    }
+
+    private static void ConfigureSynthesisLearningOverride(ModelBuilder modelBuilder)
+    {
+        var entity = modelBuilder.Entity<SynthesisLearningOverride>();
+
+        entity.ToTable("synthesis_learning_overrides");
+        entity.HasKey(x => x.Id);
+
+        entity.Property(x => x.ScoreOverride)
+            .HasColumnType("real");
+
+        entity.Property(x => x.Excluded);
+        entity.Property(x => x.Pinned);
+
+        entity.Property(x => x.CreatedAt)
+            .HasDefaultValueSql("now() at time zone 'utc'");
+
+        // One row per (Synthesis, Learning)
+        entity.HasIndex(x => new { x.SynthesisId, x.LearningId })
+            .IsUnique();
+
+        entity.HasOne(x => x.Synthesis)
+            .WithMany() // no nav required
+            .HasForeignKey(x => x.SynthesisId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        entity.HasOne(x => x.Learning)
+            .WithMany() // no nav required
+            .HasForeignKey(x => x.LearningId)
+            .OnDelete(DeleteBehavior.Cascade);
     }
 }

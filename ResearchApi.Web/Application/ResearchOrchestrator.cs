@@ -1,30 +1,30 @@
-using System.Text;
-using Microsoft.Extensions.Options;
 using ResearchApi.Configuration;
 using ResearchApi.Domain;
+using System.Text;
+using Microsoft.Extensions.Options;
 
 namespace ResearchApi.Application;
 
-public class ResearchOrchestrator(
+public sealed class ResearchOrchestrator(
     IOptions<ResearchOrchestratorConfig> options,
     ISearchClient searchClient,
     ICrawlClient crawlClient,
     IResearchJobStore jobStore,
     IQueryPlanningService queryPlanningService,
-    ILearningExtractionService learningExtractionService,
-    IResearchContentStore researchContentStore,
+    ILearningIntelService learningIntelService,
     IReportSynthesisService reportSynthesisService,
-    ILearningEmbeddingService learningEmbeddingService,
     ILogger<ResearchOrchestrator> logger)
     : IResearchOrchestrator
 {
-    private readonly object _metricsLock = new();
+    private readonly int _limitSearches       = options.Value?.LimitSearches ?? 5;
+    private readonly int _maxUrlParallelism   = options.Value?.MaxUrlParallelism ?? 1;
+    private readonly int _maxUrlsPerSerpQuery = options.Value?.MaxUrlsPerSerpQuery ?? 20;
 
-    int LimitSearches       = options.Value?.LimitSearches ?? 5;
-    int MaxUrlParallelism   = options.Value?.MaxUrlParallelism ?? 1; 
-    int MaxUrlsPerSerpQuery = options.Value?.MaxUrlsPerSerpQuery ?? 20;
-
-    public Task<ResearchJob> StartJobAsync(
+    /// <summary>
+    /// Creates a job row and immediately starts running it in the background.
+    /// Returns the job id.
+    /// </summary>
+    public async Task<Guid> StartJobAsync(
         string query,
         IEnumerable<Clarification> clarifications,
         int breadth,
@@ -32,30 +32,57 @@ public class ResearchOrchestrator(
         string language,
         string? region,
         CancellationToken ct = default)
-        => jobStore.CreateJobAsync(query, clarifications, breadth, depth, language, region, ct);
+    {
+        // 1) Create job row
+        var job = await jobStore.CreateJobAsync(
+            query: query,
+            clarifications: clarifications,
+            breadth: breadth,
+            depth: depth,
+            language: language,
+            region: region,
+            ct: ct);
 
-    public async Task RunJobAsync(Guid jobId, CancellationToken ct)
+        // 2) Run in background (do NOT tie to request cancellation)
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await RunJobAsync(job.Id, CancellationToken.None);
+            }
+            catch (Exception ex)
+            {
+                // RunJobAsync already appends Failed event + sets status,
+                // but keep a log just in case.
+                logger.LogError(ex, "Background RunJobAsync failed for job {JobId}", job.Id);
+            }
+        });
+
+        return job.Id;
+    }
+
+    /// <summary>
+    /// Worker entrypoint (used by background execution / tests).
+    /// </summary>
+    public async Task RunJobAsync(Guid jobId, CancellationToken ct = default)
     {
         var job = await jobStore.GetJobAsync(jobId, ct)
-                ?? throw new ArgumentException("Job not found", nameof(jobId));
+            ?? throw new ArgumentException("Job not found", nameof(jobId));
 
         job.Status = ResearchJobStatus.Running;
         await jobStore.UpdateJobAsync(job, ct);
 
-        var metrics = new ResearchMetrics();
+        var progress = new ResearchProgressTracker(jobId, jobStore, minEmitIntervalMs: 250);
 
         try
         {
-            await ReportProgressAsync(
-                jobId,
-                metrics,
-                ResearchEventStage.Planning,
-                "Starting research planning",
-                ct);
+            await progress.InfoAsync(ResearchEventStage.Planning, "Starting research planning", ct);
 
-            var clarifications     = job.Clarifications ?? new List<Clarification>();
+            var clarifications = job.Clarifications ?? new List<Clarification>();
             var clarificationsText = FormatClarifications(clarifications);
-            var queryHash          = researchContentStore.ComputeQueryHash(job.Query);
+
+            // IMPORTANT: stable query hash for caching
+            var queryHash = ComputeSha256(job.Query);
 
             // 1) SERP planning
             var serpQueries = await queryPlanningService.GenerateSerpQueriesAsync(
@@ -66,59 +93,54 @@ public class ResearchOrchestrator(
                 job.TargetLanguage,
                 ct);
 
-            metrics.SerpQueries   = serpQueries.Count;
-            metrics.TotalWorkUnits += serpQueries.Count; // each SERP search is one unit
+            progress.AddPlannedSerpQueries(serpQueries.Count);
 
-            await ReportProgressAsync(
-                jobId,
-                metrics,
+            await progress.InfoAsync(
                 ResearchEventStage.Planning,
                 $"Generated {serpQueries.Count} queries based on clarifications and depth={job.Depth}",
                 ct);
 
-            // 2) Collect learnings with progress-aware metrics
-            var (visitedUrls, allLearnings) =
-                await CollectLearningsAsync(job, serpQueries, clarificationsText, queryHash, metrics, ct);
-            
-            // 3) Final synthesis counts as one more unit
-            metrics.TotalWorkUnits += 1;
+            // 2) SERP -> URLs -> Sources -> Learnings
+            foreach (var serpQuery in serpQueries)
+            {
+                ct.ThrowIfCancellationRequested();
 
-            await ReportProgressAsync(
-                jobId,
-                metrics,
+                await ProcessSerpQueryAsync(
+                    job,
+                    serpQuery,
+                    clarificationsText,
+                    queryHash,
+                    progress,
+                    ct);
+            }
+
+            await progress.InfoAsync(
                 ResearchEventStage.Summarizing,
                 "Generating final report",
                 ct);
-            
-            job.VisitedUrls    = visitedUrls.Select(u => new VisitedUrl { Url = u }).ToList();
 
-            var reportMarkdown = await reportSynthesisService
-                .WriteFinalReportAsync(job, clarificationsText, allLearnings, ct);
+            var synthesisId = await reportSynthesisService.StartSynthesisAsync(
+                jobId: job.Id,
+                parentSynthesisId: null,
+                outline: null,
+                instructions: null,
+                ct: ct);
 
-            metrics.CompletedWorkUnits += 1; // synthesis done
+            // Optional: emit synthesis id for clients/tools
+            await progress.InfoAsync(
+                ResearchEventStage.Summarizing,
+                $"Synthesis started (synthesisId={synthesisId})",
+                ct);
 
-            job.Status         = ResearchJobStatus.Completed;
-            job.ReportMarkdown = reportMarkdown;
+            await reportSynthesisService.RunExistingSynthesisAsync(synthesisId, progress, ct);
 
-
+            // Job becomes completed when synthesis completes
+            job.Status = ResearchJobStatus.Completed;
             await jobStore.UpdateJobAsync(job, ct);
 
-            // final 100% + metrics summary
-            metrics.CompletedWorkUnits = metrics.TotalWorkUnits;
-
-            await ReportProgressAsync(
-                jobId,
-                metrics,
-                ResearchEventStage.Metrics,
-                metrics.ToString(),
-                ct);
-
-            await ReportProgressAsync(
-                jobId,
-                metrics,
-                ResearchEventStage.Completed,
-                "Research completed successfully",
-                ct);
+            // metrics + done
+            progress.MarkAllCompleted();
+            await progress.EmitMetricsSummaryAsync(ct);
         }
         catch (Exception ex)
         {
@@ -134,119 +156,53 @@ public class ResearchOrchestrator(
         }
     }
 
-    // ---------------- PHASE 2: collect learnings ----------------
+    // ---------------- SERP + URL processing ----------------
 
-   async Task<(HashSet<string> visitedUrls, List<Learning> allLearnings)> CollectLearningsAsync(
-        ResearchJob job,
-        IReadOnlyList<string> serpQueries,
-        string clarificationsText,
-        string queryHash,
-        ResearchMetrics metrics,
-        CancellationToken ct)
-    {
-        var visitedUrls   = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var processedUrls = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var allLearnings  = new List<Learning>();
-
-        foreach (var serpQuery in serpQueries)
-        {
-            ct.ThrowIfCancellationRequested();
-
-            var newLearningsForQuery = await ProcessSerpQueryAsync(
-                job,
-                serpQuery,
-                clarificationsText,
-                queryHash,
-                visitedUrls,
-                processedUrls,
-                metrics,
-                ct);
-
-            allLearnings.AddRange(newLearningsForQuery);
-
-            metrics.UniqueUrlsDiscovered = visitedUrls.Count;
-            metrics.UniqueUrlsProcessed  = processedUrls.Count;
-        }
-
-        return (visitedUrls, allLearnings);
-    }
-
-    async Task<IReadOnlyList<Learning>> ProcessSerpQueryAsync(
+    private async Task ProcessSerpQueryAsync(
         ResearchJob job,
         string serpQuery,
         string clarificationsText,
         string queryHash,
-        HashSet<string> visitedUrls,
-        HashSet<string> processedUrls,
-        ResearchMetrics metrics,
+        ResearchProgressTracker progress,
         CancellationToken ct)
     {
         var searchResults = await searchClient.SearchAsync(
             serpQuery,
-            LimitSearches,
+            _limitSearches,
             location: job.Region,
             ct: ct);
 
-        metrics.SearchResultsTotal += searchResults.Count;
+        progress.SerpSearchCompleted(searchResults.Count);
 
-        var newUrls = searchResults
+        var urls = searchResults
             .Select(r => r.Url)
             .Where(u => !string.IsNullOrWhiteSpace(u))
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
 
-        lock (visitedUrls)
+        if (urls.Count == 0)
         {
-            foreach (var u in newUrls)
-                visitedUrls.Add(u);
-        }
-
-        var urlsToProcess = new List<string>();
-        lock (processedUrls)
-        {
-            foreach (var url in newUrls)
-            {
-                if (!processedUrls.Contains(url))
-                {
-                    processedUrls.Add(url);
-                    urlsToProcess.Add(url);
-                }
-            }
-        }
-
-        // Search itself is one unit – mark as done now
-        metrics.CompletedWorkUnits += 1;
-
-        if (urlsToProcess.Count == 0)
-        {
-            await ReportProgressAsync(
-                job.Id,
-                metrics,
+            await progress.InfoAsync(
                 ResearchEventStage.Searching,
-                $"Processed SERP query '{serpQuery}' with {newUrls.Count} URLs (all cached/duplicate).",
+                $"Processed SERP query '{serpQuery}' with 0 URLs.",
                 ct);
 
-            return Array.Empty<Learning>();
+            return;
         }
 
-        if (urlsToProcess.Count > MaxUrlsPerSerpQuery)
-        {
-            urlsToProcess = urlsToProcess.Take(MaxUrlsPerSerpQuery).ToList();
-        }
+        if (urls.Count > _maxUrlsPerSerpQuery)
+            urls = urls.Take(_maxUrlsPerSerpQuery).ToList();
 
-        // Add work units for each URL we’re about to process
-        metrics.TotalWorkUnits += urlsToProcess.Count;
+        progress.UrlsQueued(urls.Count);
 
-        var collected     = new List<Learning>();
-        var collectedLock = new object();
-        var semaphore     = new SemaphoreSlim(MaxUrlParallelism);
+        var semaphore = new SemaphoreSlim(_maxUrlParallelism);
 
-        var tasks = urlsToProcess.Select(async url =>
+        var tasks = urls.Select(async url =>
         {
             await semaphore.WaitAsync(ct);
             try
             {
-                var result = await ProcessUrlAsync(
+                var summary = await ProcessUrlAsync(
                     job,
                     serpQuery,
                     url,
@@ -254,39 +210,10 @@ public class ResearchOrchestrator(
                     queryHash,
                     ct);
 
-                if (result.Learnings.Count > 0)
-                {
-                    lock (collectedLock)
-                    {
-                        collected.AddRange(result.Learnings);
-                    }
-                }
+                progress.UrlProcessed(summary.UsedCache, summary.HadError, summary.LearningCount);
 
-                lock (_metricsLock)
-                {
-                    if (result.UsedCache)
-                    {
-                        metrics.UrlsServedFromCache++;
-                        metrics.TotalLearningsReused += result.Learnings.Count;
-                    }
-                    else
-                    {
-                        metrics.UrlsProcessedForContent++;
-                        metrics.TotalLearningsGenerated += result.Learnings.Count;
-                    }
-
-                    if (result.HadError)
-                    {
-                        metrics.ExtractionFailures++;
-                    }
-
-                    // one URL finished
-                    metrics.CompletedWorkUnits += 1;
-                }
-
-                await ReportProgressAsync(
-                    job.Id,
-                    metrics,
+                // Throttled emit
+                await progress.ReportAsync(
                     ResearchEventStage.LearningExtraction,
                     $"Processed URL {url}",
                     ct);
@@ -295,27 +222,19 @@ public class ResearchOrchestrator(
             {
                 semaphore.Release();
             }
-    });
+        });
 
         await Task.WhenAll(tasks);
 
-        await ReportProgressAsync(
-            job.Id,
-            metrics,
+        await progress.InfoAsync(
             ResearchEventStage.Searching,
-            $"Processed SERP query '{serpQuery}' with {newUrls.Count} URLs ({urlsToProcess.Count} newly processed).",
+            $"Processed SERP query '{serpQuery}' with {urls.Count} URLs.",
             ct);
-
-        return collected;
     }
 
-    record UrlProcessingResult(
-        IReadOnlyList<Learning> Learnings,
-        bool UsedCache,
-        bool HadError
-    );
+    private sealed record UrlProcessingSummary(bool UsedCache, bool HadError, int LearningCount);
 
-    private async Task<UrlProcessingResult> ProcessUrlAsync(
+    private async Task<UrlProcessingSummary> ProcessUrlAsync(
         ResearchJob job,
         string serpQuery,
         string url,
@@ -323,66 +242,58 @@ public class ResearchOrchestrator(
         string queryHash,
         CancellationToken ct)
     {
-        // 1. Fetch content
+        // 1) Fetch content
         var content = await crawlClient.FetchContentAsync(url, ct);
 
         if (string.IsNullOrWhiteSpace(content))
         {
-            logger.LogWarning("Empty content for URL {Url}, skipping learnings extraction.", url);
-            return new UrlProcessingResult(Array.Empty<Learning>(), UsedCache: false, HadError: true);
+            logger.LogWarning("Empty content for URL {Url}, skipping.", url);
+            return new UrlProcessingSummary(UsedCache: false, HadError: true, LearningCount: 0);
         }
 
-        // 2. Upsert ScrapedPage
-        var page = await researchContentStore.UpsertScrapedPageAsync(
+        // 2) Upsert Source
+        var source = await jobStore.UpsertSourceAsync(
+            jobId: job.Id,
             url: url,
+            contentHash: ComputeSha256(content),
             content: content,
+            title: null,
             language: job.TargetLanguage,
             region: job.Region,
             ct: ct);
 
-        // 3. Try reuse cached learnings
-        var cached = await researchContentStore.GetLearningsForPageAndQueryAsync(page.Id, queryHash, ct);
+        // 3) Reuse cached learnings for (source, queryHash)
+        var cached = await jobStore.GetLearningsForSourceAndQueryAsync(source.Id, queryHash, ct);
         if (cached.Count > 0)
         {
             logger.LogInformation(
-                "Reusing {Count} cached learnings for URL {Url} (PageId={PageId}, QueryHash={QueryHash}).",
-                cached.Count, url, page.Id, queryHash);
+                "Reusing {Count} cached learnings for URL {Url} (SourceId={SourceId}, QueryHash={QueryHash}).",
+                cached.Count, url, source.Id, queryHash);
 
-            return new UrlProcessingResult(cached.ToList(), UsedCache: true, HadError: false);
+            return new UrlProcessingSummary(UsedCache: true, HadError: false, LearningCount: cached.Count);
         }
 
-        // 4. Extract new learnings with LLM
+        // 4) Extract learnings (+ embeddings) via intel service
         try
         {
-            var extractedTexts = await learningExtractionService.ExtractLearningsAsync(
-                job.Query,
-                clarificationsText,
-                page,
-                url,
-                job.TargetLanguage,
-                ct);
+            var extracted = await learningIntelService.ExtractLearningsAsync(
+                jobId: job.Id,
+                sourceId: source.Id,
+                query: job.Query,
+                clarificationsText: clarificationsText,
+                sourceUrl: source.Url,
+                sourceContent: source.Content,
+                queryHash: queryHash,
+                targetLanguage: job.TargetLanguage,
+                computeEmbeddings: true,
+                ct: ct);
 
-            if (extractedTexts.Count == 0)
-            {
-                return new UrlProcessingResult(Array.Empty<Learning>(), UsedCache: false, HadError: false);
-            }
+            if (extracted.Count == 0)
+                return new UrlProcessingSummary(UsedCache: false, HadError: false, LearningCount: 0);
 
-            var newLearnings = extractedTexts.Select(el => new Learning
-            {
-                JobId     = job.Id,
-                PageId    = page.Id,
-                QueryHash = queryHash,
-                SourceUrl = url,
-                Text      = el.Text,
-                ImportanceScore = el.Importance,
-                CreatedAt = DateTime.UtcNow
-            }).ToList();
-            
-            // refactor
-            var newLearningsWithEmbeddings = await learningEmbeddingService.PopulateEmbeddingsAsync(newLearnings, ct);
-            await researchContentStore.AddLearningsAsync(job.Id, page.Id, newLearningsWithEmbeddings, ct);
+            await jobStore.AddLearningsAsync(job.Id, source.Id, extracted, ct);
 
-            return new UrlProcessingResult(newLearningsWithEmbeddings, UsedCache: false, HadError: false);
+            return new UrlProcessingSummary(UsedCache: false, HadError: false, LearningCount: extracted.Count);
         }
         catch (Exception ex)
         {
@@ -392,11 +303,13 @@ public class ResearchOrchestrator(
                 url,
                 serpQuery);
 
-            return new UrlProcessingResult(Array.Empty<Learning>(), UsedCache: false, HadError: true);
+            return new UrlProcessingSummary(UsedCache: false, HadError: true, LearningCount: 0);
         }
     }
 
-    string FormatClarifications(IEnumerable<Clarification> clarifications)
+    // ---------------- helpers ----------------
+
+    private static string FormatClarifications(IEnumerable<Clarification> clarifications)
     {
         var list = clarifications.ToList();
         if (list.Count == 0)
@@ -413,65 +326,11 @@ public class ResearchOrchestrator(
         return sb.ToString().Trim();
     }
 
-    class ResearchMetrics
+    public static string ComputeSha256(string input)
     {
-        internal int SerpQueries { get; set; }
-        internal int SearchResultsTotal { get; set; }
-
-        internal int UniqueUrlsDiscovered { get; set; }
-        internal int UniqueUrlsProcessed { get; set; }
-
-        internal int UrlsProcessedForContent { get; set; }
-        internal int UrlsServedFromCache { get; set; }
-
-        internal int ExtractionFailures { get; set; }
-        internal int TotalLearningsGenerated { get; set; }
-        internal int TotalLearningsReused { get; set; }
-
-        internal double TotalWorkUnits { get; set; } = 2; // planning + final synthesis
-        internal double CompletedWorkUnits { get; set; } = 0;
-
-        internal int CurrentProgressPercent
-        {
-            get
-            {
-                if (TotalWorkUnits <= 0) return 0;
-                var p = (int)Math.Round(CompletedWorkUnits / TotalWorkUnits * 100.0);
-                return Math.Clamp(p, 0, 100);
-            }
-        }
-
-        public override string ToString()
-        {
-            var sb = new StringBuilder();
-            sb.AppendLine("Research metrics summary:");
-            sb.AppendLine($"  SERP queries:              {SerpQueries}");
-            sb.AppendLine($"  Search results (total):    {SearchResultsTotal}");
-            sb.AppendLine($"  Unique URLs discovered:    {UniqueUrlsDiscovered}");
-            sb.AppendLine($"  Unique URLs processed:     {UniqueUrlsProcessed}");
-            sb.AppendLine($"  URLs processed (fresh):    {UrlsProcessedForContent}");
-            sb.AppendLine($"  URLs served from cache:    {UrlsServedFromCache}");
-            sb.AppendLine($"  New learnings generated:   {TotalLearningsGenerated}");
-            sb.AppendLine($"  Learnings reused (cache):  {TotalLearningsReused}");
-            sb.AppendLine($"  Extraction failures:       {ExtractionFailures}");
-            sb.AppendLine($"  Work units:                {CompletedWorkUnits}/{TotalWorkUnits} ({CurrentProgressPercent}%)");
-            return sb.ToString();
-        }
-    }
-
-    async Task ReportProgressAsync(
-        Guid jobId,
-        ResearchMetrics metrics,
-        ResearchEventStage stage,
-        string message,
-        CancellationToken ct)
-    {
-        var percent = metrics.CurrentProgressPercent;
-        var decoratedMessage = $"[{percent}%] {message}";
-
-        await jobStore.AppendEventAsync(
-            jobId,
-            new ResearchEvent(DateTimeOffset.UtcNow, stage, decoratedMessage),
-            ct);
+        using var sha = System.Security.Cryptography.SHA256.Create();
+        var bytes = Encoding.UTF8.GetBytes(input ?? string.Empty);
+        var hash = sha.ComputeHash(bytes);
+        return Convert.ToHexString(hash);
     }
 }

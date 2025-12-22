@@ -2,7 +2,7 @@ namespace ResearchApi.Domain;
 
 public enum ResearchJobStatus { Pending, Running, Completed, Failed }
 
-public class ResearchJob
+public sealed class ResearchJob
 {
     public Guid Id { get; set; }
 
@@ -14,13 +14,11 @@ public class ResearchJob
     public string TargetLanguage { get; set; } = "en";
     public string? Region { get; set; }
 
-    public string? ReportMarkdown { get; set; }
-
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }
 
     public ICollection<Clarification> Clarifications { get; set; } = new List<Clarification>();
     public ICollection<ResearchEvent> Events { get; set; } = new List<ResearchEvent>();
-    public ICollection<VisitedUrl> VisitedUrls { get; set; } = new List<VisitedUrl>();
-    public ICollection<Learning> Learnings { get; set; } = new List<Learning>();
+    public ICollection<Source> Sources { get; set; } = new List<Source>();
+    public ICollection<Synthesis> Syntheses { get; set; } = new List<Synthesis>();
 }

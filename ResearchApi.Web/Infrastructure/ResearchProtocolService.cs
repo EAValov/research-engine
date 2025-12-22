@@ -1,7 +1,8 @@
 using System.Text.Json;
 using ResearchApi.Domain;
-using ResearchApi.Infrastructure;
 using ResearchApi.Prompts;
+
+namespace ResearchApi.Infrastructure;
 
 public class ResearchProtocolService : IResearchProtocolService
 {

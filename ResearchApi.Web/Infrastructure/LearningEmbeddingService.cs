@@ -15,8 +15,8 @@ public sealed class LearningEmbeddingService(
     ILogger<LearningEmbeddingService> logger)
     : ILearningEmbeddingService
 {
-    readonly LearningSimilarityOptions _options = similarityOptions.Value;
-    
+    private readonly LearningSimilarityOptions _options = similarityOptions.Value;
+
     public async Task<IReadOnlyList<Learning>> PopulateEmbeddingsAsync(
         IEnumerable<Learning> learnings,
         CancellationToken ct = default)
@@ -28,6 +28,7 @@ public sealed class LearningEmbeddingService(
         if (learningList.Count == 0)
             return Array.Empty<Learning>();
 
+        // New schema: embedding lives in LearningEmbedding (one-to-one)
         var toEmbed = learningList
             .Where(l => l.Embedding is null)
             .ToList();
@@ -40,31 +41,74 @@ public sealed class LearningEmbeddingService(
 
         logger.LogInformation("Computing embeddings for {Count} learnings.", toEmbed.Count);
 
-        var texts   = toEmbed.Select(l => l.Text).ToList();
+        var texts = toEmbed.Select(l => l.Text).ToList();
         var vectors = await embeddingModel.GenerateEmbeddingsAsync(texts, ct);
 
         var count = Math.Min(toEmbed.Count, vectors.Count);
+        if (count == 0)
+            return Array.Empty<Learning>();
+
+        var now = DateTimeOffset.UtcNow;
+
+        // Persist embeddings for the learnings that do not have them yet.
+        await using var db = await dbContextFactory.CreateDbContextAsync(ct);
+
+        // Load the same learnings from the DB, including Embedding navigation,
+        // to avoid attaching detached entities from the caller.
+        var ids = toEmbed.Take(count).Select(l => l.Id).ToList();
+
+        var entities = await db.Learnings
+            .Include(l => l.Embedding)
+            .Where(l => ids.Contains(l.Id))
+            .ToListAsync(ct);
+
+        // Map id -> entity for stable assignment
+        var byId = entities.ToDictionary(l => l.Id);
+
         for (var i = 0; i < count; i++)
         {
-            toEmbed[i].Embedding = new Vector(vectors[i].Vector);
+            var id = ids[i];
+            if (!byId.TryGetValue(id, out var entity))
+                continue;
+
+            // If another worker added it meanwhile, skip
+            if (entity.Embedding is not null)
+                continue;
+
+            entity.Embedding = new LearningEmbedding
+            {
+                Id = Guid.NewGuid(),
+                LearningId = entity.Id,
+                Vector = new Vector(vectors[i].Vector),
+                CreatedAt = now
+            };
         }
 
-        logger.LogInformation("Stored embeddings for {Count} learnings.", count);
+        var saved = await db.SaveChangesAsync(ct);
+        logger.LogInformation("Stored embeddings for {Count} learnings. DB changes saved: {Saved}.", count, saved);
+
+        // Reflect newly created embedding objects back into the passed-in instances where possible
+        foreach (var l in toEmbed)
+        {
+            if (byId.TryGetValue(l.Id, out var entity))
+                l.Embedding = entity.Embedding;
+        }
 
         return toEmbed;
     }
 
     public async Task<IReadOnlyList<Learning>> GetSimilarLearningsAsync(
         string queryText,
-        Guid? jobId          = null,
-        string? queryHash    = null,
-        string? language     = null,
-        string? region       = null,
-        int   topK           = 20,
+        Guid? jobId = null,
+        string? queryHash = null,
+        string? language = null,
+        string? region = null,
+        int topK = 20,
         CancellationToken ct = default)
     {
-        logger.LogDebug("[GetSimilarLearningsAsync] Calling tool with parameters: queryText={queryText}, jobId={jobId}, language{language}, region={region}",
-             queryText, jobId, language, region);
+        logger.LogDebug(
+            "[GetSimilarLearningsAsync] queryText={queryText}, jobId={jobId}, language={language}, region={region}, queryHash={queryHash}, topK={topK}",
+            queryText, jobId, language, region, queryHash, topK);
 
         if (string.IsNullOrWhiteSpace(queryText))
             return Array.Empty<Learning>();
@@ -74,36 +118,37 @@ public sealed class LearningEmbeddingService(
             return Array.Empty<Learning>();
 
         var queryVector = new Vector(embeddingResult.Vector);
-        var maxK        = Math.Clamp(topK, 1, 200);
+        var maxK = Math.Clamp(topK, 1, 200);
 
-        var localMinImportance          = _options.LocalMinImportance;
-        var globalMinImportance         = _options.GlobalMinImportance;
+        var localMinImportance = _options.LocalMinImportance;
+        var globalMinImportance = _options.GlobalMinImportance;
         var minLocalFractionForNoGlobal = _options.MinLocalFractionForNoGlobal;
 
         await using var db = await dbContextFactory.CreateDbContextAsync(ct);
 
         IQueryable<Learning> BaseLocalQuery()
         {
+            // New schema:
+            // - Source replaces ScrapedPage and carries Language/Region + Url.
+            // - Embedding is in LearningEmbedding (Learning.Embedding)
             var q = db.Learnings
-                .Include(l => l.Page)
+                .Include(l => l.Source)
+                .Include(l => l.Embedding)
                 .Where(l => l.Embedding != null);
 
             if (jobId is Guid jid)
-            {
                 q = q.Where(l => l.JobId == jid);
-            }
 
             if (!string.IsNullOrWhiteSpace(queryHash))
-            {
                 q = q.Where(l => l.QueryHash == queryHash);
-            }
 
             return q;
         }
 
         IQueryable<Learning> BaseGlobalQuery() =>
             db.Learnings
-              .Include(l => l.Page)
+              .Include(l => l.Source)
+              .Include(l => l.Embedding)
               .Where(l => l.Embedding != null);
 
         async Task<List<Learning>> RunQueryAsync(
@@ -117,14 +162,10 @@ public sealed class LearningEmbeddingService(
             var q = baseQuery;
 
             if (useLanguageFilter && !string.IsNullOrWhiteSpace(language))
-            {
-                q = q.Where(l => l.Page.Language == language);
-            }
+                q = q.Where(l => l.Source.Language == language);
 
             if (useRegionFilter && !string.IsNullOrWhiteSpace(region))
-            {
-                q = q.Where(l => l.Page.Region == region);
-            }
+                q = q.Where(l => l.Source.Region == region);
 
             q = q.Where(l => l.ImportanceScore >= minImportance);
 
@@ -132,35 +173,33 @@ public sealed class LearningEmbeddingService(
             {
                 var excluded = excludeIds as ICollection<Guid> ?? excludeIds.ToList();
                 if (excluded.Count > 0)
-                {
                     q = q.Where(l => !excluded.Contains(l.Id));
-                }
             }
 
             // vector similarity first, then importance desc
             q = q
-                .OrderBy(l => l.Embedding!.CosineDistance(queryVector))
+                .OrderBy(l => l.Embedding.Vector.CosineDistance(queryVector))
                 .ThenByDescending(l => l.ImportanceScore)
                 .Take(Math.Clamp(limit, 1, maxK));
 
             return await q.AsNoTracking().ToListAsync(ct);
         }
 
-        var useLangFilter   = !string.IsNullOrWhiteSpace(language);
+        var useLangFilter = !string.IsNullOrWhiteSpace(language);
         var useRegionFilter = !string.IsNullOrWhiteSpace(region);
 
         // ========== 1) LOCAL SEARCH ==========
 
-        var localQuery  = BaseLocalQuery();
+        var localQuery = BaseLocalQuery();
         var localResults = new List<Learning>();
 
         // 1a) with language + region (if provided)
         localResults.AddRange(await RunQueryAsync(
             localQuery,
             useLanguageFilter: useLangFilter,
-            useRegionFilter:   useRegionFilter,
-            minImportance:     localMinImportance,
-            limit:             maxK));
+            useRegionFilter: useRegionFilter,
+            minImportance: localMinImportance,
+            limit: maxK));
 
         // 1b) drop region
         if (localResults.Count < maxK && useRegionFilter)
@@ -168,10 +207,10 @@ public sealed class LearningEmbeddingService(
             localResults.AddRange(await RunQueryAsync(
                 localQuery,
                 useLanguageFilter: useLangFilter,
-                useRegionFilter:   false,
-                minImportance:     localMinImportance,
-                limit:             maxK - localResults.Count,
-                excludeIds:        localResults.Select(l => l.Id)));
+                useRegionFilter: false,
+                minImportance: localMinImportance,
+                limit: maxK - localResults.Count,
+                excludeIds: localResults.Select(l => l.Id)));
         }
 
         // 1c) drop language too
@@ -180,10 +219,10 @@ public sealed class LearningEmbeddingService(
             localResults.AddRange(await RunQueryAsync(
                 localQuery,
                 useLanguageFilter: false,
-                useRegionFilter:   false,
-                minImportance:     localMinImportance,
-                limit:             maxK - localResults.Count,
-                excludeIds:        localResults.Select(l => l.Id)));
+                useRegionFilter: false,
+                minImportance: localMinImportance,
+                limit: maxK - localResults.Count,
+                excludeIds: localResults.Select(l => l.Id)));
         }
 
         var minLocalNeeded = (int)Math.Ceiling(maxK * minLocalFractionForNoGlobal);
@@ -201,10 +240,10 @@ public sealed class LearningEmbeddingService(
         var globalResults = await RunQueryAsync(
             globalQuery,
             useLanguageFilter: useLangFilter,
-            useRegionFilter:   false,
-            minImportance:     globalMinImportance,
-            limit:             remaining,
-            excludeIds:        localResults.Select(l => l.Id));
+            useRegionFilter: false,
+            minImportance: globalMinImportance,
+            limit: remaining,
+            excludeIds: localResults.Select(l => l.Id));
 
         if (globalResults.Count > 0)
             localResults.AddRange(globalResults);
@@ -212,18 +251,18 @@ public sealed class LearningEmbeddingService(
         return ApplyDiversityFilter(localResults, topK);
     }
 
-    IReadOnlyList<Learning> ApplyDiversityFilter(
+    private IReadOnlyList<Learning> ApplyDiversityFilter(
         IReadOnlyList<Learning> orderedCandidates,
         int topK)
     {
         if (orderedCandidates.Count == 0)
             return orderedCandidates;
 
-        var maxPerUrl        = _options.DiversityMaxPerUrl;
+        var maxPerUrl = _options.DiversityMaxPerUrl;
         var maxTextSimilarity = _options.DiversityMaxTextSimilarity;
 
-        var selected  = new List<Learning>(capacity: topK);
-        var perUrl    = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        var selected = new List<Learning>(capacity: topK);
+        var perUrl = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
         var seenTexts = new List<string>();
 
         foreach (var candidate in orderedCandidates)
@@ -231,7 +270,8 @@ public sealed class LearningEmbeddingService(
             if (selected.Count >= topK)
                 break;
 
-            var url = candidate.SourceUrl ?? string.Empty;
+            // New schema: url lives on Source
+            var url = candidate.Source?.Url ?? string.Empty;
             if (!string.IsNullOrWhiteSpace(url))
             {
                 if (perUrl.TryGetValue(url, out var count) && count >= maxPerUrl)
@@ -259,12 +299,14 @@ public sealed class LearningEmbeddingService(
             }
         }
 
-        logger.LogDebug("[GetSimilarLearningsAsync] {number} Learnings retrieved: {learnings}", selected.Count, string.Join(",", selected.Select(g => g.ToString())));
+        logger.LogDebug(
+            "[GetSimilarLearningsAsync] {Count} learnings selected.",
+            selected.Count);
 
         return selected;
     }
 
-    static string NormalizeForSimilarity(string text)
+    private static string NormalizeForSimilarity(string text)
     {
         if (string.IsNullOrWhiteSpace(text))
             return string.Empty;
@@ -288,7 +330,7 @@ public sealed class LearningEmbeddingService(
             normalized.Split(' ', StringSplitOptions.RemoveEmptyEntries));
     }
 
-    static double ComputeJaccardSimilarity(string a, string b)
+    private static double ComputeJaccardSimilarity(string a, string b)
     {
         if (string.IsNullOrWhiteSpace(a) || string.IsNullOrWhiteSpace(b))
             return 0.0;
@@ -302,7 +344,7 @@ public sealed class LearningEmbeddingService(
             return 0.0;
 
         var intersection = setA.Intersect(setB).Count();
-        var union        = setA.Union(setB).Count();
+        var union = setA.Union(setB).Count();
 
         return union == 0 ? 0.0 : (double)intersection / union;
     }

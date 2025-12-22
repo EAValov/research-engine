@@ -8,14 +8,8 @@ public sealed class SectionResult
 }
 public sealed class SectionPlan
 {
+    public int Index { get; set; }   
     public string Title { get; set; } = null!;
     public string Description { get; set; } = string.Empty;
-
-    /// <summary>
-    /// Можно помечать, что эта секция — заключение (опционально).
-    /// Пока будем считать, что последняя секция — это conclusion.
-    /// </summary>
     public bool IsConclusion { get; set; }
 }
-
-

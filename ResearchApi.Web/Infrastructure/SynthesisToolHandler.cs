@@ -2,60 +2,58 @@ using ResearchApi.Domain;
 
 namespace ResearchApi.Infrastructure;
 
-public class SynthesisToolHandler(
-    ILearningEmbeddingService retrieval,
+public sealed class SynthesisToolHandler(
+    ILearningIntelService retrieval,
+    Guid synthesisId,
+    string queryHash,
     Dictionary<string, int> sourceIndexMap,
-    Guid jobId
+    string? language = null,
+    string? region = null
 )
 {
     public async Task<GetSimilarLearningsToolResult> HandleGetSimilarLearningsAsync(
         string queryText,
-        string? language = null,
-        string? region = null,
         CancellationToken ct = default)
     {
         var learnings = await retrieval.GetSimilarLearningsAsync(
             queryText: queryText,
-            jobId: jobId,
-            queryHash: null,
+            synthesisId: synthesisId,
+            queryHash: queryHash,
             language: language,
             region: region,
-            topK: 10,
+            topK: 20,
             ct: ct);
 
         return new GetSimilarLearningsToolResult
         {
             TotalAvailable = learnings.Count,
-            Learnings = learnings
-                .Select(l =>
+            Learnings = learnings.Select(l =>
+            {
+                var url = l.Source?.Url ?? string.Empty;
+
+                if (string.IsNullOrWhiteSpace(url))
+                    url = "about:blank";
+
+                if (!sourceIndexMap.TryGetValue(url, out var idx))
                 {
-                    if (!sourceIndexMap.TryGetValue(l.SourceUrl, out var idx))
-                    {
-                        // If URL not previously indexed, you can decide to:
-                        // - ignore it, or
-                        // - assign a new index and mutate _sourceIndexMap.
-                        idx = sourceIndexMap.Count + 1;
-                        sourceIndexMap[l.SourceUrl] = idx;
-                    }
+                    idx = sourceIndexMap.Count + 1;
+                    sourceIndexMap[url] = idx;
+                }
 
-                    var citation = $"[{idx}]";
+                var citation = $"[{idx}]";
+                var textWithCitation = l.Text.Trim();
 
-                    // Ensure citation is in the text (at the end) so the model sees it.
-                    var textWithCitation = l.Text.Trim();
-                    if (!textWithCitation.EndsWith(citation, StringComparison.Ordinal))
-                    {
-                        textWithCitation = $"{textWithCitation} {citation}";
-                    }
+                if (!textWithCitation.EndsWith(citation, StringComparison.Ordinal))
+                    textWithCitation = $"{textWithCitation} {citation}";
 
-                    return new ToolLearningDto
-                    {
-                        Id        = l.Id,
-                        Text      = textWithCitation,
-                        SourceUrl = l.SourceUrl,
-                        Citation  = citation
-                    };
-                })
-                .ToList()
+                return new ToolLearningDto
+                {
+                    Id = l.Id,
+                    Text = textWithCitation,
+                    SourceUrl = url,
+                    Citation = citation
+                };
+            }).ToList()
         };
     }
 
@@ -66,7 +64,7 @@ public class SynthesisToolHandler(
         public string SourceUrl { get; set; } = null!;
         public string Citation { get; set; } = null!;
     }
-        
+
     public sealed class GetSimilarLearningsToolResult
     {
         public List<ToolLearningDto> Learnings { get; set; } = new();
