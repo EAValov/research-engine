@@ -8,7 +8,8 @@ public sealed class SectionResult
 }
 public sealed class SectionPlan
 {
-    public int Index { get; set; }   
+    public Guid SectionKey { get; set; } // now required for all plans after normalization
+    public int Index { get; set; }       // 1-based
     public string Title { get; set; } = null!;
     public string Description { get; set; } = string.Empty;
     public bool IsConclusion { get; set; }

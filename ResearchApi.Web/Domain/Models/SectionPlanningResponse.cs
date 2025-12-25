@@ -33,6 +33,7 @@ public sealed class SectionPlanningResponse
 
             result.Add(new SectionPlan
             {
+                SectionKey  = Guid.NewGuid(),
                 Index       = item.Index,
                 Title       = item.Title.Trim(),
                 Description = item.Description?.Trim() ?? string.Empty,

@@ -6,7 +6,6 @@ public sealed class SynthesisToolHandler(
     ILearningIntelService retrieval,
     Guid synthesisId,
     string queryHash,
-    Dictionary<string, int> sourceIndexMap,
     string? language = null,
     string? region = null
 )
@@ -30,19 +29,12 @@ public sealed class SynthesisToolHandler(
             Learnings = learnings.Select(l =>
             {
                 var url = l.Source?.Url ?? string.Empty;
-
                 if (string.IsNullOrWhiteSpace(url))
                     url = "about:blank";
 
-                if (!sourceIndexMap.TryGetValue(url, out var idx))
-                {
-                    idx = sourceIndexMap.Count + 1;
-                    sourceIndexMap[url] = idx;
-                }
+                var citation = $"[lrn:{l.Id:N}]";
 
-                var citation = $"[{idx}]";
                 var textWithCitation = l.Text.Trim();
-
                 if (!textWithCitation.EndsWith(citation, StringComparison.Ordinal))
                     textWithCitation = $"{textWithCitation} {citation}";
 

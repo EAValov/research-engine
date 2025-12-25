@@ -113,7 +113,6 @@ namespace ResearchApi.Migrations
                     Status = table.Column<string>(type: "character varying(50)", maxLength: 50, nullable: false),
                     Outline = table.Column<string>(type: "text", nullable: true),
                     Instructions = table.Column<string>(type: "text", nullable: true),
-                    ReportMarkdown = table.Column<string>(type: "text", nullable: true),
                     CreatedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false, defaultValueSql: "now() at time zone 'utc'"),
                     CompletedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
                     ErrorMessage = table.Column<string>(type: "character varying(4000)", maxLength: 4000, nullable: true)
@@ -161,6 +160,32 @@ namespace ResearchApi.Migrations
                         name: "FK_learnings_sources_SourceId",
                         column: x => x.SourceId,
                         principalTable: "sources",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "synthesis_sections",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    SynthesisId = table.Column<Guid>(type: "uuid", nullable: false),
+                    SectionKey = table.Column<Guid>(type: "uuid", nullable: false),
+                    Index = table.Column<int>(type: "integer", nullable: false),
+                    Title = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: false),
+                    Description = table.Column<string>(type: "character varying(4000)", maxLength: 4000, nullable: false),
+                    IsConclusion = table.Column<bool>(type: "boolean", nullable: false),
+                    ContentMarkdown = table.Column<string>(type: "text", nullable: false),
+                    Summary = table.Column<string>(type: "character varying(20000)", maxLength: 20000, nullable: true),
+                    CreatedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false, defaultValueSql: "now() at time zone 'utc'")
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_synthesis_sections", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_synthesis_sections_syntheses_SynthesisId",
+                        column: x => x.SynthesisId,
+                        principalTable: "syntheses",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
                 });
@@ -314,6 +339,18 @@ namespace ResearchApi.Migrations
                 unique: true);
 
             migrationBuilder.CreateIndex(
+                name: "IX_synthesis_sections_SynthesisId_Index",
+                table: "synthesis_sections",
+                columns: new[] { "SynthesisId", "Index" },
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_synthesis_sections_SynthesisId_SectionKey",
+                table: "synthesis_sections",
+                columns: new[] { "SynthesisId", "SectionKey" },
+                unique: true);
+
+            migrationBuilder.CreateIndex(
                 name: "IX_synthesis_source_overrides_SourceId",
                 table: "synthesis_source_overrides",
                 column: "SourceId");
@@ -339,6 +376,9 @@ namespace ResearchApi.Migrations
 
             migrationBuilder.DropTable(
                 name: "synthesis_learning_overrides");
+
+            migrationBuilder.DropTable(
+                name: "synthesis_sections");
 
             migrationBuilder.DropTable(
                 name: "synthesis_source_overrides");

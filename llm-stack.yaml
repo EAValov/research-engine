@@ -130,7 +130,7 @@ spec:
           mountPath: /root/.cache/huggingface
 
     - name: open-webui
-      image: ghcr.io/open-webui/open-webui:main
+      image: ghcr.io/open-webui/open-webui:0.6.43
       ports:
         - containerPort: 8081
       env:

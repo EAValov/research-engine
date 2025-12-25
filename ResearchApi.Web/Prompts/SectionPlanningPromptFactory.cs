@@ -21,7 +21,6 @@ public static class SectionPlanningPromptFactory
     public static Prompt BuildPlanningPrompt(
         string query,
         string? clarifications,
-        string? outline,
         string? instructions,
         string? targetLanguage = "en")
     {
@@ -44,21 +43,6 @@ public static class SectionPlanningPromptFactory
         systemSb.AppendLine("- Descriptions must be 1–2 sentences.");
         systemSb.AppendLine();
 
-        if (!string.IsNullOrWhiteSpace(outline))
-        {
-            systemSb.AppendLine("IMPORTANT: A user-provided outline is included.");
-            systemSb.AppendLine("When an outline is provided, it is AUTHORITATIVE and MUST be respected:");
-            systemSb.AppendLine("- Use the SAME number of sections as the outline.");
-            systemSb.AppendLine("- Keep the SAME section order as the outline.");
-            systemSb.AppendLine("- index must follow the outline order: 1..N.");
-            systemSb.AppendLine("- The LAST outline section MUST be the conclusion: set isConclusion=true only for the LAST section.");
-
-        }
-        else
-        {
-            systemSb.AppendLine("If no outline is provided, you must propose 3–7 logical sections, with the LAST section as conclusion.");
-        }
-
         var systemPrompt = systemSb.ToString();
 
         var userSb = new StringBuilder();
@@ -80,22 +64,10 @@ public static class SectionPlanningPromptFactory
             userSb.AppendLine();
         }
 
-        if (!string.IsNullOrWhiteSpace(outline))
-        {
-            userSb.AppendLine("User-provided outline (AUTHORITATIVE):");
-            userSb.AppendLine(outline.Trim());
-            userSb.AppendLine();
-            userSb.AppendLine("Task:");
-            userSb.AppendLine("Convert the outline into the JSON section plan by filling in missing descriptions.");
-            userSb.AppendLine("Use the SAME number/order/titles as the outline. Do not add or remove sections.");
-        }
-        else
-        {
-            userSb.AppendLine("Task:");
-            userSb.AppendLine("Propose 3–7 logical sections for a structured analytical report on this topic.");
-            userSb.AppendLine("The LAST section must be the conclusion and have isConclusion=true.");
-        }
-
+        userSb.AppendLine("Task:");
+        userSb.AppendLine("Propose 3–7 logical sections for a structured analytical report on this topic.");
+        userSb.AppendLine("The LAST section must be the conclusion and have isConclusion=true.");
+        
         userSb.AppendLine();
         userSb.AppendLine("Formatting rules:");
         userSb.AppendLine("- Output ONLY JSON that matches the schema.");

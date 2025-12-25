@@ -13,7 +13,7 @@ using ResearchApi.Infrastructure;
 namespace ResearchApi.Migrations
 {
     [DbContext(typeof(ResearchDbContext))]
-    [Migration("20251221111839_InitialCreate")]
+    [Migration("20251225163225_InitialCreate")]
     partial class InitialCreate
     {
         /// <inheritdoc />
@@ -288,9 +288,6 @@ namespace ResearchApi.Migrations
                     b.Property<Guid?>("ParentSynthesisId")
                         .HasColumnType("uuid");
 
-                    b.Property<string>("ReportMarkdown")
-                        .HasColumnType("text");
-
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasMaxLength(50)
@@ -341,6 +338,58 @@ namespace ResearchApi.Migrations
                         .IsUnique();
 
                     b.ToTable("synthesis_learning_overrides", (string)null);
+                });
+
+            modelBuilder.Entity("ResearchApi.Domain.SynthesisSection", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ContentMarkdown")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("now() at time zone 'utc'");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)");
+
+                    b.Property<int>("Index")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("IsConclusion")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid>("SectionKey")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Summary")
+                        .HasMaxLength(20000)
+                        .HasColumnType("character varying(20000)");
+
+                    b.Property<Guid>("SynthesisId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SynthesisId", "Index")
+                        .IsUnique();
+
+                    b.HasIndex("SynthesisId", "SectionKey")
+                        .IsUnique();
+
+                    b.ToTable("synthesis_sections", (string)null);
                 });
 
             modelBuilder.Entity("ResearchApi.Domain.SynthesisSourceOverride", b =>
@@ -476,6 +525,17 @@ namespace ResearchApi.Migrations
                     b.Navigation("Synthesis");
                 });
 
+            modelBuilder.Entity("ResearchApi.Domain.SynthesisSection", b =>
+                {
+                    b.HasOne("ResearchApi.Domain.Synthesis", "Synthesis")
+                        .WithMany("Sections")
+                        .HasForeignKey("SynthesisId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Synthesis");
+                });
+
             modelBuilder.Entity("ResearchApi.Domain.SynthesisSourceOverride", b =>
                 {
                     b.HasOne("ResearchApi.Domain.Source", "Source")
@@ -520,6 +580,8 @@ namespace ResearchApi.Migrations
             modelBuilder.Entity("ResearchApi.Domain.Synthesis", b =>
                 {
                     b.Navigation("Children");
+
+                    b.Navigation("Sections");
                 });
 #pragma warning restore 612, 618
         }

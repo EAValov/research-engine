@@ -20,7 +20,6 @@ public sealed class LearningIntelService(
 
     private const int MaxLearningsPerSegment = 20;
     private const int MinLearningsPerSegment = 5;
-    private const int MaxEvidenceLen = 20_000;
 
     public async Task<IReadOnlyList<Learning>> ExtractLearningsAsync(
         Guid jobId,
@@ -110,8 +109,7 @@ public sealed class LearningIntelService(
 
             if (items is null || items.Count == 0)
                 continue;
-
-            var evidence = segment.Length > MaxEvidenceLen ? segment[..MaxEvidenceLen] : segment;
+         
             var now = DateTimeOffset.UtcNow;
 
             foreach (var it in items)
@@ -124,7 +122,7 @@ public sealed class LearningIntelService(
                     QueryHash = queryHash,
                     Text = it.Text.Trim(),
                     ImportanceScore = it.Importance,
-                    EvidenceText = evidence,
+                    EvidenceText = segment,
                     CreatedAt = now
                 });
             }

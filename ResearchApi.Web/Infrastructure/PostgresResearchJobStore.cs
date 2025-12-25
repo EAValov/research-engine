@@ -282,16 +282,57 @@ public sealed class PostgresResearchJobStore(
         return await db.SaveChangesAsync(ct);
     }
 
-    public async Task<int> CompleteSynthesisAsync(Guid synthesisId, string reportMarkdown, CancellationToken ct = default)
+    public async Task<int> CompleteSynthesisAsync(
+        Guid synthesisId,
+        IReadOnlyList<SynthesisSection> sections,
+        CancellationToken ct = default)
     {
+        if (sections is null)
+            throw new ArgumentNullException(nameof(sections));
+
         await using var db = await dbContextFactory.CreateDbContextAsync(ct);
 
         var entity = await db.Syntheses.FirstOrDefaultAsync(s => s.Id == synthesisId, ct);
         if (entity is null) return 0;
 
+        // Replace any existing sections for idempotency/retry safety.
+        await db.SynthesisSections
+            .Where(s => s.SynthesisId == synthesisId)
+            .ExecuteDeleteAsync(ct);
+
+        var now = DateTimeOffset.UtcNow;
+
+        // Normalize + attach
+        for (int i = 0; i < sections.Count; i++)
+        {
+            var s = sections[i];
+
+            if (s.Id == Guid.Empty)
+                s.Id = Guid.NewGuid();
+
+            s.SynthesisId = synthesisId;
+
+            if (s.SectionKey == Guid.Empty)
+                s.SectionKey = Guid.NewGuid();
+
+            // Force deterministic ordering
+            s.Index = i;
+
+            s.Title = (s.Title ?? string.Empty).Trim();
+            if (string.IsNullOrWhiteSpace(s.Title))
+                s.Title = $"Section {i + 1}";
+
+            s.Description ??= string.Empty;
+            s.ContentMarkdown ??= string.Empty;
+
+            if (s.CreatedAt == default)
+                s.CreatedAt = now;
+        }
+
+        db.SynthesisSections.AddRange(sections);
+
         entity.Status = SynthesisStatus.Completed;
-        entity.ReportMarkdown = reportMarkdown;
-        entity.CompletedAt = DateTimeOffset.UtcNow;
+        entity.CompletedAt = now;
         entity.ErrorMessage = null;
 
         return await db.SaveChangesAsync(ct);
@@ -316,6 +357,7 @@ public sealed class PostgresResearchJobStore(
         await using var db = await dbContextFactory.CreateDbContextAsync(ct);
 
         return await db.Syntheses
+            .Include(s => s.Sections.OrderBy(x => x.Index))
             .FirstOrDefaultAsync(s => s.Id == synthesisId, ct);
     }
 
@@ -326,6 +368,7 @@ public sealed class PostgresResearchJobStore(
         return await db.Syntheses
             .Where(s => s.JobId == jobId)
             .OrderByDescending(s => s.CreatedAt)
+            .Include(s => s.Sections.OrderBy(x => x.Index))
             .FirstOrDefaultAsync(ct);
     }
 
@@ -509,7 +552,7 @@ public sealed class PostgresResearchJobStore(
             .ToListAsync(ct);
     }
 
-    public async Task<IReadOnlyList<LearningListItemDto>> ListLearningsAsync(
+    public async Task<PagedResult<LearningListItemDto>> ListLearningsAsync(
         Guid jobId,
         int skip = 0,
         int take = 200,
@@ -520,10 +563,14 @@ public sealed class PostgresResearchJobStore(
 
         await using var db = await dbContextFactory.CreateDbContextAsync(ct);
 
-        return await db.Learnings
+        var baseQuery = db.Learnings
             .AsNoTracking()
+            .Where(l => l.JobId == jobId);
+
+        var total = await baseQuery.CountAsync(ct);
+
+        var items = await baseQuery
             .Include(l => l.Source)
-            .Where(l => l.JobId == jobId)
             .OrderByDescending(l => l.ImportanceScore)
             .ThenByDescending(l => l.CreatedAt)
             .Skip(skip)
@@ -536,6 +583,8 @@ public sealed class PostgresResearchJobStore(
                 l.CreatedAt,
                 l.Text))
             .ToListAsync(ct);
+
+        return new PagedResult<LearningListItemDto>(items, skip, take, total);
     }
 
     public async Task<SynthesisOverridesSnapshot> GetSynthesisOverridesAsync(

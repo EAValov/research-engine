@@ -9,14 +9,18 @@ using System.Text;
 
 public static class SectionWritingPromptFactory
 {
+    /// <summary>
+    /// Builds a prompt for writing ONE section body.
+    /// </summary>
     public static Prompt BuildSectionPrompt(
         string query,
         string? clarifications,
         string targetLanguage,
         SectionPlan section,
-        string? outline,
         string? instructions)
     {
+        targetLanguage ??= "en";
+
         var userSb = new StringBuilder();
 
         userSb.AppendLine("Main research query:");
@@ -27,19 +31,6 @@ public static class SectionWritingPromptFactory
         {
             userSb.AppendLine("Additional clarifications:");
             userSb.AppendLine(clarifications.Trim());
-            userSb.AppendLine();
-        }
-
-        if (!string.IsNullOrWhiteSpace(outline))
-        {
-            userSb.AppendLine("User-provided outline (AUTHORITATIVE):");
-            userSb.AppendLine(outline.Trim());
-            userSb.AppendLine();
-            userSb.AppendLine("Hard constraint:");
-            userSb.AppendLine("- The full report must follow this outline exactly.");
-            userSb.AppendLine("- You are writing ONLY ONE section from this outline right now.");
-            userSb.AppendLine("- Do NOT introduce content that belongs to a different outline section.");
-            userSb.AppendLine("- Do NOT create new sections not present in the outline.");
             userSb.AppendLine();
         }
 
@@ -80,16 +71,17 @@ public static class SectionWritingPromptFactory
         userSb.AppendLine("- BEFORE writing any substantive content, you MUST call `get_similar_learnings` at least once");
         userSb.AppendLine("  with a focused query that is specific to THIS section.");
         userSb.AppendLine("- You MAY call it multiple times for distinct sub-aspects within this section.");
-        userSb.AppendLine("- Use evidence returned by the tool and preserve [n] citation markers exactly.");
-        userSb.AppendLine("- Do NOT invent citation numbers.");
-        userSb.AppendLine("- This section must contain at least ONE citation marker like [1].");
+        userSb.AppendLine("- The tool returns evidence snippets that contain citation tokens like: [lrn:2f0d...].");
+        userSb.AppendLine("- Preserve these [lrn:...] citation tokens EXACTLY as provided.");
+        userSb.AppendLine("- Do NOT invent citations and do NOT rewrite tokens.");
+        userSb.AppendLine("- This section must contain at least ONE citation token like [lrn:0123abcd...].");
         userSb.AppendLine("- Do NOT output the tool call results verbatim; synthesize them into prose.");
         userSb.AppendLine();
 
-        userSb.AppendLine("CITATION STYLE:");
-        userSb.AppendLine("- Citations must appear as [n] markers in the text.");
-        userSb.AppendLine("- If multiple, use: [1], [3], [5].");
-        userSb.AppendLine("- Never use chained citations like [1][3][5] (forbidden).");
+        userSb.AppendLine("CITATION STYLE (CRITICAL):");
+        userSb.AppendLine("- Citations must appear ONLY as [lrn:<32-hex>] tokens, e.g. [lrn:6f5c1a2b3c4d5e6f7a8b9c0d1e2f3a4b].");
+        userSb.AppendLine("- If multiple, separate with commas/spaces: [lrn:...], [lrn:...].");
+        userSb.AppendLine("- Never use chained citations like [lrn:...][lrn:...] (forbidden).");
 
         var userPrompt = userSb.ToString();
         return new Prompt(BuildSystemPrompt(targetLanguage), userPrompt);
@@ -114,15 +106,15 @@ public static class SectionWritingPromptFactory
 
         sb.AppendLine("TOOL USAGE (`get_similar_learnings`) IS MANDATORY:");
         sb.AppendLine("- You MUST call `get_similar_learnings` at least once before writing substantive content.");
-        sb.AppendLine("- The tool returns evidence snippets that include citation markers like [3], [7].");
-        sb.AppendLine("- Preserve citation markers exactly; do not invent or renumber citations.");
+        sb.AppendLine("- The tool returns evidence snippets that include citation tokens like [lrn:...].");
+        sb.AppendLine("- Preserve citation tokens EXACTLY; do not invent, renumber, or rewrite them.");
         sb.AppendLine("- If you cannot find evidence for a claim, phrase it as uncertainty or omit it.");
         sb.AppendLine();
 
-        sb.AppendLine("CITATIONS:");
-        sb.AppendLine("- Preserve [n] citation markers from the learnings exactly as they appear.");
-        sb.AppendLine("- Never output chained citations like [1][3]; always separate: [1], [3].");
-        sb.AppendLine("- The final section text MUST include at least one citation marker [n].");
+        sb.AppendLine("CITATIONS (CRITICAL):");
+        sb.AppendLine("- Citations must be ONLY in the form [lrn:<32-hex-guid>]. Example: [lrn:0123abcd0123abcd0123abcd0123abcd].");
+        sb.AppendLine("- Never output chained citations like [lrn:...][lrn:...]; always separate: [lrn:...], [lrn:...].");
+        sb.AppendLine("- The final section text MUST include at least one [lrn:...] citation token.");
         sb.AppendLine();
 
         sb.AppendLine("SOURCE QUALITY:");

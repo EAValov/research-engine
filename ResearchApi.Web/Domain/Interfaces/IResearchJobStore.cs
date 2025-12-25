@@ -53,7 +53,7 @@ public interface IResearchJobStore
 
     Task<int> CompleteSynthesisAsync(
         Guid synthesisId,
-        string reportMarkdown,
+        IReadOnlyList<SynthesisSection> sections,
         CancellationToken ct = default);
 
     Task<int> FailSynthesisAsync(
@@ -75,7 +75,7 @@ public interface IResearchJobStore
 
      Task<IReadOnlyList<SourceListItemDto>> ListSourcesAsync(Guid jobId, CancellationToken ct = default);
 
-    Task<IReadOnlyList<LearningListItemDto>> ListLearningsAsync(
+     Task<PagedResult<LearningListItemDto>> ListLearningsAsync(
         Guid jobId,
         int skip = 0,
         int take = 200,

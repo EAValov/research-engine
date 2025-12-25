@@ -190,8 +190,9 @@ public static class ResearchJobsApi
             jobId,
             skip = s,
             take = t,
-            count = learnings.Count,
-            learnings = learnings.Select(l => new
+            total = learnings.Total,
+            page = learnings.Page,
+            learnings = learnings.Items.Select(l => new
             {
                 learningId = l.LearningId,
                 sourceId = l.SourceId,
@@ -296,19 +297,39 @@ public static class ResearchJobsApi
         if (syn is null)
             return Results.Ok(new { jobId, synthesis = (object?)null });
 
+        // Defensive: keep stable order
+        var sections = (syn.Sections ?? Array.Empty<SynthesisSection>())
+            .OrderBy(s => s.Index)
+            .Select(s => new
+            {
+                id = s.Id,
+                synthesisId = s.SynthesisId,
+                sectionKey = s.SectionKey,
+                index = s.Index,
+                title = s.Title,
+                description = s.Description,
+                isConclusion = s.IsConclusion,
+                summary = s.Summary,
+                contentMarkdown = s.ContentMarkdown,
+                createdAt = s.CreatedAt
+            })
+            .ToList();
+
         return Results.Ok(new
         {
             jobId,
             synthesis = new
             {
                 id = syn.Id,
+                jobId = syn.JobId,
+                parentSynthesisId = syn.ParentSynthesisId,
                 status = syn.Status.ToString(),
                 outline = syn.Outline,
                 instructions = syn.Instructions,
-                reportMarkdown = syn.ReportMarkdown,
                 createdAt = syn.CreatedAt,
                 completedAt = syn.CompletedAt,
-                errorMessage = syn.ErrorMessage
+                errorMessage = syn.ErrorMessage,
+                sections
             }
         });
     }
@@ -322,6 +343,23 @@ public static class ResearchJobsApi
         if (syn is null)
             return Results.NotFound();
 
+        var sections = (syn.Sections ?? Array.Empty<SynthesisSection>())
+            .OrderBy(s => s.Index)
+            .Select(s => new
+            {
+                id = s.Id,
+                synthesisId = s.SynthesisId,
+                sectionKey = s.SectionKey,
+                index = s.Index,
+                title = s.Title,
+                description = s.Description,
+                isConclusion = s.IsConclusion,
+                summary = s.Summary,
+                contentMarkdown = s.ContentMarkdown,
+                createdAt = s.CreatedAt
+            })
+            .ToList();
+
         return Results.Ok(new
         {
             id = syn.Id,
@@ -330,14 +368,14 @@ public static class ResearchJobsApi
             status = syn.Status.ToString(),
             outline = syn.Outline,
             instructions = syn.Instructions,
-            reportMarkdown = syn.ReportMarkdown,
             createdAt = syn.CreatedAt,
             completedAt = syn.CompletedAt,
-            errorMessage = syn.ErrorMessage
+            errorMessage = syn.ErrorMessage,
+            sections
         });
     }
 
-    // ---------------- events (unchanged) ----------------
+    // ---------------- events ----------------
 
     private static async Task<IResult> ListEventsAsync(
         Guid jobId,
@@ -400,7 +438,7 @@ public static class ResearchJobsApi
 
         await using var subscription = await eventBus.SubscribeAsync(
             jobId,
-            (ev, t) => OnLiveEventAsync(httpContext, jsonOptions, jobId, ev, doneTcs, t),
+            (ev, t) => OnLiveEventAsync(httpContext, jsonOptions, ev, doneTcs, t),
             token);
 
         await WaitForCompletionOrDisconnectAsync(doneTcs, token);
@@ -510,7 +548,6 @@ public static class ResearchJobsApi
     private static async Task OnLiveEventAsync(
         HttpContext httpContext,
         JsonSerializerOptions jsonOptions,
-        Guid jobId,
         ResearchEvent ev,
         TaskCompletionSource<ResearchEventStage> doneTcs,
         CancellationToken token)

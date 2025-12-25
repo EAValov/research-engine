@@ -42,7 +42,6 @@ public class ResearchProtocolService : IResearchProtocolService
         }
         catch
         {
-            // If the LLM somehow returns invalid JSON despite the schema, just fall back to an empty list.
             return Array.Empty<string>();
         }
 

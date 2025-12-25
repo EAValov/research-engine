@@ -17,6 +17,7 @@ public sealed class ResearchDbContext : DbContext
     public DbSet<Learning> Learnings => Set<Learning>();
     public DbSet<LearningEmbedding> LearningEmbeddings => Set<LearningEmbedding>();
     public DbSet<Synthesis> Syntheses => Set<Synthesis>();
+    public DbSet<SynthesisSection> SynthesisSections => Set<SynthesisSection>();
     public DbSet<SynthesisSourceOverride> SynthesisSourceOverrides => Set<SynthesisSourceOverride>();
     public DbSet<SynthesisLearningOverride> SynthesisLearningOverrides => Set<SynthesisLearningOverride>();
 
@@ -40,6 +41,7 @@ public sealed class ResearchDbContext : DbContext
         ConfigureLearning(modelBuilder);
         ConfigureLearningEmbedding(modelBuilder);
         ConfigureSynthesis(modelBuilder);
+        ConfigureSynthesisSection(modelBuilder);
         ConfigureSynthesisSourceOverride(modelBuilder);
         ConfigureSynthesisLearningOverride(modelBuilder);
     }
@@ -107,7 +109,7 @@ public sealed class ResearchDbContext : DbContext
             .OnDelete(DeleteBehavior.Cascade);
     }
 
-     private void ConfigureEvent(ModelBuilder modelBuilder)
+    private void ConfigureEvent(ModelBuilder modelBuilder)
     {
         var entity = modelBuilder.Entity<ResearchEvent>();
 
@@ -259,8 +261,6 @@ public sealed class ResearchDbContext : DbContext
         entity.Property(s => s.Outline);
         entity.Property(s => s.Instructions);
 
-        entity.Property(s => s.ReportMarkdown);
-
         entity.Property(s => s.ErrorMessage)
             .HasMaxLength(4000);
 
@@ -278,8 +278,59 @@ public sealed class ResearchDbContext : DbContext
             .HasForeignKey(s => s.ParentSynthesisId)
             .OnDelete(DeleteBehavior.SetNull);
 
+        // NEW: sections relationship
+        entity.HasMany(s => s.Sections)
+            .WithOne(ss => ss.Synthesis)
+            .HasForeignKey(ss => ss.SynthesisId)
+            .OnDelete(DeleteBehavior.Cascade);
+
         entity.HasIndex(s => new { s.JobId, s.CreatedAt });
         entity.HasIndex(s => s.Status);
+    }
+
+    private static void ConfigureSynthesisSection(ModelBuilder modelBuilder)
+    {
+        var entity = modelBuilder.Entity<SynthesisSection>();
+
+        entity.ToTable("synthesis_sections");
+        entity.HasKey(s => s.Id);
+
+        entity.Property(s => s.SectionKey)
+            .IsRequired();
+
+        entity.Property(s => s.Index)
+            .IsRequired();
+
+        entity.Property(s => s.Title)
+            .IsRequired()
+            .HasMaxLength(500);
+
+        entity.Property(s => s.Description)
+            .IsRequired()
+            .HasMaxLength(4000);
+
+        entity.Property(s => s.IsConclusion)
+            .IsRequired();
+
+        entity.Property(s => s.ContentMarkdown)
+            .IsRequired();
+
+        entity.Property(s => s.Summary)
+            .HasMaxLength(20_000);
+
+        entity.Property(s => s.CreatedAt)
+            .HasDefaultValueSql("now() at time zone 'utc'");
+
+        entity.HasOne(s => s.Synthesis)
+            .WithMany(p => p.Sections)
+            .HasForeignKey(s => s.SynthesisId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        // Ordering and fast lookup
+        entity.HasIndex(s => new { s.SynthesisId, s.Index }).IsUnique();
+
+        // Stable identity within a synthesis (helps avoid duplicates)
+        entity.HasIndex(s => new { s.SynthesisId, s.SectionKey }).IsUnique();
     }
 
     private static void ConfigureSynthesisSourceOverride(ModelBuilder modelBuilder)
