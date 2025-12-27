@@ -89,8 +89,22 @@ builder.Services.AddSingleton<IConnectionMultiplexer>(_ => ConnectionMultiplexer
 builder.Services.AddSingleton<IResearchEventBus, RedisResearchEventBus>();
 
 // ---------- Search & Crawl ----------
-builder.Services.AddSearchAndCrawlClients(config);
+var firecrawlSection = config.GetSection(nameof(FirecrawlOptions));
+var firecrawlOptions = firecrawlSection.Get<FirecrawlOptions>();
 
+builder.Services.Configure<FirecrawlOptions>(firecrawlSection);
+
+builder.Services
+    .AddHttpClient<FirecrawlClient>()
+    .ConfigureHttpClient(c =>
+    {
+        c.Timeout = TimeSpan.FromSeconds(firecrawlOptions!.HttpClientTimeoutSeconds);
+        if (!string.IsNullOrWhiteSpace(firecrawlOptions.BaseUrl))
+        {
+            c.BaseAddress = new Uri(firecrawlOptions.BaseUrl);
+        }
+    });
+    
 // ---------- Core services ----------
 builder.Services.AddSingleton<IChatModel, OpenAiChatModel>();
 builder.Services.AddSingleton<IEmbeddingModel, OpenAiEmbeddingModel>();
@@ -113,7 +127,6 @@ builder.Services.AddHealthChecks()
         builder.Configuration.GetConnectionString("ResearchDb")!,
         name: "postgres",
         tags: ["ready", "db"])
-    .AddSearchAndCrawlHealthChecks(config)
     .AddRedis(redisOptions!.ConnectionString, name: "redis", tags: ["ready", "cache"]);
 
 builder.Services.AddOpenApi();
