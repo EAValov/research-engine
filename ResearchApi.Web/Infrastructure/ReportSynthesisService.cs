@@ -185,8 +185,8 @@ public sealed class ReportSynthesisService(
             // Persist sections atomically and mark completed
             await jobStore.CompleteSynthesisAsync(synthesis.Id, sectionsToPersist, ct);
 
-            await progress.InfoSynthesisAsync(
-                ResearchEventStage.Completed,
+            await progress.SynthesisCompletedAsync(
+                synthesis.Id,
                 $"[{synTag}] Synthesis completed",
                 ct);
         }
@@ -225,7 +225,7 @@ public sealed class ReportSynthesisService(
             return fromOutline;
         }
 
-        // 2) Otherwise use LLM planner as before
+        // 2) Otherwise use LLM planner 
         var planningPrompt = SectionPlanningPromptFactory.BuildPlanningPrompt(
             query: job.Query,
             clarifications: clarificationsText,
@@ -273,8 +273,6 @@ public sealed class ReportSynthesisService(
 
         return plans;
     }
-
-
 
     private static List<SectionPlan> OutlineToPlans(SynthesisOutline outline)
     {
@@ -356,23 +354,44 @@ public sealed class ReportSynthesisService(
         if (plans.Count == 0)
             return plans;
 
-        // Keep current order if indexes are broken; otherwise sort by Index.
-        // We still re-number contiguously 1..N.
+        // If indexes are valid, sort by Index; otherwise keep current order.
         var hasValidIndices = plans.All(p => p.Index > 0);
-        plans = hasValidIndices
-            ? plans.OrderBy(p => p.Index).ToList()
-            : plans.ToList();
+        if (hasValidIndices)
+            plans = plans.OrderBy(p => p.Index).ToList();
 
+        // Pick the intended conclusion (if any). If multiple, take the last-by-index (or last in order).
+        SectionPlan? intendedConclusion = null;
+        var candidates = plans.Where(p => p.IsConclusion).ToList();
+        if (candidates.Count > 0)
+        {
+            intendedConclusion = hasValidIndices
+                ? candidates.OrderBy(p => p.Index).Last()
+                : candidates.Last();
+        }
+
+        // Clear all conclusion flags
+        foreach (var p in plans)
+            p.IsConclusion = false;
+
+        // If there was an intended conclusion, move it to the end (stable)
+        if (intendedConclusion is not null)
+        {
+            plans.Remove(intendedConclusion);
+            plans.Add(intendedConclusion);
+        }
+
+        // Ensure keys + contiguous indices
         for (var i = 0; i < plans.Count; i++)
         {
             plans[i].Index = i + 1;
-            plans[i].IsConclusion = false;
 
             if (plans[i].SectionKey == Guid.Empty)
                 plans[i].SectionKey = Guid.NewGuid();
         }
 
+        // Ensure exactly one conclusion and it is last
         plans[^1].IsConclusion = true;
+
         return plans;
     }
 
@@ -460,7 +479,6 @@ public sealed class ReportSynthesisService(
             var toolHandler = new SynthesisToolHandler(
                 learningIntelService,
                 synthesis.Id,
-                ResearchOrchestrator.ComputeSha256(job.Query),
                 job.Region,
                 job.TargetLanguage);
 

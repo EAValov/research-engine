@@ -21,14 +21,13 @@ public sealed class LearningIntelService(
     private const int MaxLearningsPerSegment = 20;
     private const int MinLearningsPerSegment = 5;
 
-    public async Task<IReadOnlyList<Learning>> ExtractLearningsAsync(
+    public async Task<IReadOnlyList<Learning>> ExtractAndSaveLearningsAsync(
         Guid jobId,
         Guid sourceId,
         string query,
         string clarificationsText,
         string sourceUrl,
         string sourceContent,
-        string queryHash,
         string targetLanguage,
         bool computeEmbeddings,
         CancellationToken ct)
@@ -119,7 +118,6 @@ public sealed class LearningIntelService(
                     Id = Guid.NewGuid(),
                     JobId = jobId,
                     SourceId = sourceId,
-                    QueryHash = queryHash,
                     Text = it.Text.Trim(),
                     ImportanceScore = it.Importance,
                     EvidenceText = segment,
@@ -133,10 +131,11 @@ public sealed class LearningIntelService(
 
         // Attach embeddings in-memory
         await PopulateEmbeddingsAsync(allLearnings, ct);
+        await jobStore.AddLearningsAsync(jobId, sourceId, query, allLearnings, ct);
         return allLearnings;
     }
 
-    public async Task<IReadOnlyList<Learning>> PopulateEmbeddingsAsync(
+    private async Task<IReadOnlyList<Learning>> PopulateEmbeddingsAsync(
         IEnumerable<Learning> learnings,
         CancellationToken ct = default)
     {
@@ -174,7 +173,6 @@ public sealed class LearningIntelService(
     public async Task<IReadOnlyList<Learning>> GetSimilarLearningsAsync(
         string queryText,
         Guid synthesisId,
-        string? queryHash = null,
         string? language = null,
         string? region = null,
         int topK = 20,
@@ -222,18 +220,18 @@ public sealed class LearningIntelService(
         var localRaw = new List<Learning>();
 
         localRaw.AddRange(await jobStore.VectorSearchLearningsAsync(
-            queryVector, jobId, queryHash, language, region, localMinImportance, maxK, ct));
+            queryVector, jobId, language, region, localMinImportance, maxK, ct));
 
         if (localRaw.Count < maxK && !string.IsNullOrWhiteSpace(region))
         {
             localRaw.AddRange(await jobStore.VectorSearchLearningsAsync(
-                queryVector, jobId, queryHash, language, region: null, localMinImportance, maxK - localRaw.Count, ct));
+                queryVector, jobId, language, region: null, localMinImportance, maxK - localRaw.Count, ct));
         }
 
         if (localRaw.Count < maxK && !string.IsNullOrWhiteSpace(language))
         {
             localRaw.AddRange(await jobStore.VectorSearchLearningsAsync(
-                queryVector, jobId, queryHash, language: null, region: null, localMinImportance, maxK - localRaw.Count, ct));
+                queryVector, jobId, language: null, region: null, localMinImportance, maxK - localRaw.Count, ct));
         }
 
         var local = localRaw
@@ -262,7 +260,7 @@ public sealed class LearningIntelService(
             return ApplyDiversityFilter(local, topK);
 
         var globalRaw = await jobStore.VectorSearchLearningsAsync(
-            queryVector, jobId: null, queryHash, language, region: null, globalMinImportance, remaining, ct);
+            queryVector, jobId: null, language, region: null, globalMinImportance, remaining, ct);
 
         var global = globalRaw
             .GroupBy(l => l.Id)

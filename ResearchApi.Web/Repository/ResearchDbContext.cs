@@ -120,6 +120,8 @@ public sealed class ResearchDbContext : DbContext
             .IsRequired()
             .HasConversion<string>()
             .HasMaxLength(200);
+        
+        entity.Property(e => e.SynthesisId);
 
         entity.Property(e => e.Message)
             .IsRequired()
@@ -129,6 +131,8 @@ public sealed class ResearchDbContext : DbContext
             .WithMany(j => j.Events)
             .HasForeignKey(e => e.JobId)
             .OnDelete(DeleteBehavior.Cascade);
+
+        entity.HasIndex(e => new { e.JobId, e.SynthesisId });
     }
 
     private static void ConfigureSource(ModelBuilder modelBuilder)

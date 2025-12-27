@@ -5,7 +5,6 @@ namespace ResearchApi.Infrastructure;
 public sealed class SynthesisToolHandler(
     ILearningIntelService retrieval,
     Guid synthesisId,
-    string queryHash,
     string? language = null,
     string? region = null
 )
@@ -17,7 +16,6 @@ public sealed class SynthesisToolHandler(
         var learnings = await retrieval.GetSimilarLearningsAsync(
             queryText: queryText,
             synthesisId: synthesisId,
-            queryHash: queryHash,
             language: language,
             region: region,
             topK: 20,

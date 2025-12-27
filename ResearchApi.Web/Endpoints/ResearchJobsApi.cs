@@ -33,8 +33,6 @@ public static class ResearchJobsApi
         IResearchOrchestrator orchestrator,
         IResearchProtocolService protocolService,
         IResearchJobStore jobStore,
-        IWebhookSubscriptionStore webhookStore,
-        IWebhookDispatcher webhookDispatcher,
         CancellationToken ct)
     {
         // Compute missing protocol params
@@ -64,21 +62,6 @@ public static class ResearchJobsApi
             language ?? "en",
             region,
             ct);
-
-        // Persist webhook subscription if provided
-        if (request.Webhook is not null)
-        {
-            await SaveWebhookSubscriptionAsync(jobId, request.Webhook, webhookStore, ct);
-
-            // Optional: immediate "Created" webhook delivery
-            await webhookDispatcher.EnqueueAsync(
-                new WebhookDeliveryRequest(
-                    jobId,
-                    ResearchEventStage.Created,
-                    DateTimeOffset.UtcNow,
-                    new { jobId, status = "Queued" }),
-                ct);
-        }
 
         var response = new
         {
@@ -418,70 +401,95 @@ public static class ResearchJobsApi
         var jsonOptions = CreateJsonOptions();
         var lastId = GetLastEventIdAsInt(httpContext);
 
-        var storedEvents = await jobStore.GetEventsAsync(jobId, ct);
-        foreach (var e in storedEvents.Where(e => e.Id > lastId))
-        {
-            await WriteEventAsync(httpContext, jsonOptions, e, ct);
+        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(ct, httpContext.RequestAborted);
+        var token = linkedCts.Token;
 
-            if (e.Stage is ResearchEventStage.Completed or ResearchEventStage.Failed)
+        // highest event id we've actually written to the client
+        var lastSentId = lastId;
+
+        static bool IsTerminal(ResearchEventStage stage)
+            => stage is ResearchEventStage.Completed or ResearchEventStage.Failed;
+
+        async Task<bool> TryWriteEventAsync(ResearchEvent ev, CancellationToken t)
+        {
+            // Dedupe between replay and live
+            if (ev.Id <= Volatile.Read(ref lastSentId))
+                return false;
+
+            await WriteEventAsync(httpContext, jsonOptions, ev, t);
+            Volatile.Write(ref lastSentId, ev.Id);
+            return true;
+        }
+
+        async Task WriteDoneNowAsync(ResearchEvent terminalEvent, CancellationToken t)
+        {
+            // Use numeric id for maximum SSE client compatibility
+            var doneId = Volatile.Read(ref lastSentId) + 1;
+
+            await WriteSseAsync(
+                httpContext,
+                jsonOptions,
+                eventName: "done",
+                id: doneId.ToString(),
+                data: new
+                {
+                    jobId,
+                    status = terminalEvent.Stage.ToString(),
+                    // Requires ResearchEvent.SynthesisId? to exist (nullable)
+                    synthesisId = terminalEvent.SynthesisId
+                },
+                token: t);
+
+            // After "done", we end the stream deterministically.
+            linkedCts.Cancel();
+        }
+
+        // 1) Subscribe FIRST to close race window
+        await using var subscription = await eventBus.SubscribeAsync(
+            jobId,
+            async (ev, t) =>
             {
-                await WriteDoneAsync(httpContext, jsonOptions, jobId, e.Stage, ct);
+                // If request already shutting down, ignore.
+                if (t.IsCancellationRequested)
+                    return;
+
+                await TryWriteEventAsync(ev, t);
+
+                if (IsTerminal(ev.Stage))
+                    await WriteDoneNowAsync(ev, t);
+            },
+            token);
+
+        // 2) Replay stored events AFTER subscribing
+        var storedEvents = await jobStore.GetEventsAsync(jobId, token);
+
+        foreach (var e in storedEvents.Where(e => e.Id > lastId).OrderBy(e => e.Id))
+        {
+            if (token.IsCancellationRequested)
+                break;
+
+            await TryWriteEventAsync(e, token);
+
+            if (IsTerminal(e.Stage))
+            {
+                await WriteDoneNowAsync(e, token);
                 return;
             }
         }
 
-        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(ct, httpContext.RequestAborted);
-        var token = linkedCts.Token;
-
-        var doneTcs = new TaskCompletionSource<ResearchEventStage>(
-            TaskCreationOptions.RunContinuationsAsynchronously);
-
-        await using var subscription = await eventBus.SubscribeAsync(
-            jobId,
-            (ev, t) => OnLiveEventAsync(httpContext, jsonOptions, ev, doneTcs, t),
-            token);
-
-        await WaitForCompletionOrDisconnectAsync(doneTcs, token);
-
-        if (doneTcs.Task.IsCompletedSuccessfully && !token.IsCancellationRequested)
+        // 3) Keep connection open until completion/disconnect
+        try
         {
-            await WriteDoneAsync(httpContext, jsonOptions, jobId, doneTcs.Task.Result, token);
+            while (!token.IsCancellationRequested)
+                await Task.Delay(500, token);
+        }
+        catch (OperationCanceledException)
+        {
+            // expected (completion or client disconnect)
         }
     }
 
     // ---------------- helpers ----------------
-
-    private static async Task SaveWebhookSubscriptionAsync(
-        Guid jobId,
-        WebhookDto webhook,
-        IWebhookSubscriptionStore store,
-        CancellationToken ct)
-    {
-        if (!Uri.TryCreate(webhook.Url, UriKind.Absolute, out var uri))
-            throw new ArgumentException("Invalid webhook Url.", nameof(webhook));
-
-        var stages = new[]
-        {
-            ResearchEventStage.Created,
-            ResearchEventStage.Planning,
-            ResearchEventStage.Summarizing,
-            ResearchEventStage.Searching,
-            ResearchEventStage.LearningExtraction,
-            ResearchEventStage.Metrics,
-            ResearchEventStage.Completed,
-            ResearchEventStage.Failed
-        };
-
-        var sub = new WebhookSubscription(
-            JobId: jobId,
-            Url: uri,
-            Secret: string.IsNullOrWhiteSpace(webhook.Secret) ? null : webhook.Secret,
-            Stages: stages,
-            CreatedUtc: DateTimeOffset.UtcNow);
-
-        await store.SaveAsync(sub, ct);
-    }
-
     private static void ConfigureSseHeaders(HttpContext httpContext)
     {
         httpContext.Response.StatusCode = StatusCodes.Status200OK;
@@ -530,50 +538,4 @@ public static class ResearchJobsApi
             id: e.Id.ToString(),
             data: new { id = e.Id, timestamp = e.Timestamp, stage = e.Stage, message = e.Message },
             token: token);
-
-    private static Task WriteDoneAsync(
-        HttpContext httpContext,
-        JsonSerializerOptions jsonOptions,
-        Guid jobId,
-        ResearchEventStage status,
-        CancellationToken token)
-        => WriteSseAsync(
-            httpContext,
-            jsonOptions,
-            eventName: "done",
-            id: "done",
-            data: new { jobId, status = status.ToString() },
-            token: token);
-
-    private static async Task OnLiveEventAsync(
-        HttpContext httpContext,
-        JsonSerializerOptions jsonOptions,
-        ResearchEvent ev,
-        TaskCompletionSource<ResearchEventStage> doneTcs,
-        CancellationToken token)
-    {
-        await WriteEventAsync(httpContext, jsonOptions, ev, token);
-
-        if (ev.Stage is ResearchEventStage.Completed or ResearchEventStage.Failed)
-        {
-            doneTcs.TrySetResult(ev.Stage);
-        }
-    }
-
-    private static async Task WaitForCompletionOrDisconnectAsync(
-        TaskCompletionSource<ResearchEventStage> doneTcs,
-        CancellationToken token)
-    {
-        try
-        {
-            while (!token.IsCancellationRequested && !doneTcs.Task.IsCompleted)
-            {
-                await Task.Delay(500, token);
-            }
-        }
-        catch (OperationCanceledException)
-        {
-            // client disconnected
-        }
-    }
 }

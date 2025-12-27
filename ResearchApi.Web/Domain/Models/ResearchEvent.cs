@@ -17,6 +17,7 @@ public class ResearchEvent
     public string Message { get; set; } = null!;
 
     public Guid JobId { get; set; }
+    public Guid? SynthesisId { get; set; }
     public ResearchJob Job { get; set; } = null!;
 }
 

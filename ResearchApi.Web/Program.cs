@@ -72,45 +72,21 @@ builder.Services.AddAuthentication("Bearer")
 
 builder.Services.AddAuthorization();
 
-// ---------- Webhook / Redis ----------
-var webhookSection = builder.Configuration.GetSection(nameof(WebhookOptions));
-var webhookOptions = webhookSection.Get<WebhookOptions>()
-    ?? throw new InvalidOperationException("Missing required configuration section 'Webhook'.");
+// ---------- Redis ----------
 
-var validationResults = new List<ValidationResult>();
-if (!Validator.TryValidateObject(webhookOptions, new ValidationContext(webhookOptions), validationResults, true))
-{
-    var msg = string.Join("; ", validationResults.Select(r => r.ErrorMessage));
-    throw new InvalidOperationException($"Invalid 'Webhook' configuration: {msg}");
-}
+builder.Services.AddOptions<RedisEventBusOptions>()
+    .Bind(builder.Configuration.GetSection(nameof(RedisEventBusOptions)))
+    .ValidateDataAnnotations()
+    .ValidateOnStart();
 
-ConfigurationOptions redisOptions;
-try
-{
-    redisOptions = ConfigurationOptions.Parse(webhookOptions.RedisConnectionString);
-}
-catch (Exception ex)
-{
-    throw new InvalidOperationException($"Invalid 'Webhook:RedisConnectionString': {ex.Message}", ex);
-}
+var redisOptions = builder.Configuration.GetSection(nameof(RedisEventBusOptions))
+    .Get<RedisEventBusOptions>();
 
-// Make webhook options available (direct injection)
-builder.Services.AddSingleton(webhookOptions);
+// Redis multiplexer (singleton)
+builder.Services.AddSingleton<IConnectionMultiplexer>(_ => ConnectionMultiplexer.Connect(redisOptions!.ConnectionString));
 
-// Redis connection (shared)
-builder.Services.AddSingleton<IConnectionMultiplexer>(_ => ConnectionMultiplexer.Connect(redisOptions));
-
-// Webhook HttpClient (named client)
-builder.Services.AddHttpClient<WebhookDispatcher>()
-    .ConfigureHttpClient(client =>
-    {
-        client.Timeout = TimeSpan.FromSeconds(webhookOptions.HttpTimeoutSeconds);
-    });
-
-// Webhook services
+// Event bus
 builder.Services.AddSingleton<IResearchEventBus, RedisResearchEventBus>();
-builder.Services.AddSingleton<IWebhookSubscriptionStore, RedisWebhookSubscriptionStore>();
-builder.Services.AddSingleton<IWebhookDispatcher, WebhookDispatcher>();
 
 // ---------- Search & Crawl ----------
 builder.Services.AddSearchAndCrawlClients(config);
@@ -122,10 +98,8 @@ builder.Services.AddSingleton<ITokenizer, VllmTokenizer>();
 
 builder.Services.AddScoped<IResearchOrchestrator, ResearchOrchestrator>();
 builder.Services.AddScoped<IResearchProtocolService, ResearchProtocolService>();
-builder.Services.AddScoped<ILearningEmbeddingService, LearningEmbeddingService>();
 builder.Services.AddScoped<ILearningIntelService, LearningIntelService>();
 builder.Services.AddScoped<IQueryPlanningService, QueryPlanningService>();
-builder.Services.AddScoped<ILearningExtractionService, LearningExtractionService>();
 builder.Services.AddScoped<IReportSynthesisService, ReportSynthesisService>();
 
 builder.Services.AddScoped<IResearchJobStore, PostgresResearchJobStore>();
@@ -140,7 +114,7 @@ builder.Services.AddHealthChecks()
         name: "postgres",
         tags: ["ready", "db"])
     .AddSearchAndCrawlHealthChecks(config)
-    .AddRedis(webhookOptions.RedisConnectionString, name: "redis", tags: ["ready", "cache"]);
+    .AddRedis(redisOptions!.ConnectionString, name: "redis", tags: ["ready", "cache"]);
 
 builder.Services.AddOpenApi();
 

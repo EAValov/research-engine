@@ -65,7 +65,8 @@ namespace ResearchApi.Migrations
                     Timestamp = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
                     Stage = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false),
                     Message = table.Column<string>(type: "character varying(4000)", maxLength: 4000, nullable: false),
-                    JobId = table.Column<Guid>(type: "uuid", nullable: false)
+                    JobId = table.Column<Guid>(type: "uuid", nullable: false),
+                    SynthesisId = table.Column<Guid>(type: "uuid", nullable: true)
                 },
                 constraints: table =>
                 {
@@ -297,9 +298,9 @@ namespace ResearchApi.Migrations
                 columns: new[] { "SourceId", "QueryHash" });
 
             migrationBuilder.CreateIndex(
-                name: "IX_research_events_JobId",
+                name: "IX_research_events_JobId_SynthesisId",
                 table: "research_events",
-                column: "JobId");
+                columns: new[] { "JobId", "SynthesisId" });
 
             migrationBuilder.CreateIndex(
                 name: "IX_sources_ContentHash",

@@ -1,3 +1,4 @@
+using System.Text;
 using Microsoft.EntityFrameworkCore;
 using Pgvector;
 using Pgvector.EntityFrameworkCore;
@@ -111,7 +112,9 @@ public sealed class PostgresResearchJobStore(
 
         logger.LogInformation("Job {JobId} [{Stage}] {Message}", jobId, ev.Stage, ev.Message);
 
-        var saved = await db.SaveChangesAsync(ct);
+        await db.SaveChangesAsync(ct);
+
+        var id = ev.Id; 
 
         try
         {
@@ -122,20 +125,12 @@ public sealed class PostgresResearchJobStore(
             logger.LogError(ex, "Failed to publish event for job {JobId}", jobId);
         }
 
-        return saved;
-    }
-
-    public async Task<bool> SourceExistsAsync(Guid jobId, string url, CancellationToken ct = default)
-    {
-        await using var db = await dbContextFactory.CreateDbContextAsync(ct);
-
-        return await db.Sources.AnyAsync(s => s.JobId == jobId && s.Url == url, ct);
+        return id;
     }
 
     public async Task<Source> UpsertSourceAsync(
         Guid jobId,
         string url,
-        string contentHash,
         string content,
         string? title,
         string? language,
@@ -146,6 +141,8 @@ public sealed class PostgresResearchJobStore(
 
         var existing = await db.Sources
             .FirstOrDefaultAsync(s => s.JobId == jobId && s.Url == url, ct);
+
+        var contentHash = ComputeSha256(content);
 
         if (existing is not null)
         {
@@ -188,60 +185,6 @@ public sealed class PostgresResearchJobStore(
         db.Sources.Add(source);
         await db.SaveChangesAsync(ct);
         return source;
-    }
-
-    public async Task<Learning> AddLearningAsync(
-        Guid jobId,
-        Guid sourceId,
-        string queryHash,
-        string text,
-        float importanceScore,
-        string evidenceText,
-        float[]? embeddingVector,
-        CancellationToken ct = default)
-    {
-        // Enforce evidence truncation rule here to keep rows sane
-        const int maxEvidenceLen = 20_000;
-        if (evidenceText.Length > maxEvidenceLen)
-            evidenceText = evidenceText.Substring(0, maxEvidenceLen);
-
-        await using var db = await dbContextFactory.CreateDbContextAsync(ct);
-
-        // Ensure source exists (foreign key safety)
-        var sourceExists = await db.Sources.AnyAsync(s => s.Id == sourceId && s.JobId == jobId, ct);
-        if (!sourceExists)
-            throw new InvalidOperationException($"Source {sourceId} does not exist for job {jobId}.");
-
-        var now = DateTimeOffset.UtcNow;
-
-        var learning = new Learning
-        {
-            Id = Guid.NewGuid(),
-            JobId = jobId,
-            SourceId = sourceId,
-            QueryHash = queryHash,
-            Text = text,
-            ImportanceScore = importanceScore,
-            EvidenceText = evidenceText,
-            CreatedAt = now
-        };
-
-        db.Learnings.Add(learning);
-
-        if (embeddingVector is not null)
-        {
-            var emb = new LearningEmbedding
-            {
-                Id = Guid.NewGuid(),
-                LearningId = learning.Id,
-                Vector = new Pgvector.Vector(embeddingVector),
-                CreatedAt = now
-            };
-            db.LearningEmbeddings.Add(emb);
-        }
-
-        await db.SaveChangesAsync(ct);
-        return learning;
     }
 
     public async Task<Synthesis> CreateSynthesisAsync(
@@ -374,7 +317,7 @@ public sealed class PostgresResearchJobStore(
 
     public async Task<IReadOnlyList<Learning>> GetLearningsForSourceAndQueryAsync(
         Guid sourceId,
-        string queryHash,
+        string serpQuery,
         CancellationToken ct = default)
     {
         await using var db = await dbContextFactory.CreateDbContextAsync(ct);
@@ -385,7 +328,7 @@ public sealed class PostgresResearchJobStore(
             .AsNoTracking()
             .Include(l => l.Source)
             .Include(l => l.Embedding)
-            .Where(l => l.SourceId == sourceId && l.QueryHash == queryHash)
+            .Where(l => l.SourceId == sourceId && l.QueryHash == ComputeSha256(serpQuery))
             .OrderBy(l => l.CreatedAt)
             .ToListAsync(ct);
     }
@@ -393,6 +336,7 @@ public sealed class PostgresResearchJobStore(
     public async Task AddLearningsAsync(
         Guid jobId,
         Guid sourceId,
+        string query,
         IEnumerable<Learning> learnings,
         CancellationToken ct = default)
     {
@@ -414,6 +358,7 @@ public sealed class PostgresResearchJobStore(
             // force ownership (avoid accidental mismatch)
             l.JobId = jobId;
             l.SourceId = sourceId;
+            l.QueryHash = ComputeSha256(query);
 
             if (l.Id == Guid.Empty)
                 l.Id = Guid.NewGuid();
@@ -622,7 +567,6 @@ public sealed class PostgresResearchJobStore(
     public async Task<IReadOnlyList<Learning>> VectorSearchLearningsAsync(
         Vector queryVector,
         Guid? jobId,
-        string? queryHash,
         string? language,
         string? region,
         float minImportance,
@@ -641,9 +585,6 @@ public sealed class PostgresResearchJobStore(
         if (jobId is Guid jid)
             q = q.Where(l => l.JobId == jid);
 
-        if (!string.IsNullOrWhiteSpace(queryHash))
-            q = q.Where(l => l.QueryHash == queryHash);
-
         if (!string.IsNullOrWhiteSpace(language))
             q = q.Where(l => l.Source.Language == language);
 
@@ -656,5 +597,13 @@ public sealed class PostgresResearchJobStore(
             .Take(Math.Clamp(topK, 1, 200));
 
         return await q.ToListAsync(ct);
+    }
+
+    private static string ComputeSha256(string input)
+    {
+        using var sha = System.Security.Cryptography.SHA256.Create();
+        var bytes = Encoding.UTF8.GetBytes(input ?? string.Empty);
+        var hash = sha.ComputeHash(bytes);
+        return Convert.ToHexString(hash);
     }
 }

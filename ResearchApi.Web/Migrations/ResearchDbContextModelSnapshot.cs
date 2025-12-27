@@ -150,12 +150,15 @@ namespace ResearchApi.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
 
+                    b.Property<Guid?>("SynthesisId")
+                        .HasColumnType("uuid");
+
                     b.Property<DateTimeOffset>("Timestamp")
                         .HasColumnType("timestamp with time zone");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("JobId");
+                    b.HasIndex("JobId", "SynthesisId");
 
                     b.ToTable("research_events", (string)null);
                 });

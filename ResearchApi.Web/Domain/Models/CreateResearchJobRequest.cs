@@ -19,7 +19,5 @@ public sealed record CreateResearchJobRequest(
     string? Language,
     
     [MaxLength(100)]
-    string? Region,
-    
-    WebhookDto? Webhook
+    string? Region
 );

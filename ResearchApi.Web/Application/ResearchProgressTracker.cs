@@ -50,6 +50,9 @@ public sealed class ResearchProgressTracker
     public Task InfoSynthesisAsync(ResearchEventStage stage, string message, CancellationToken ct = default)
         => EmitRawAsync(stage, message, ct, force: true);
 
+    public Task SynthesisCompletedAsync(Guid synthesisID, string message, CancellationToken ct = default)
+        => EmitRawAsync(ResearchEventStage.Completed, message, ct, force: true, synthesisID);
+
     /// <summary>
     /// Like ReportAsync, but does NOT prefix with [xx%] and is throttled unless force=true.
     /// </summary>
@@ -58,7 +61,7 @@ public sealed class ResearchProgressTracker
 
     // ---------------- shared emitter ----------------
 
-    private async Task EmitRawAsync(ResearchEventStage stage, string message, CancellationToken ct, bool force)
+    private async Task EmitRawAsync(ResearchEventStage stage, string message, CancellationToken ct, bool force, Guid? SynthesisId = null)
     {
         if (!force && _minEmitIntervalMs > 0)
         {
@@ -70,9 +73,14 @@ public sealed class ResearchProgressTracker
             Interlocked.Exchange(ref _lastEmitTicks, now);
         }
 
+        var ev = new ResearchEvent(DateTimeOffset.UtcNow, stage, message);
+
+        if(SynthesisId is not null)
+            ev.SynthesisId = SynthesisId;
+
         await _jobStore.AppendEventAsync(
             _jobId,
-            new ResearchEvent(DateTimeOffset.UtcNow, stage, message),
+            ev,
             ct);
     }
 

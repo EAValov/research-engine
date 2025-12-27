@@ -18,28 +18,16 @@ public interface IResearchJobStore
         CancellationToken ct = default);
 
     Task<ResearchJob?> GetJobAsync(Guid id, CancellationToken ct = default);
+    
     Task<int> UpdateJobAsync(ResearchJob job, CancellationToken ct = default);
 
     Task<Source> UpsertSourceAsync(
         Guid jobId,
         string url,
-        string contentHash,
         string content,
         string? title,
         string? language,
         string? region,
-        CancellationToken ct = default);
-
-    Task<bool> SourceExistsAsync(Guid jobId, string url, CancellationToken ct = default);
-
-    Task<Learning> AddLearningAsync(
-        Guid jobId,
-        Guid sourceId,
-        string queryHash,
-        string text,
-        float importanceScore,
-        string evidenceText,
-        float[]? embeddingVector,
         CancellationToken ct = default);
 
     Task<Synthesis> CreateSynthesisAsync(
@@ -65,11 +53,12 @@ public interface IResearchJobStore
 
     Task<Synthesis?> GetLatestSynthesisAsync(Guid jobId, CancellationToken ct = default);
 
-    Task<IReadOnlyList<Learning>> GetLearningsForSourceAndQueryAsync(Guid sourceId, string queryHash, CancellationToken ct = default);
+    Task<IReadOnlyList<Learning>> GetLearningsForSourceAndQueryAsync(Guid sourceId, string serpQuery, CancellationToken ct = default);
 
     Task AddLearningsAsync(
         Guid jobId,
         Guid sourceId,
+        string query,
         IEnumerable<Learning> learnings,
         CancellationToken ct = default);
 
@@ -100,7 +89,6 @@ public interface IResearchJobStore
     Task<IReadOnlyList<Learning>> VectorSearchLearningsAsync(
         Vector queryVector,
         Guid? jobId,
-        string? queryHash,
         string? language,
         string? region,
         float minImportance,

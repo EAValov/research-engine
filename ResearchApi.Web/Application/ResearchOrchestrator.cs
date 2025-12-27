@@ -81,9 +81,6 @@ public sealed class ResearchOrchestrator(
             var clarifications = job.Clarifications ?? new List<Clarification>();
             var clarificationsText = FormatClarifications(clarifications);
 
-            // IMPORTANT: stable query hash for caching
-            var queryHash = ComputeSha256(job.Query);
-
             // 1) SERP planning
             var serpQueries = await queryPlanningService.GenerateSerpQueriesAsync(
                 job.Query,
@@ -109,7 +106,6 @@ public sealed class ResearchOrchestrator(
                     job,
                     serpQuery,
                     clarificationsText,
-                    queryHash,
                     progress,
                     ct);
             }
@@ -126,7 +122,7 @@ public sealed class ResearchOrchestrator(
                 instructions: null,
                 ct: ct);
 
-            // Optional: emit synthesis id for clients/tools
+            // Emit synthesis id for clients/tools
             await progress.InfoAsync(
                 ResearchEventStage.Summarizing,
                 $"Synthesis started (synthesisId={synthesisId})",
@@ -162,7 +158,6 @@ public sealed class ResearchOrchestrator(
         ResearchJob job,
         string serpQuery,
         string clarificationsText,
-        string queryHash,
         ResearchProgressTracker progress,
         CancellationToken ct)
     {
@@ -195,6 +190,11 @@ public sealed class ResearchOrchestrator(
 
         progress.UrlsQueued(urls.Count);
 
+        await progress.InfoAsync(
+            ResearchEventStage.LearningExtraction,
+            $"Starting learning extraction for SERP query '{serpQuery}' ({urls.Count} URLs queued).",
+            ct);
+
         var semaphore = new SemaphoreSlim(_maxUrlParallelism);
 
         var tasks = urls.Select(async url =>
@@ -207,12 +207,10 @@ public sealed class ResearchOrchestrator(
                     serpQuery,
                     url,
                     clarificationsText,
-                    queryHash,
                     ct);
 
                 progress.UrlProcessed(summary.UsedCache, summary.HadError, summary.LearningCount);
 
-                // Throttled emit
                 await progress.ReportAsync(
                     ResearchEventStage.LearningExtraction,
                     $"Processed URL {url}",
@@ -239,7 +237,6 @@ public sealed class ResearchOrchestrator(
         string serpQuery,
         string url,
         string clarificationsText,
-        string queryHash,
         CancellationToken ct)
     {
         // 1) Fetch content
@@ -255,7 +252,6 @@ public sealed class ResearchOrchestrator(
         var source = await jobStore.UpsertSourceAsync(
             jobId: job.Id,
             url: url,
-            contentHash: ComputeSha256(content),
             content: content,
             title: null,
             language: job.TargetLanguage,
@@ -263,35 +259,29 @@ public sealed class ResearchOrchestrator(
             ct: ct);
 
         // 3) Reuse cached learnings for (source, queryHash)
-        var cached = await jobStore.GetLearningsForSourceAndQueryAsync(source.Id, queryHash, ct);
+        var cached = await jobStore.GetLearningsForSourceAndQueryAsync(source.Id, serpQuery, ct);
         if (cached.Count > 0)
         {
-            logger.LogInformation(
-                "Reusing {Count} cached learnings for URL {Url} (SourceId={SourceId}, QueryHash={QueryHash}).",
-                cached.Count, url, source.Id, queryHash);
-
+            logger.LogInformation("Reusing {Count} cached learnings for URL {Url} (SourceId={SourceId}).", cached.Count, url, source.Id);
             return new UrlProcessingSummary(UsedCache: true, HadError: false, LearningCount: cached.Count);
         }
 
         // 4) Extract learnings (+ embeddings) via intel service
         try
         {
-            var extracted = await learningIntelService.ExtractLearningsAsync(
+            var extracted = await learningIntelService.ExtractAndSaveLearningsAsync(
                 jobId: job.Id,
                 sourceId: source.Id,
                 query: job.Query,
                 clarificationsText: clarificationsText,
                 sourceUrl: source.Url,
                 sourceContent: source.Content,
-                queryHash: queryHash,
                 targetLanguage: job.TargetLanguage,
                 computeEmbeddings: true,
                 ct: ct);
 
             if (extracted.Count == 0)
                 return new UrlProcessingSummary(UsedCache: false, HadError: false, LearningCount: 0);
-
-            await jobStore.AddLearningsAsync(job.Id, source.Id, extracted, ct);
 
             return new UrlProcessingSummary(UsedCache: false, HadError: false, LearningCount: extracted.Count);
         }
@@ -324,13 +314,5 @@ public sealed class ResearchOrchestrator(
             sb.AppendLine();
         }
         return sb.ToString().Trim();
-    }
-
-    public static string ComputeSha256(string input)
-    {
-        using var sha = System.Security.Cryptography.SHA256.Create();
-        var bytes = Encoding.UTF8.GetBytes(input ?? string.Empty);
-        var hash = sha.ComputeHash(bytes);
-        return Convert.ToHexString(hash);
     }
 }

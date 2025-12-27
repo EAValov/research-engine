@@ -13,7 +13,7 @@ using ResearchApi.Infrastructure;
 namespace ResearchApi.Migrations
 {
     [DbContext(typeof(ResearchDbContext))]
-    [Migration("20251225163225_InitialCreate")]
+    [Migration("20251227151151_InitialCreate")]
     partial class InitialCreate
     {
         /// <inheritdoc />
@@ -153,12 +153,15 @@ namespace ResearchApi.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
 
+                    b.Property<Guid?>("SynthesisId")
+                        .HasColumnType("uuid");
+
                     b.Property<DateTimeOffset>("Timestamp")
                         .HasColumnType("timestamp with time zone");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("JobId");
+                    b.HasIndex("JobId", "SynthesisId");
 
                     b.ToTable("research_events", (string)null);
                 });
