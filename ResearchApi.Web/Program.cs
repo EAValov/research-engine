@@ -2,7 +2,6 @@ using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using ResearchApi.Application;
-using ResearchApi.Bootstrap;
 using ResearchApi.Configuration;
 using ResearchApi.Domain;
 using ResearchApi.Infrastructure;
@@ -10,7 +9,6 @@ using ResearchApi.Infrastructure.Authentication;
 using Scalar.AspNetCore;
 using Serilog;
 using StackExchange.Redis;
-using System.ComponentModel.DataAnnotations;
 
 var builder = WebApplication.CreateBuilder(args);
 
