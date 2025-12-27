@@ -152,10 +152,9 @@ public static class ResearchJobsApi
         return Results.Ok(response);
     }
 
-    private static async Task<IResult> ListLearningsAsync(
+   private static async Task<IResult> ListLearningsAsync(
         Guid jobId,
-        [FromQuery] int? skip,
-        [FromQuery] int? take,
+        [AsParameters] ListLearningsRequest req,
         IResearchJobStore jobStore,
         CancellationToken ct)
     {
@@ -163,8 +162,8 @@ public static class ResearchJobsApi
         if (job is null)
             return Results.NotFound();
 
-        var s = Math.Max(skip ?? 0, 0);
-        var t = Math.Clamp(take ?? 200, 1, 500);
+        var s = req.SkipValue;
+        var t = req.TakeValue;
 
         var learnings = await jobStore.ListLearningsAsync(jobId, s, t, ct);
 

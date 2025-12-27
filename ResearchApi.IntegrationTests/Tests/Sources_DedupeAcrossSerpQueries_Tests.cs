@@ -78,9 +78,7 @@ public sealed class Sources_DedupeAcrossSerpQueries_Tests : IntegrationTestBase
         var learnings = learningsJson.GetProperty("learnings").EnumerateArray().ToList();
         Assert.True(learnings.Count > 0);
 
-        // If the same source was processed twice, you'd often see doubled learnings.
-        // Keep it loose but bounded.
-        Assert.InRange(learnings.Count, 1, 200);
+        Assert.InRange(learnings.Count, 1, 20); // 20 learnings configured in fixture
     }
 
     private sealed class OverlapSearchClient : ISearchClient

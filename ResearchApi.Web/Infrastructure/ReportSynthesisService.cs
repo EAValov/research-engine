@@ -1,6 +1,5 @@
 using System.Text;
 using System.Text.Json;
-using System.Text.RegularExpressions;
 using ResearchApi.Application;
 using ResearchApi.Domain;
 using ResearchApi.Prompts;
@@ -23,8 +22,6 @@ public sealed class ReportSynthesisService(
         string? instructions,
         CancellationToken ct)
     {
-        // outline is now expected to be strict JSON (SynthesisOutline) or null.
-        // We store as-is; validation happens in RunExistingSynthesisAsync.
         var synthesis = await jobStore.CreateSynthesisAsync(
             jobId: jobId,
             parentSynthesisId: parentSynthesisId,
