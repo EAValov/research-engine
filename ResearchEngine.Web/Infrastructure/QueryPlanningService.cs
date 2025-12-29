@@ -1,5 +1,7 @@
+using System.ComponentModel;
 using System.Text;
 using System.Text.Json;
+using Microsoft.Extensions.AI;
 using ResearchEngine.Domain;
 using ResearchEngine.Prompts;
 
@@ -28,7 +30,7 @@ public class QueryPlanningService(IChatModel chatModel, ILogger<QueryPlanningSer
             PropertyNameCaseInsensitive = true
         };
 
-        var responseFormat = SerpQueryPlan.JsonResponseSchema(jsonOptions);
+        var responseFormat = SerpQueryPlanResponse.JsonResponseSchema(jsonOptions);
 
         var rawResponse = await chatModel.ChatAsync(
             prompt,
@@ -39,11 +41,11 @@ public class QueryPlanningService(IChatModel chatModel, ILogger<QueryPlanningSer
         // In case if model still emits a <think> block
         var withoutThink = chatModel.StripThinkBlock(rawResponse.Text).Trim();
 
-        SerpQueryPlan? plan = null;
+        SerpQueryPlanResponse? plan = null;
 
         try
         {
-            plan = JsonSerializer.Deserialize<SerpQueryPlan>(withoutThink, jsonOptions);
+            plan = JsonSerializer.Deserialize<SerpQueryPlanResponse>(withoutThink, jsonOptions);
         }
         catch (Exception ex)
         {
@@ -68,5 +70,21 @@ public class QueryPlanningService(IChatModel chatModel, ILogger<QueryPlanningSer
             breadth);
 
         return queries;
+    }
+
+    private sealed class SerpQueryPlanResponse
+    {
+        [Description("List of high-value search queries, ordered from broader/overview to narrower/deeper.")]
+        public required List<string> Queries { get; init; }
+
+        public static ChatResponseFormat JsonResponseSchema(JsonSerializerOptions? jsonSerializerOptions = default)
+        {
+            var jsonElement = AIJsonUtilities.CreateJsonSchema(
+                typeof(SerpQueryPlanResponse),
+                description: "Planned SERP queries for deep research",
+                serializerOptions: jsonSerializerOptions);
+
+            return new ChatResponseFormatJson(jsonElement);
+        }
     }
 }

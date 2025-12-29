@@ -1,4 +1,6 @@
+using System.ComponentModel;
 using System.Text.Json;
+using Microsoft.Extensions.AI;
 using ResearchEngine.Domain;
 using ResearchEngine.Prompts;
 
@@ -117,7 +119,7 @@ public class ResearchProtocolService : IResearchProtocolService
             PropertyNameCaseInsensitive = true
         };
 
-        var responseFormat = LanguageRegionSelection.JsonResponseSchema(jsonOptions);
+        var responseFormat = LanguageRegionSelectionResponse.JsonResponseSchema(jsonOptions);
 
         var raw = await _chatModel.ChatAsync(
             prompt,
@@ -130,10 +132,10 @@ public class ResearchProtocolService : IResearchProtocolService
 
         var rawText = _chatModel.StripThinkBlock(raw.Text).Trim();
 
-        LanguageRegionSelection? parsed;
+        LanguageRegionSelectionResponse? parsed;
         try
         {
-            parsed = JsonSerializer.Deserialize<LanguageRegionSelection>(rawText, jsonOptions);
+            parsed = JsonSerializer.Deserialize<LanguageRegionSelectionResponse>(rawText, jsonOptions);
         }
         catch
         {
@@ -155,5 +157,59 @@ public class ResearchProtocolService : IResearchProtocolService
         }
 
         return (language!, region);
+    }
+
+    private sealed class BreadthDepthSelection
+    {
+        [Description("How many distinct directions / subtopics to explore (1–8).")]
+        public required int Breadth { get; init; }
+
+        [Description("How deep and multi-step the research should be (1–4).")]
+        public required int Depth { get; init; }
+
+        public static ChatResponseFormat JsonResponseSchema(JsonSerializerOptions? jsonSerializerOptions = default)
+        {
+            var jsonElement = AIJsonUtilities.CreateJsonSchema(
+                typeof(BreadthDepthSelection),
+                description: "Selected breadth and depth configuration for deep research",
+                serializerOptions: jsonSerializerOptions);
+
+            return new ChatResponseFormatJson(jsonElement);
+        }
+    }
+
+    private sealed class ClarificationQuestionsResponse
+    {
+        [Description("Array of clarification questions for the user, in natural language.")]
+        public required List<string> Queries { get; init; }
+
+        public static ChatResponseFormat JsonResponseSchema(JsonSerializerOptions? jsonSerializerOptions = default)
+        {
+            var jsonElement = AIJsonUtilities.CreateJsonSchema(
+                typeof(ClarificationQuestionsResponse),
+                description: "Clarification questions to refine the user's research query",
+                serializerOptions: jsonSerializerOptions);
+
+            return new ChatResponseFormatJson(jsonElement);
+        }
+    }
+
+    private sealed class LanguageRegionSelectionResponse
+    {
+        [Description("2-letter ISO 639-1 language code in lowercase (e.g. \"en\", \"de\").")]
+        public required string Language { get; init; }
+
+        [Description("Human-readable location string (e.g. \"Germany\", \"Berlin,Germany\") or null if no specific region.")]
+        public string? Region { get; init; }
+
+        public static ChatResponseFormat JsonResponseSchema(JsonSerializerOptions? jsonSerializerOptions = default)
+        {
+            var jsonElement = AIJsonUtilities.CreateJsonSchema(
+                typeof(LanguageRegionSelectionResponse),
+                description: "Selected language and region for web research",
+                serializerOptions: jsonSerializerOptions);
+
+            return new ChatResponseFormatJson(jsonElement);
+        }
     }
 }

@@ -6,6 +6,7 @@ public sealed class SectionResult
     public required string Text { get; init; }
     public string? Summary { get; set; }
 }
+
 public sealed class SectionPlan
 {
     public Guid SectionKey { get; set; } // now required for all plans after normalization

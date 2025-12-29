@@ -5,6 +5,8 @@ using Microsoft.Extensions.Options;
 using ResearchEngine.Domain;
 using ResearchEngine.Configuration;
 using ResearchEngine.Prompts;
+using System.ComponentModel;
+using Microsoft.Extensions.AI;
 
 namespace ResearchEngine.Infrastructure;
 
@@ -398,5 +400,30 @@ public sealed class LearningIntelService(
         var intersection = setA.Intersect(setB).Count();
         var union = setA.Union(setB).Count();
         return union == 0 ? 0.0 : (double)intersection / union;
+    }
+
+    private sealed class ExtractedLearningItem
+    {
+        [Description("Single, self-contained learning text in the target language, highly relevant to the user's query.")]
+        public required string Text { get; init; }
+
+        [Description("Importance score between 0.0 (barely relevant) and 1.0 (critical for answering the query).")]
+        public required float Importance { get; init; }
+    }
+
+    private sealed class LearningExtractionResponse
+    {
+        [Description("Array of extracted learnings.")]
+        public required List<ExtractedLearningItem> Learnings { get; init; }
+
+        public static ChatResponseFormat JsonResponseSchema(JsonSerializerOptions? jsonSerializerOptions = default)
+        {
+            var jsonElement = AIJsonUtilities.CreateJsonSchema(
+                typeof(LearningExtractionResponse),
+                description: "Structured learnings extraction result",
+                serializerOptions: jsonSerializerOptions);
+
+            return new ChatResponseFormatJson(jsonElement);
+        }
     }
 }
