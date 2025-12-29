@@ -1,0 +1,9 @@
+<Solution>
+  <Configurations>
+    <Platform Name="Any CPU" />
+    <Platform Name="x64" />
+    <Platform Name="x86" />
+  </Configurations>
+  <Project Path="ResearchEngine.IntegrationTests/ResearchEngine.IntegrationTests.csproj" />
+  <Project Path="ResearchEngine.Web/ResearchEngine.Web.csproj" />
+</Solution>

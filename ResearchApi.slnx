@@ -1,9 +1,0 @@
-<Solution>
-  <Configurations>
-    <Platform Name="Any CPU" />
-    <Platform Name="x64" />
-    <Platform Name="x86" />
-  </Configurations>
-  <Project Path="ResearchApi.IntegrationTests/ResearchApi.IntegrationTests.csproj" />
-  <Project Path="ResearchApi.Web/ResearchApi.csproj" />
-</Solution>
