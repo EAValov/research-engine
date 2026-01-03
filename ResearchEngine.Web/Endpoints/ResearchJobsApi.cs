@@ -271,8 +271,6 @@ public static partial class ResearchJobsApi
             instructions: request.Instructions,
             ct: ct);
 
-        // NOTE: overrides moved to separate endpoints
-
         // Fire-and-forget synthesis run
         _ = Task.Run(async () =>
         {

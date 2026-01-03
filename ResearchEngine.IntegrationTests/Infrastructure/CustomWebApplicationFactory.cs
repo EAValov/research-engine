@@ -16,11 +16,13 @@ public sealed class CustomWebApplicationFactory : WebApplicationFactory<Program>
 {
     private readonly ContainersFixture _containers;
     private readonly string _dbConnectionString;
+    private readonly int _redisDb;
 
-    public CustomWebApplicationFactory(ContainersFixture containers, string dbConnectionString)
+    public CustomWebApplicationFactory(ContainersFixture containers, string dbConnectionString, int redisDb)
     {
         _containers = containers;
         _dbConnectionString = dbConnectionString;
+        _redisDb = redisDb;
     }
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
@@ -31,7 +33,9 @@ public sealed class CustomWebApplicationFactory : WebApplicationFactory<Program>
         {
             var redisHost = _containers.Redis.Hostname;
             var redisPort = _containers.Redis.GetMappedPublicPort(6379);
-            var redisConn = $"{redisHost}:{redisPort},abortConnect=false";
+
+            // IMPORTANT: isolate per test via logical DB
+            var redisConn = $"{redisHost}:{redisPort},abortConnect=false,defaultDatabase={_redisDb}";
 
             cfg.AddInMemoryCollection(new Dictionary<string, string?>
             {
@@ -62,8 +66,9 @@ public sealed class CustomWebApplicationFactory : WebApplicationFactory<Program>
             services.AddSingleton<FakeChatModel>();
             services.AddSingleton<IChatModel>(sp => sp.GetRequiredService<FakeChatModel>());
 
-            // Redis
+            // Redis multiplexer (per-test DB)
             services.RemoveAll<IConnectionMultiplexer>();
+
             var redisHost = _containers.Redis.Hostname;
             var redisPort = _containers.Redis.GetMappedPublicPort(6379);
 
@@ -77,12 +82,14 @@ public sealed class CustomWebApplicationFactory : WebApplicationFactory<Program>
                     SyncTimeout = 15000,
                     KeepAlive = 10,
                     ResolveDns = false,
+                    DefaultDatabase = _redisDb, // redis db isolation
                 };
+
                 opts.EndPoints.Add(redisHost, redisPort);
                 return ConnectionMultiplexer.Connect(opts);
             });
 
-            // DbContext (pointing to per-test database)
+            // DbContext per-test DB
             services.RemoveAll<ResearchDbContext>();
             services.RemoveAll<DbContextOptions<ResearchDbContext>>();
             services.RemoveAll<IDbContextFactory<ResearchDbContext>>();
@@ -96,6 +103,7 @@ public sealed class CustomWebApplicationFactory : WebApplicationFactory<Program>
                 });
             });
 
+            // auth
             services.AddAuthentication(options =>
             {
                 options.DefaultAuthenticateScheme = TestAuthHandler.Scheme;

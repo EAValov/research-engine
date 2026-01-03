@@ -1,5 +1,6 @@
 using System.Threading.Tasks;
 using Npgsql;
+using StackExchange.Redis;
 using Testcontainers.PostgreSql;
 using Testcontainers.Redis;
 using Xunit;
@@ -14,6 +15,8 @@ public sealed class ContainersCollection : ICollectionFixture<ContainersFixture>
 
 public sealed class ContainersFixture : IAsyncLifetime
 {
+    public const int RedisDbCount = 512;
+
     public PostgreSqlContainer Postgres { get; }
     public RedisContainer Redis { get; }
 
@@ -29,6 +32,8 @@ public sealed class ContainersFixture : IAsyncLifetime
 
         Redis = new RedisBuilder()
             .WithImage("redis:7-alpine")
+            // disable persistence to reduce noise and IO during tests + db count enough to separate each test.
+            .WithCommand("redis-server", "--save", "", "--appendonly", "no", "--databases", RedisDbCount.ToString())
             .Build();
     }
 
@@ -40,9 +45,8 @@ public sealed class ContainersFixture : IAsyncLifetime
         // Redis readiness probe (prevents race on first Connect() in app DI)
         var host = Redis.Hostname;
         var port = Redis.GetMappedPublicPort(6379);
-        var conn = await StackExchange.Redis.ConnectionMultiplexer.ConnectAsync($"{host}:{port},abortConnect=false");
-
-        await conn.GetDatabase().PingAsync();
+        var conn = await ConnectionMultiplexer.ConnectAsync($"{host}:{port},abortConnect=false");
+        await conn.GetDatabase(0).PingAsync();
         await conn.CloseAsync();
     }
 
