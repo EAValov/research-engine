@@ -23,15 +23,13 @@ public sealed class ContainersFixture : IAsyncLifetime
     public ContainersFixture()
     {
         // Postgres 17 with pgvector
-        Postgres = new PostgreSqlBuilder()
-            .WithImage("pgvector/pgvector:pg17")
+        Postgres = new PostgreSqlBuilder("pgvector/pgvector:pg17")
             .WithDatabase("research")
             .WithUsername("postgres")
             .WithPassword("postgres")
             .Build();
 
-        Redis = new RedisBuilder()
-            .WithImage("redis:7-alpine")
+        Redis = new RedisBuilder("redis:7-alpine")
             // disable persistence to reduce noise and IO during tests + db count enough to separate each test.
             .WithCommand("redis-server", "--save", "", "--appendonly", "no", "--databases", RedisDbCount.ToString())
             .Build();
