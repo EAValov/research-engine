@@ -13,7 +13,7 @@ using ResearchEngine.Infrastructure;
 namespace ResearchEngine.Web.Migrations
 {
     [DbContext(typeof(ResearchDbContext))]
-    [Migration("20251228153152_InitialCreate")]
+    [Migration("20260101191906_InitialCreate")]
     partial class InitialCreate
     {
         /// <inheritdoc />
@@ -76,7 +76,13 @@ namespace ResearchEngine.Web.Migrations
                     b.Property<float>("ImportanceScore")
                         .HasColumnType("real");
 
+                    b.Property<bool>("IsUserProvided")
+                        .HasColumnType("boolean");
+
                     b.Property<Guid>("JobId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("LearningGroupId")
                         .HasColumnType("uuid");
 
                     b.Property<string>("QueryHash")
@@ -92,6 +98,10 @@ namespace ResearchEngine.Web.Migrations
                         .HasColumnType("text");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("LearningGroupId");
+
+                    b.HasIndex("JobId", "LearningGroupId");
 
                     b.HasIndex("JobId", "SourceId");
 
@@ -130,6 +140,77 @@ namespace ResearchEngine.Web.Migrations
                     NpgsqlIndexBuilderExtensions.HasOperators(b.HasIndex("Vector"), new[] { "vector_cosine_ops" });
 
                     b.ToTable("learning_embeddings", (string)null);
+                });
+
+            modelBuilder.Entity("ResearchEngine.Domain.LearningGroup", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<float>("CanonicalImportanceScore")
+                        .HasColumnType("real");
+
+                    b.Property<string>("CanonicalText")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("now() at time zone 'utc'");
+
+                    b.Property<int>("DistinctSourceCount")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("JobId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("MemberCount")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("now() at time zone 'utc'");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("JobId", "UpdatedAt");
+
+                    b.ToTable("learning_groups", (string)null);
+                });
+
+            modelBuilder.Entity("ResearchEngine.Domain.LearningGroupEmbedding", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("now() at time zone 'utc'");
+
+                    b.Property<Guid>("LearningGroupId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Vector>("Vector")
+                        .IsRequired()
+                        .HasColumnType("vector(1024)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("LearningGroupId")
+                        .IsUnique();
+
+                    b.HasIndex("Vector")
+                        .HasAnnotation("Npgsql:StorageParameter:lists", 100);
+
+                    NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex("Vector"), "ivfflat");
+                    NpgsqlIndexBuilderExtensions.HasOperators(b.HasIndex("Vector"), new[] { "vector_cosine_ops" });
+
+                    b.ToTable("learning_group_embeddings", (string)null);
                 });
 
             modelBuilder.Entity("ResearchEngine.Domain.ResearchEvent", b =>
@@ -234,9 +315,17 @@ namespace ResearchEngine.Web.Migrations
                     b.Property<Guid>("JobId")
                         .HasColumnType("uuid");
 
+                    b.Property<int>("Kind")
+                        .HasColumnType("integer");
+
                     b.Property<string>("Language")
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)");
+
+                    b.Property<string>("Reference")
+                        .IsRequired()
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)");
 
                     b.Property<string>("Region")
                         .HasMaxLength(500)
@@ -246,16 +335,11 @@ namespace ResearchEngine.Web.Migrations
                         .HasMaxLength(1000)
                         .HasColumnType("character varying(1000)");
 
-                    b.Property<string>("Url")
-                        .IsRequired()
-                        .HasMaxLength(2000)
-                        .HasColumnType("character varying(2000)");
-
                     b.HasKey("Id");
 
                     b.HasIndex("ContentHash");
 
-                    b.HasIndex("JobId", "Url")
+                    b.HasIndex("JobId", "Reference")
                         .IsUnique();
 
                     b.ToTable("sources", (string)null);
@@ -447,11 +531,19 @@ namespace ResearchEngine.Web.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.HasOne("ResearchEngine.Domain.LearningGroup", "Group")
+                        .WithMany("Learnings")
+                        .HasForeignKey("LearningGroupId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
                     b.HasOne("ResearchEngine.Domain.Source", "Source")
                         .WithMany("Learnings")
                         .HasForeignKey("SourceId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+
+                    b.Navigation("Group");
 
                     b.Navigation("Job");
 
@@ -467,6 +559,28 @@ namespace ResearchEngine.Web.Migrations
                         .IsRequired();
 
                     b.Navigation("Learning");
+                });
+
+            modelBuilder.Entity("ResearchEngine.Domain.LearningGroup", b =>
+                {
+                    b.HasOne("ResearchEngine.Domain.ResearchJob", "Job")
+                        .WithMany()
+                        .HasForeignKey("JobId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Job");
+                });
+
+            modelBuilder.Entity("ResearchEngine.Domain.LearningGroupEmbedding", b =>
+                {
+                    b.HasOne("ResearchEngine.Domain.LearningGroup", "Group")
+                        .WithOne("Embedding")
+                        .HasForeignKey("ResearchEngine.Domain.LearningGroupEmbedding", "LearningGroupId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Group");
                 });
 
             modelBuilder.Entity("ResearchEngine.Domain.ResearchEvent", b =>
@@ -562,6 +676,14 @@ namespace ResearchEngine.Web.Migrations
                 {
                     b.Navigation("Embedding")
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("ResearchEngine.Domain.LearningGroup", b =>
+                {
+                    b.Navigation("Embedding")
+                        .IsRequired();
+
+                    b.Navigation("Learnings");
                 });
 
             modelBuilder.Entity("ResearchEngine.Domain.ResearchJob", b =>

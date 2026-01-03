@@ -1,5 +1,7 @@
 using System.Net.Http.Json;
 using System.Text.Json;
+using Microsoft.Extensions.DependencyInjection;
+using ResearchEngine.Domain;
 using ResearchEngine.IntegrationTests.Helpers;
 using ResearchEngine.IntegrationTests.Infrastructure;
 
@@ -48,43 +50,43 @@ public sealed class Overrides_PinnedLearning_IsCited_Tests : IntegrationTestBase
         var pinnedLearningId = items[0].GetProperty("learningId").GetGuid();
         Assert.NotEqual(Guid.Empty, pinnedLearningId);
 
-        // 3) capture current max event id for a clean SSE checkpoint for the regeneration run
-        var afterEventId = await SseTestHelpers.GetMaxEventIdAsync(client, jobId);
+        // 3) Create synthesis row without running via HTTP endpoint (deterministic)
+        using var scope = Factory.Services.CreateScope();
+        var store = scope.ServiceProvider.GetRequiredService<IResearchJobStore>();
+        var synthesisService = scope.ServiceProvider.GetRequiredService<IReportSynthesisService>();
 
-        // 4) start regeneration with learning override pinned=true
-        var regenReq = new
+        var parent = await store.GetLatestSynthesisAsync(jobId, CancellationToken.None);
+        var parentId = parent?.Id;
+
+        var synthesisId = await synthesisService.StartSynthesisAsync(
+            jobId: jobId,
+            parentSynthesisId: parentId,
+            outline: null,
+            instructions: "When writing the report, use retrieved learnings and keep citations.",
+            ct: CancellationToken.None);
+
+        Assert.NotEqual(Guid.Empty, synthesisId);
+
+        // 4) Apply pinned override BEFORE running the synthesis
+        var learningOverrides = new object[]
         {
-            parentSynthesisId = (Guid?)null,
-            useLatestAsParent = true,
-            outline = (string?)null,
-            instructions = "When writing the report, use retrieved learnings and keep citations.",
-            sourceOverrides = (object?)null,
-            learningOverrides = new[]
-            {
-                new { learningId = pinnedLearningId, scoreOverride = (float?)null, excluded = (bool?)null, pinned = true }
-            }
+            new { learningId = pinnedLearningId, scoreOverride = (float?)null, excluded = (bool?)null, pinned = true }
         };
 
-        var regenResp = await client.PostAsJsonAsync($"/api/research/jobs/{jobId}/syntheses", regenReq);
-        regenResp.EnsureSuccessStatusCode();
+        var ovResp = await client.PutAsJsonAsync(
+            $"/api/research/syntheses/{synthesisId}/overrides/learnings",
+            learningOverrides);
 
-        var regenJson = await regenResp.Content.ReadFromJsonAsync<JsonElement>();
-        var expectedSynthesisId = regenJson.GetProperty("synthesisId").GetGuid();
-        Assert.NotEqual(Guid.Empty, expectedSynthesisId);
+        ovResp.EnsureSuccessStatusCode();
 
-        // 5) wait for done AFTER checkpoint; ensure we got the regeneration completion
-        var (synStatus, doneSynId, _) = await SseTestHelpers.WaitForDoneAfterAsync(
-            client,
-            jobId,
-            afterEventId: afterEventId,
-            timeout: TimeSpan.FromSeconds(60));
-
-        Assert.Equal("Completed", synStatus);
-        Assert.True(doneSynId.HasValue);
-        Assert.Equal(expectedSynthesisId, doneSynId.Value);
+        // 5) Run the synthesis (overrides will be observed during retrieval)
+        await synthesisService.RunExistingSynthesisAsync(
+            synthesisId: synthesisId,
+            progress: null,
+            ct: CancellationToken.None);
 
         // 6) pull synthesis and assert pinned citation exists
-        var synResp = await client.GetAsync($"/api/research/syntheses/{expectedSynthesisId}");
+        var synResp = await client.GetAsync($"/api/research/syntheses/{synthesisId}");
         synResp.EnsureSuccessStatusCode();
 
         var synDoc = await synResp.Content.ReadFromJsonAsync<JsonElement>();
@@ -93,7 +95,10 @@ public sealed class Overrides_PinnedLearning_IsCited_Tests : IntegrationTestBase
         var sections = synDoc.GetProperty("sections").EnumerateArray().ToList();
         Assert.True(sections.Count > 0);
 
-        var allMarkdown = string.Join("\n\n", sections.Select(s => s.GetProperty("contentMarkdown").GetString() ?? ""));
+        var allMarkdown = string.Join(
+            "\n\n",
+            sections.Select(s => s.GetProperty("contentMarkdown").GetString() ?? ""));
+
         var citation = $"[lrn:{pinnedLearningId:N}]";
         Assert.Contains(citation, allMarkdown);
     }

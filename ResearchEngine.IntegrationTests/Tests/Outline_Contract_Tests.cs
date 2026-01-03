@@ -89,24 +89,4 @@ public sealed class Outline_Contract_Tests : IntegrationTestBase
         var titles = sections.Select(s => s.GetProperty("title").GetString() ?? "").ToList();
         Assert.Equal("Conclusion", titles[^1]);
     }
-
-    private static async Task<Guid> CreateJobAsync(HttpClient client, string query)
-    {
-        var createReq = new
-        {
-            query,
-            clarifications = Array.Empty<object>(),
-            breadth = 2,
-            depth = 2,
-            language = "en",
-            region = (string?)null,
-            webhook = (object?)null
-        };
-
-        var resp = await client.PostAsJsonAsync("/api/research/jobs", createReq);
-        resp.EnsureSuccessStatusCode();
-
-        var json = await resp.Content.ReadFromJsonAsync<JsonElement>();
-        return json.GetProperty("jobId").GetGuid();
-    }
 }

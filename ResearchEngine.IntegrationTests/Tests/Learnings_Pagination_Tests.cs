@@ -72,49 +72,10 @@ public sealed class Learnings_Pagination_Tests : IntegrationTestBase
             .Select(l => (
                 LearningId: l.GetProperty("learningId").GetGuid(),
                 SourceId: l.GetProperty("sourceId").GetGuid(),
-                SourceUrl: l.GetProperty("sourceUrl").GetString() ?? "",
+                SourceUrl: l.GetProperty("sourceReference").GetString() ?? "",
                 Text: l.GetProperty("text").GetString() ?? ""))
             .ToList();
 
         return new LearningsPage(jobId, jSkip, jTake, total, items);
-    }
-
-    private static async Task<Guid> CreateJobAsync(HttpClient client, string query)
-    {
-        var createReq = new
-        {
-            query,
-            clarifications = Array.Empty<object>(),
-            breadth = 2,
-            depth = 2,
-            language = "en",
-            region = (string?)null,
-            webhook = (object?)null
-        };
-
-        var resp = await client.PostAsJsonAsync("/api/research/jobs", createReq);
-        resp.EnsureSuccessStatusCode();
-
-        var json = await resp.Content.ReadFromJsonAsync<JsonElement>();
-        return json.GetProperty("jobId").GetGuid();
-    }
-
-    private static async Task WaitForJobCompletionAsync(HttpClient client, Guid jobId, int timeoutSeconds)
-    {
-        var deadline = DateTimeOffset.UtcNow.AddSeconds(timeoutSeconds);
-        while (true)
-        {
-            var evResp = await client.GetAsync($"/api/research/jobs/{jobId}/events");
-            evResp.EnsureSuccessStatusCode();
-
-            var events = await evResp.Content.ReadFromJsonAsync<JsonElement>();
-            var stages = events.EnumerateArray().Select(GenericHelpers.GetStageName).ToList();
-
-            if (stages.Contains("Completed")) return;
-            if (stages.Contains("Failed")) throw new Xunit.Sdk.XunitException("Job failed unexpectedly.");
-            if (DateTimeOffset.UtcNow > deadline) throw new Xunit.Sdk.XunitException("Timed out waiting for job completion.");
-
-            await Task.Delay(300);
-        }
     }
 }

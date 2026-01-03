@@ -2,7 +2,6 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using ResearchEngine.IntegrationTests.Helpers;
 using ResearchEngine.IntegrationTests.Infrastructure;
-using Xunit;
 
 namespace ResearchEngine.IntegrationTests.Tests;
 
@@ -73,7 +72,7 @@ public sealed class Learnings_VectorPath_Tests : IntegrationTestBase
         {
             Assert.NotEqual(Guid.Empty, l.GetProperty("learningId").GetGuid());
             Assert.NotEqual(Guid.Empty, l.GetProperty("sourceId").GetGuid());
-            Assert.StartsWith("https://", l.GetProperty("sourceUrl").GetString() ?? "");
+            Assert.StartsWith("https://", l.GetProperty("sourceReference").GetString() ?? "");
             Assert.True(l.GetProperty("importanceScore").GetSingle() > 0);
             Assert.False(string.IsNullOrWhiteSpace(l.GetProperty("text").GetString()));
         }

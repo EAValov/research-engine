@@ -1,4 +1,5 @@
 using System.Threading.Tasks;
+using Npgsql;
 using Testcontainers.PostgreSql;
 using Testcontainers.Redis;
 using Xunit;
@@ -49,5 +50,25 @@ public sealed class ContainersFixture : IAsyncLifetime
     {
         await Redis.DisposeAsync();
         await Postgres.DisposeAsync();
+    }
+
+    public string GetAdminConnectionString()
+    {
+        var csb = new NpgsqlConnectionStringBuilder(Postgres.GetConnectionString())
+        {
+            Database = "postgres"
+        };
+        
+        return csb.ConnectionString;
+    }
+
+    public string BuildDbConnectionString(string databaseName)
+    {
+        var csb = new NpgsqlConnectionStringBuilder(Postgres.GetConnectionString())
+        {
+            Database = databaseName
+        };
+
+        return csb.ConnectionString;
     }
 }

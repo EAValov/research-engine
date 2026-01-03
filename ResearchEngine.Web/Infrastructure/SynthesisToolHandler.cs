@@ -26,7 +26,7 @@ public sealed class SynthesisToolHandler(
             TotalAvailable = learnings.Count,
             Learnings = learnings.Select(l =>
             {
-                var url = l.Source?.Url ?? string.Empty;
+                var url = l.Source?.Reference ?? string.Empty;
                 if (string.IsNullOrWhiteSpace(url))
                     url = "about:blank";
 

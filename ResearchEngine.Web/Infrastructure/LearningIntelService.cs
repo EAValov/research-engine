@@ -24,6 +24,29 @@ public sealed class LearningIntelService(
     private const int MaxLearningsPerSegment = 20;
     private const int MinLearningsPerSegment = 5;
 
+    // Similarity threshold for *automatic* learning group assignment.
+    //
+    // This value is intentionally high (0.93) to ensure HIGH PRECISION grouping.
+    // At this threshold we only auto-merge near-duplicate learnings:
+    //   - identical or trivially rewritten sentences
+    //   - same claim repeated across multiple sources (SERP duplication)
+    //   - minor re-ordering or formatting changes
+    //
+    // IMPORTANT:
+    // - Semantically related or paraphrased learnings that are not near-duplicates
+    //   are EXPECTED to fall below this threshold and form separate groups.
+    // - This avoids over-merging distinct claims and preserves research nuance,
+    //   since only one representative learning per group is surfaced to synthesis.
+    //
+    // If broader semantic clustering is needed in the future, it should be
+    // implemented as a separate "related groups" or manual merge feature,
+    // NOT by lowering this threshold.
+    private const float GroupAssignSimilarityThreshold = 0.93f;
+    private const int GroupSearchTopK = 5;
+
+    // Evidence safety
+    private const int MaxEvidenceLen = 20_000;
+
     public async Task<IReadOnlyList<Learning>> ExtractAndSaveLearningsAsync(
         Guid jobId,
         Guid sourceId,
@@ -111,20 +134,26 @@ public sealed class LearningIntelService(
 
             if (items is null || items.Count == 0)
                 continue;
-         
+
             var now = DateTimeOffset.UtcNow;
 
             foreach (var it in items)
             {
+                var text = it.Text.Trim();
+                if (string.IsNullOrWhiteSpace(text))
+                    continue;
+
                 allLearnings.Add(new Learning
                 {
                     Id = Guid.NewGuid(),
                     JobId = jobId,
                     SourceId = sourceId,
-                    Text = it.Text.Trim(),
+                    LearningGroupId = Guid.Empty, // assigned later
+                    Text = text,
                     ImportanceScore = it.Importance,
-                    EvidenceText = segment,
-                    CreatedAt = now
+                    EvidenceText = segment.Length > MaxEvidenceLen ? segment[..MaxEvidenceLen] : segment,
+                    CreatedAt = now,
+                    IsUserProvided = false
                 });
             }
         }
@@ -132,10 +161,111 @@ public sealed class LearningIntelService(
         if (!computeEmbeddings || allLearnings.Count == 0)
             return allLearnings;
 
-        // Attach embeddings in-memory
+        // 1) Embeddings
         await PopulateEmbeddingsAsync(allLearnings, ct);
+
+        // 2) Assign groups (nearest-group by embedding; create group if none above threshold)
+        await AssignGroupsAsync(jobId, allLearnings, ct);
+
+        // 3) Persist
         await jobStore.AddLearningsAsync(jobId, sourceId, query, allLearnings, ct);
+
+        // 4) Update group stats (best-effort)
+        await RecomputeGroupStatsBestEffortAsync(allLearnings, ct);
+
         return allLearnings;
+    }
+
+    /// <summary>
+    /// Adds a user-provided learning to a job. Creates/uses a Source depending on reference:
+    /// - reference null/empty: uses a per-job "user:manual" Source (Kind=User)
+    /// - reference provided: upserts a Web Source with placeholder content (crawl can fill later)
+    ///
+    /// Embedding is computed, group assignment is done (nearest group), and the learning is stored like extracted learnings.
+    /// </summary>
+    public async Task<Learning> AddUserLearningAsync(
+        Guid jobId,
+        string text,
+        float importanceScore = 1.0f,
+        string? reference = null,
+        string? evidenceText = null,
+        string? language = null,
+        string? region = null,
+        CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+            throw new ArgumentException("Learning text is required.", nameof(text));
+
+        var trimmedText = text.Trim();
+        if (trimmedText.Length == 0)
+            throw new ArgumentException("Learning text is required.", nameof(text));
+
+        // Clamp importance to sane range
+        var score = float.IsNaN(importanceScore) ? 1.0f : importanceScore;
+        score = Math.Clamp(score <= 0 ? 1.0f : score, 0.0f, 1.0f);
+
+        Source src;
+        if (string.IsNullOrWhiteSpace(reference))
+        {
+            src = await jobStore.GetOrCreateUserSourceAsync(jobId, ct);
+        }
+        else
+        {
+            // Placeholder until crawl populates content.
+            const string placeholderContent =
+                "Placeholder content for user-provided reference. A crawl job may populate this later.";
+
+            src = await jobStore.UpsertSourceAsync(
+                jobId: jobId,
+                reference: reference.Trim(),
+                content: placeholderContent,
+                title: null,
+                language: language,
+                region: region,
+                kind: SourceKind.Web,
+                ct: ct);
+        }
+
+        var now = DateTimeOffset.UtcNow;
+
+        var learning = new Learning
+        {
+            Id = Guid.NewGuid(),
+            JobId = jobId,
+            SourceId = src.Id,
+            LearningGroupId = Guid.Empty, // assigned below
+            Text = trimmedText,
+            ImportanceScore = score,
+            EvidenceText = (evidenceText ?? string.Empty).Length > MaxEvidenceLen
+                ? (evidenceText ?? string.Empty)[..MaxEvidenceLen]
+                : (evidenceText ?? string.Empty),
+            CreatedAt = now,
+            IsUserProvided = true
+        };
+
+        // Embedding (single)
+        var emb = await embeddingModel.GenerateEmbeddingAsync(learning.Text, ct);
+        if (emb?.Vector is null)
+            throw new InvalidOperationException("Failed to generate embedding for user learning.");
+
+        learning.Embedding = new LearningEmbedding
+        {
+            Id = Guid.NewGuid(),
+            LearningId = learning.Id,
+            Vector = new Pgvector.Vector(emb.Vector),
+            CreatedAt = now
+        };
+
+        // Group assignment
+        await AssignGroupsAsync(jobId, new List<Learning> { learning }, ct);
+
+        // Persist (use stable "user" query placeholder)
+        await jobStore.AddLearningsAsync(jobId, src.Id, query: "user", learnings: new[] { learning }, ct);
+
+        // Update group stats (best-effort)
+        await RecomputeGroupStatsBestEffortAsync(new[] { learning }, ct);
+
+        return learning;
     }
 
     private async Task<IReadOnlyList<Learning>> PopulateEmbeddingsAsync(
@@ -157,20 +287,125 @@ public sealed class LearningIntelService(
         var vectors = await embeddingModel.GenerateEmbeddingsAsync(texts, ct);
 
         var count = Math.Min(toEmbed.Count, vectors.Count);
+        var now = DateTimeOffset.UtcNow;
+
         for (var i = 0; i < count; i++)
         {
-            // attach navigation; store will persist to LearningEmbeddings table
             toEmbed[i].Embedding = new LearningEmbedding
             {
                 Id = Guid.NewGuid(),
                 LearningId = toEmbed[i].Id,
                 Vector = new Pgvector.Vector(vectors[i].Vector),
-                CreatedAt = DateTimeOffset.UtcNow
+                CreatedAt = now
             };
         }
 
         logger.LogInformation("Generated embeddings for {Count} learnings.", count);
         return toEmbed;
+    }
+
+    /// <summary>
+    /// Assigns each learning to a learning group using embedding similarity.
+    ///
+    /// Grouping strategy:
+    /// - Uses cosine similarity between the learning embedding and existing group embeddings.
+    /// - Only assigns to an existing group if similarity >= GroupAssignSimilarityThreshold.
+    ///
+    /// Design rationale:
+    /// - Grouping is used for *deduplication*, not semantic clustering.
+    /// - Only near-duplicate learnings should be auto-merged.
+    /// - Semantically similar but non-identical claims are intentionally kept
+    ///   in separate groups to avoid collapsing distinct evidence.
+    ///
+    /// Behavioral guarantees:
+    /// - Identical or trivially rewritten learnings are grouped together.
+    /// - Paraphrases that change meaning, scope, or emphasis will typically
+    ///   form new groups.
+    /// - If no sufficiently similar group exists, a new group is created
+    ///   using the learning as the canonical representative.
+    ///
+    /// NOTE:
+    /// - Canonical group text and score are updated only if a stronger
+    ///   (higher-importance) learning is added to the group.
+    /// - This method does NOT perform "soft clustering" or relatedness detection.
+    ///   Those should be implemented separately if needed.
+    /// </summary>
+    private async Task AssignGroupsAsync(Guid jobId, IList<Learning> learnings, CancellationToken ct)
+    {
+        foreach (var l in learnings)
+        {
+            ct.ThrowIfCancellationRequested();
+
+            if (l.Embedding is null)
+                throw new InvalidOperationException("Learning embedding must be generated before grouping.");
+
+            // Find nearest groups (with distance)
+            var hits = await jobStore.VectorSearchLearningGroupsWithDistanceAsync(
+                queryVector: l.Embedding.Vector,
+                jobId: jobId,
+                topK: GroupSearchTopK,
+                ct: ct);
+
+            var best = hits.FirstOrDefault();
+            var bestSim = best is null ? 0f : 1f - best.CosineDistance;
+
+            logger.LogDebug("Group assign: bestDist={Dist} bestSim={Sim}", best?.CosineDistance, bestSim);
+
+            if (best is not null && bestSim >= GroupAssignSimilarityThreshold)
+            {
+                l.LearningGroupId = best.Group.Id;
+
+                // Update canonical if this learning is stronger
+                if (l.ImportanceScore > best.Group.CanonicalImportanceScore)
+                {
+                    var emb = await embeddingModel.GenerateEmbeddingAsync(l.Text, ct);
+                    if (emb?.Vector is not null)
+                    {
+                        await jobStore.UpdateLearningGroupCanonicalAsync(
+                            groupId: best.Group.Id,
+                            canonicalText: l.Text,
+                            canonicalImportanceScore: l.ImportanceScore,
+                            embeddingVector: emb.Vector,
+                            ct: ct);
+                    }
+                }
+            }
+            else
+            {
+                // Create new group using this learning as canonical
+                var emb = await embeddingModel.GenerateEmbeddingAsync(l.Text, ct);
+                if (emb?.Vector is null)
+                    throw new InvalidOperationException("Failed to generate embedding for learning group.");
+
+                var g = await jobStore.CreateLearningGroupAsync(
+                    jobId: jobId,
+                    canonicalText: l.Text,
+                    canonicalImportanceScore: l.ImportanceScore,
+                    embeddingVector: emb.Vector,
+                    ct: ct);
+
+                l.LearningGroupId = g.Id;
+            }
+        }
+    }
+
+    private async Task RecomputeGroupStatsBestEffortAsync(IEnumerable<Learning> learnings, CancellationToken ct)
+    {
+        try
+        {
+            var groupIds = learnings
+                .Select(l => l.LearningGroupId)
+                .Where(id => id != Guid.Empty)
+                .Distinct()
+                .ToList();
+
+            foreach (var gid in groupIds)
+                await jobStore.RecomputeLearningGroupStatsAsync(gid, ct);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Failed to recompute learning group stats (best-effort).");
+        }
     }
 
     public async Task<IReadOnlyList<Learning>> GetSimilarLearningsAsync(
@@ -185,15 +420,13 @@ public sealed class LearningIntelService(
             return Array.Empty<Learning>();
 
         var emb = await embeddingModel.GenerateEmbeddingAsync(queryText, ct);
-        if (emb is null)
+        if (emb?.Vector is null)
             return Array.Empty<Learning>();
 
         var queryVector = new Pgvector.Vector(emb.Vector);
 
         var maxK = Math.Clamp(topK, 1, 200);
         var localMinImportance = _options.LocalMinImportance;
-        var globalMinImportance = _options.GlobalMinImportance;
-        var minLocalFractionForNoGlobal = _options.MinLocalFractionForNoGlobal;
 
         // Load overrides once
         var snapshot = await jobStore.GetSynthesisOverridesAsync(synthesisId, ct);
@@ -219,7 +452,7 @@ public sealed class LearningIntelService(
             return l.ImportanceScore;
         }
 
-        // 1) local (job-scoped) first
+        // Job-scoped only (global removed)
         var localRaw = new List<Learning>();
 
         localRaw.AddRange(await jobStore.VectorSearchLearningsAsync(
@@ -237,7 +470,7 @@ public sealed class LearningIntelService(
                 queryVector, jobId, language: null, region: null, localMinImportance, maxK - localRaw.Count, ct));
         }
 
-        var local = localRaw
+        var ordered = localRaw
             .GroupBy(l => l.Id)
             .Select(g => g.First())
             .Where(l => !IsLearningExcluded(l.Id))
@@ -253,38 +486,33 @@ public sealed class LearningIntelService(
             .Select(x => x.Learning)
             .ToList();
 
-        var minLocalNeeded = (int)Math.Ceiling(maxK * minLocalFractionForNoGlobal);
-        if (local.Count >= minLocalNeeded)
-            return ApplyDiversityFilter(local, topK);
-
-        // 2) global fallback (still apply local synthesis overrides)
-        var remaining = maxK - local.Count;
-        if (remaining <= 0)
-            return ApplyDiversityFilter(local, topK);
-
-        var globalRaw = await jobStore.VectorSearchLearningsAsync(
-            queryVector, jobId: null, language, region: null, globalMinImportance, remaining, ct);
-
-        var global = globalRaw
-            .GroupBy(l => l.Id)
-            .Select(g => g.First())
-            .Where(l => !IsLearningExcluded(l.Id))
-            .Where(l => !IsSourceExcluded(l.SourceId))
-            .Select(l => new
+        // NEW: dedupe by group (choose representative per group)
+        var dedupedByGroup = ordered
+            .Where(l => l.LearningGroupId != Guid.Empty)
+            .GroupBy(l => l.LearningGroupId)
+            .Select(g =>
             {
-                Learning = l,
-                Pinned = IsPinnedLearning(l.Id) || IsPinnedSource(l.SourceId),
-                Score = EffectiveLearningScore(l)
+                var rep = g
+                    .Select(l => new
+                    {
+                        Learning = l,
+                        Pinned = IsPinnedLearning(l.Id) || IsPinnedSource(l.SourceId),
+                        Score = EffectiveLearningScore(l)
+                    })
+                    .OrderByDescending(x => x.Pinned)
+                    .ThenByDescending(x => x.Score)
+                    .Select(x => x.Learning)
+                    .First();
+
+                return rep;
             })
-            .OrderByDescending(x => x.Pinned)
-            .ThenByDescending(x => x.Score)
-            .Select(x => x.Learning)
             .ToList();
 
-        local.AddRange(global);
-        local = local.GroupBy(l => l.Id).Select(g => g.First()).ToList();
+        // If some learnings somehow have no group (shouldn't happen after migration), append them last.
+        var ungrouped = ordered.Where(l => l.LearningGroupId == Guid.Empty).ToList();
+        dedupedByGroup.AddRange(ungrouped);
 
-        return ApplyDiversityFilter(local, topK);
+        return ApplyDiversityFilter(dedupedByGroup, topK);
     }
 
     private IReadOnlyList<Learning> ApplyDiversityFilter(IReadOnlyList<Learning> orderedCandidates, int topK)
@@ -292,11 +520,11 @@ public sealed class LearningIntelService(
         if (orderedCandidates.Count == 0)
             return orderedCandidates;
 
-        var maxPerUrl = _options.DiversityMaxPerUrl;
+        var maxPerRef = _options.DiversityMaxPerUrl; // keep option name for now
         var maxTextSimilarity = _options.DiversityMaxTextSimilarity;
 
         var selected = new List<Learning>(capacity: topK);
-        var perUrl = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        var perRef = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
         var seenTexts = new List<string>();
 
         foreach (var c in orderedCandidates)
@@ -304,9 +532,9 @@ public sealed class LearningIntelService(
             if (selected.Count >= topK)
                 break;
 
-            var url = c.Source?.Url ?? string.Empty;
-            if (!string.IsNullOrWhiteSpace(url) &&
-                perUrl.TryGetValue(url, out var count) && count >= maxPerUrl)
+            var reference = c.Source?.Reference ?? string.Empty;
+            if (!string.IsNullOrWhiteSpace(reference) &&
+                perRef.TryGetValue(reference, out var count) && count >= maxPerRef)
                 continue;
 
             var norm = NormalizeForSimilarity(c.Text);
@@ -319,8 +547,8 @@ public sealed class LearningIntelService(
             selected.Add(c);
             seenTexts.Add(norm);
 
-            if (!string.IsNullOrWhiteSpace(url))
-                perUrl[url] = perUrl.TryGetValue(url, out var n) ? n + 1 : 1;
+            if (!string.IsNullOrWhiteSpace(reference))
+                perRef[reference] = perRef.TryGetValue(reference, out var n) ? n + 1 : 1;
         }
 
         return selected;

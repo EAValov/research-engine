@@ -39,24 +39,13 @@ public sealed class Overrides_Persistence_Tests : IntegrationTestBase
         // 3) checkpoint so we get the NEXT done for this synthesis run
         var checkpoint = await SseTestHelpers.GetMaxEventIdAsync(client, jobId);
 
-        // 4) Start synthesis with overrides (regen)
+        // 4) Start synthesis (regen) WITHOUT overrides in body
         var req = new
         {
             parentSynthesisId = (Guid?)null,
             useLatestAsParent = true,
             outline = (string?)null,
-            instructions = "Test overrides",
-
-            sourceOverrides = new object[]
-            {
-                new { sourceId, excluded = true, pinned = (bool?)null }
-            },
-
-            learningOverrides = new object[]
-            {
-                new { learningId = learningExcluded, scoreOverride = (float?)null, excluded = true, pinned = (bool?)null },
-                new { learningId = learningPinned,   scoreOverride = (float?)0.95f, excluded = (bool?)null, pinned = true }
-            }
+            instructions = "Test overrides"
         };
 
         var startResp = await client.PostAsJsonAsync($"/api/research/jobs/{jobId}/syntheses", req);
@@ -65,6 +54,28 @@ public sealed class Overrides_Persistence_Tests : IntegrationTestBase
         var startJson = await startResp.Content.ReadFromJsonAsync<JsonElement>();
         var expectedSynthesisId = startJson.GetProperty("synthesisId").GetGuid();
         Assert.NotEqual(Guid.Empty, expectedSynthesisId);
+
+        // 4.1) Apply overrides via NEW endpoints (before waiting done)
+        var sourceOverrides = new object[]
+        {
+            new { sourceId, excluded = true, pinned = (bool?)null }
+        };
+
+        var learningOverrides = new object[]
+        {
+            new { learningId = learningExcluded, scoreOverride = (float?)null, excluded = true, pinned = (bool?)null },
+            new { learningId = learningPinned,   scoreOverride = (float?)0.95f, excluded = (bool?)null, pinned = true }
+        };
+
+        var srcOvResp = await client.PutAsJsonAsync(
+            $"/api/research/syntheses/{expectedSynthesisId}/overrides/sources",
+            sourceOverrides);
+        srcOvResp.EnsureSuccessStatusCode();
+
+        var lrnOvResp = await client.PutAsJsonAsync(
+            $"/api/research/syntheses/{expectedSynthesisId}/overrides/learnings",
+            learningOverrides);
+        lrnOvResp.EnsureSuccessStatusCode();
 
         // 5) Wait for NEXT done and ensure it matches this synthesis
         var (synStatus, doneSynthesisId, _) =
@@ -92,43 +103,5 @@ public sealed class Overrides_Persistence_Tests : IntegrationTestBase
         Assert.True(snapshot.LearningOverridesByLearningId.TryGetValue(learningPinned, out var lo2));
         Assert.True(lo2.Pinned == true);
         Assert.True(lo2.ScoreOverride.HasValue);
-    }
-
-    private static async Task<Guid> CreateJobAsync(HttpClient client, string query)
-    {
-        var createReq = new
-        {
-            query,
-            clarifications = Array.Empty<object>(),
-            breadth = 2,
-            depth = 2,
-            language = "en",
-            region = (string?)null,
-            webhook = (object?)null
-        };
-
-        var resp = await client.PostAsJsonAsync("/api/research/jobs", createReq);
-        resp.EnsureSuccessStatusCode();
-
-        var json = await resp.Content.ReadFromJsonAsync<JsonElement>();
-        return json.GetProperty("jobId").GetGuid();
-    }
-
-    private static async Task<List<JsonElement>> ListSourcesAsync(HttpClient client, Guid jobId)
-    {
-        var resp = await client.GetAsync($"/api/research/jobs/{jobId}/sources");
-        resp.EnsureSuccessStatusCode();
-
-        var json = await resp.Content.ReadFromJsonAsync<JsonElement>();
-        return json.GetProperty("sources").EnumerateArray().ToList();
-    }
-
-    private static async Task<List<JsonElement>> ListLearningsAsync(HttpClient client, Guid jobId)
-    {
-        var resp = await client.GetAsync($"/api/research/jobs/{jobId}/learnings?skip=0&take=200");
-        resp.EnsureSuccessStatusCode();
-
-        var json = await resp.Content.ReadFromJsonAsync<JsonElement>();
-        return json.GetProperty("learnings").EnumerateArray().ToList();
     }
 }

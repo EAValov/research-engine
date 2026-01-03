@@ -1,5 +1,7 @@
 using System.Net.Http.Json;
 using System.Text.Json;
+using Microsoft.Extensions.DependencyInjection;
+using ResearchEngine.Domain;
 using ResearchEngine.IntegrationTests.Helpers;
 using ResearchEngine.IntegrationTests.Infrastructure;
 using Xunit;
@@ -16,52 +18,60 @@ public sealed class VectorSearch_RespectsOverrides_Tests : IntegrationTestBase
     {
         using var client = CreateClient();
 
-        // initial job run
+        // 1) initial job run
         var jobId = await CreateJobAsync(client, "Test query: overrides affect retrieval.");
         var (status1, _, _) = await SseTestHelpers.WaitForDoneAsync(client, jobId, TimeSpan.FromSeconds(60));
         Assert.Equal("Completed", status1);
 
-        // pick a learning to exclude
+        // 2) pick a learning to exclude
         var learnings = await ListLearningsAsync(client, jobId);
         Assert.True(learnings.Count > 0);
+
         var excludedLearningId = learnings[0].GetProperty("learningId").GetGuid();
         Assert.NotEqual(Guid.Empty, excludedLearningId);
 
-        // checkpoint
-        var checkpoint = await SseTestHelpers.GetMaxEventIdAsync(client, jobId);
+        // 3) Create synthesis row WITHOUT starting it via HTTP endpoint (deterministic)
+        using var scope = Factory.Services.CreateScope();
+        var store = scope.ServiceProvider.GetRequiredService<IResearchJobStore>();
+        var synthesisService = scope.ServiceProvider.GetRequiredService<IReportSynthesisService>();
 
-        // regen with learning override excluded=true
-        var startReq = new
+        var parent = await store.GetLatestSynthesisAsync(jobId, CancellationToken.None);
+        var parentId = parent?.Id;
+
+        var synthesisId = await synthesisService.StartSynthesisAsync(
+            jobId: jobId,
+            parentSynthesisId: parentId,
+            outline: null,
+            instructions: "Ensure you cite evidence learnings using [lrn:...] markers.",
+            ct: CancellationToken.None);
+
+        Assert.NotEqual(Guid.Empty, synthesisId);
+
+        // 4) Apply excluded override BEFORE running the synthesis
+        var learningOverrides = new object[]
         {
-            parentSynthesisId = (Guid?)null,
-            useLatestAsParent = true,
-            outline = (string?)null,
-            instructions = "Ensure you cite evidence learnings using [lrn:...] markers.",
-            sourceOverrides = (object[]?)null,
-            learningOverrides = new object[]
-            {
-                new { learningId = excludedLearningId, scoreOverride = (float?)null, excluded = true, pinned = (bool?)null }
-            }
+            new { learningId = excludedLearningId, scoreOverride = (float?)null, excluded = true, pinned = (bool?)null }
         };
 
-        var startResp = await client.PostAsJsonAsync($"/api/research/jobs/{jobId}/syntheses", startReq);
-        startResp.EnsureSuccessStatusCode();
+        var ovResp = await client.PutAsJsonAsync(
+            $"/api/research/syntheses/{synthesisId}/overrides/learnings",
+            learningOverrides);
 
-        var startJson = await startResp.Content.ReadFromJsonAsync<JsonElement>();
-        var expectedSynId = startJson.GetProperty("synthesisId").GetGuid();
+        ovResp.EnsureSuccessStatusCode();
 
-        var (status2, doneSynId, _) =
-            await SseTestHelpers.WaitForDoneAfterAsync(client, jobId, checkpoint, TimeSpan.FromSeconds(60));
+        // 5) Run synthesis so overrides take effect
+        await synthesisService.RunExistingSynthesisAsync(
+            synthesisId: synthesisId,
+            progress: null,
+            ct: CancellationToken.None);
 
-        Assert.Equal("Completed", status2);
-        Assert.True(doneSynId.HasValue);
-        Assert.Equal(expectedSynId, doneSynId.Value);
-
-        // fetch synthesis and ensure none of the sections contain the excluded [lrn:...]
-        var synResp = await client.GetAsync($"/api/research/syntheses/{doneSynId.Value}");
+        // 6) fetch synthesis and ensure none of the sections contain the excluded citation
+        var synResp = await client.GetAsync($"/api/research/syntheses/{synthesisId}");
         synResp.EnsureSuccessStatusCode();
 
         var synJson = await synResp.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("Completed", synJson.GetProperty("status").GetString());
+
         var sections = synJson.GetProperty("sections").EnumerateArray().ToList();
         Assert.True(sections.Count > 0);
 
@@ -71,34 +81,5 @@ public sealed class VectorSearch_RespectsOverrides_Tests : IntegrationTestBase
             var body = s.GetProperty("contentMarkdown").GetString() ?? "";
             Assert.DoesNotContain(needle, body);
         }
-    }
-
-    private static async Task<List<JsonElement>> ListLearningsAsync(HttpClient client, Guid jobId)
-    {
-        var resp = await client.GetAsync($"/api/research/jobs/{jobId}/learnings?skip=0&take=200");
-        resp.EnsureSuccessStatusCode();
-
-        var json = await resp.Content.ReadFromJsonAsync<JsonElement>();
-        return json.GetProperty("learnings").EnumerateArray().ToList();
-    }
-
-    private static async Task<Guid> CreateJobAsync(HttpClient client, string query)
-    {
-        var createReq = new
-        {
-            query,
-            clarifications = Array.Empty<object>(),
-            breadth = 2,
-            depth = 2,
-            language = "en",
-            region = (string?)null,
-            webhook = (object?)null
-        };
-
-        var resp = await client.PostAsJsonAsync("/api/research/jobs", createReq);
-        resp.EnsureSuccessStatusCode();
-
-        var json = await resp.Content.ReadFromJsonAsync<JsonElement>();
-        return json.GetProperty("jobId").GetGuid();
     }
 }

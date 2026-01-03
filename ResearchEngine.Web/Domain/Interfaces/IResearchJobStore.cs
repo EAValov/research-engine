@@ -23,11 +23,12 @@ public interface IResearchJobStore
 
     Task<Source> UpsertSourceAsync(
         Guid jobId,
-        string url,
+        string reference,
         string content,
         string? title,
         string? language,
         string? region,
+        SourceKind kind,
         CancellationToken ct = default);
 
     Task<Synthesis> CreateSynthesisAsync(
@@ -81,7 +82,6 @@ public interface IResearchJobStore
         IEnumerable<SynthesisLearningOverrideDto> overrides,
         CancellationToken ct = default);
 
-    // Override snapshot used by retrieval
     Task<SynthesisOverridesSnapshot> GetSynthesisOverridesAsync(
         Guid synthesisId,
         CancellationToken ct = default);
@@ -94,4 +94,34 @@ public interface IResearchJobStore
         float minImportance,
         int topK,
         CancellationToken ct = default);
+
+    Task<IReadOnlyList<LearningGroup>> VectorSearchLearningGroupsAsync(
+        Vector queryVector,
+        Guid jobId,
+        int topK,
+        CancellationToken ct = default);
+    
+    Task<LearningGroup> CreateLearningGroupAsync(
+        Guid jobId,
+        string canonicalText,
+        float canonicalImportanceScore,
+        ReadOnlyMemory<float> embeddingVector,
+        CancellationToken ct = default);
+
+    Task<int> UpdateLearningGroupCanonicalAsync(
+        Guid groupId,
+        string canonicalText,
+        float canonicalImportanceScore,
+        ReadOnlyMemory<float> embeddingVector,
+        CancellationToken ct = default);
+
+    Task<int> RecomputeLearningGroupStatsAsync(Guid groupId, CancellationToken ct = default);
+
+    Task<IReadOnlyList<LearningGroupHit>> VectorSearchLearningGroupsWithDistanceAsync(
+        Vector queryVector,
+        Guid jobId,
+        int topK,
+        CancellationToken ct = default);
+
+    Task<Source> GetOrCreateUserSourceAsync(Guid jobId, CancellationToken ct = default);
 }

@@ -5,25 +5,26 @@ namespace ResearchEngine.Domain;
 public sealed class Learning
 {
     public Guid Id { get; set; }
-
     public Guid JobId { get; set; }
     public ResearchJob Job { get; set; } = null!;
-
     public Guid SourceId { get; set; }
     public Source Source { get; set; } = null!;
 
-    // Optional grouping key you already used
+    public Guid LearningGroupId { get; set; }
+    public LearningGroup Group { get; set; } = null!;
+
+    /// <summary>
+    /// True for user-added learnings. We never delete these automatically when source content changes.
+    /// </summary>
+    public bool IsUserProvided { get; set; }
+
+    // Optional grouping key
     public string QueryHash { get; set; } = null!;
 
     public string Text { get; set; } = null!;
-
-    // The score assigned by the model during extraction (keep your current meaning)
     public float ImportanceScore { get; set; }
-
-    // Evidence/provenance for auditability
     public string EvidenceText { get; set; } = null!;
-
-    public DateTimeOffset CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 
     public LearningEmbedding Embedding { get; set; } = null!;
 }
@@ -36,14 +37,13 @@ public sealed class LearningEmbedding
     public Learning Learning { get; set; } = null!;
 
     public Vector Vector { get; set; } = null!;
-
     public DateTimeOffset CreatedAt { get; set; }
 }
 
 public sealed record LearningListItemDto(
     Guid LearningId,
     Guid SourceId,
-    string SourceUrl,
+    string SourceReference,
     float ImportanceScore,
     DateTimeOffset CreatedAt,
     string Text);

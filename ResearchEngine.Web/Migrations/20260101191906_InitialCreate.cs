@@ -57,6 +57,30 @@ namespace ResearchEngine.Web.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "learning_groups",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    JobId = table.Column<Guid>(type: "uuid", nullable: false),
+                    CanonicalText = table.Column<string>(type: "text", nullable: false),
+                    CanonicalImportanceScore = table.Column<float>(type: "real", nullable: false),
+                    MemberCount = table.Column<int>(type: "integer", nullable: false),
+                    DistinctSourceCount = table.Column<int>(type: "integer", nullable: false),
+                    CreatedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false, defaultValueSql: "now() at time zone 'utc'"),
+                    UpdatedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false, defaultValueSql: "now() at time zone 'utc'")
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_learning_groups", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_learning_groups_research_jobs_JobId",
+                        column: x => x.JobId,
+                        principalTable: "research_jobs",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "research_events",
                 columns: table => new
                 {
@@ -85,10 +109,11 @@ namespace ResearchEngine.Web.Migrations
                 {
                     Id = table.Column<Guid>(type: "uuid", nullable: false),
                     JobId = table.Column<Guid>(type: "uuid", nullable: false),
-                    Url = table.Column<string>(type: "character varying(2000)", maxLength: 2000, nullable: false),
+                    Reference = table.Column<string>(type: "character varying(4000)", maxLength: 4000, nullable: false),
                     ContentHash = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: false),
                     Title = table.Column<string>(type: "character varying(1000)", maxLength: 1000, nullable: true),
                     Content = table.Column<string>(type: "text", nullable: false),
+                    Kind = table.Column<int>(type: "integer", nullable: false),
                     Language = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: true),
                     Region = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true),
                     CreatedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false, defaultValueSql: "now() at time zone 'utc'")
@@ -136,12 +161,34 @@ namespace ResearchEngine.Web.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "learning_group_embeddings",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    LearningGroupId = table.Column<Guid>(type: "uuid", nullable: false),
+                    Vector = table.Column<Vector>(type: "vector(1024)", nullable: false),
+                    CreatedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false, defaultValueSql: "now() at time zone 'utc'")
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_learning_group_embeddings", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_learning_group_embeddings_learning_groups_LearningGroupId",
+                        column: x => x.LearningGroupId,
+                        principalTable: "learning_groups",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "learnings",
                 columns: table => new
                 {
                     Id = table.Column<Guid>(type: "uuid", nullable: false),
                     JobId = table.Column<Guid>(type: "uuid", nullable: false),
                     SourceId = table.Column<Guid>(type: "uuid", nullable: false),
+                    LearningGroupId = table.Column<Guid>(type: "uuid", nullable: false),
+                    IsUserProvided = table.Column<bool>(type: "boolean", nullable: false),
                     QueryHash = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: false),
                     Text = table.Column<string>(type: "text", nullable: false),
                     ImportanceScore = table.Column<float>(type: "real", nullable: false),
@@ -151,6 +198,12 @@ namespace ResearchEngine.Web.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_learnings", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_learnings_learning_groups_LearningGroupId",
+                        column: x => x.LearningGroupId,
+                        principalTable: "learning_groups",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
                     table.ForeignKey(
                         name: "FK_learnings_research_jobs_JobId",
                         column: x => x.JobId,
@@ -288,9 +341,38 @@ namespace ResearchEngine.Web.Migrations
                 .Annotation("Npgsql:StorageParameter:lists", 100);
 
             migrationBuilder.CreateIndex(
+                name: "IX_learning_group_embeddings_LearningGroupId",
+                table: "learning_group_embeddings",
+                column: "LearningGroupId",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_learning_group_embeddings_Vector",
+                table: "learning_group_embeddings",
+                column: "Vector")
+                .Annotation("Npgsql:IndexMethod", "ivfflat")
+                .Annotation("Npgsql:IndexOperators", new[] { "vector_cosine_ops" })
+                .Annotation("Npgsql:StorageParameter:lists", 100);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_learning_groups_JobId_UpdatedAt",
+                table: "learning_groups",
+                columns: new[] { "JobId", "UpdatedAt" });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_learnings_JobId_LearningGroupId",
+                table: "learnings",
+                columns: new[] { "JobId", "LearningGroupId" });
+
+            migrationBuilder.CreateIndex(
                 name: "IX_learnings_JobId_SourceId",
                 table: "learnings",
                 columns: new[] { "JobId", "SourceId" });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_learnings_LearningGroupId",
+                table: "learnings",
+                column: "LearningGroupId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_learnings_SourceId_QueryHash",
@@ -308,9 +390,9 @@ namespace ResearchEngine.Web.Migrations
                 column: "ContentHash");
 
             migrationBuilder.CreateIndex(
-                name: "IX_sources_JobId_Url",
+                name: "IX_sources_JobId_Reference",
                 table: "sources",
-                columns: new[] { "JobId", "Url" },
+                columns: new[] { "JobId", "Reference" },
                 unique: true);
 
             migrationBuilder.CreateIndex(
@@ -373,6 +455,9 @@ namespace ResearchEngine.Web.Migrations
                 name: "learning_embeddings");
 
             migrationBuilder.DropTable(
+                name: "learning_group_embeddings");
+
+            migrationBuilder.DropTable(
                 name: "research_events");
 
             migrationBuilder.DropTable(
@@ -389,6 +474,9 @@ namespace ResearchEngine.Web.Migrations
 
             migrationBuilder.DropTable(
                 name: "syntheses");
+
+            migrationBuilder.DropTable(
+                name: "learning_groups");
 
             migrationBuilder.DropTable(
                 name: "sources");

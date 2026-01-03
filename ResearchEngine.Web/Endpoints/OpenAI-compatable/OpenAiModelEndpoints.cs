@@ -960,7 +960,7 @@ public static class OpenAiModelEndpoints
             if (!learningIndex.TryGetValue(lrnId, out var item))
                 continue;
 
-            var url = NormalizeUrl(item.SourceUrl);
+            var url = NormalizeUrl(item.SourceReference);
             if (string.IsNullOrWhiteSpace(url))
                 url = "about:blank";
 
@@ -1015,7 +1015,7 @@ public static class OpenAiModelEndpoints
             if (!learningIndex.TryGetValue(lrnId, out var item))
                 return m.Value;
 
-            var url = NormalizeUrl(item.SourceUrl);
+            var url = NormalizeUrl(item.SourceReference);
             if (string.IsNullOrWhiteSpace(url))
                 url = "about:blank";
 

@@ -69,35 +69,4 @@ public sealed class Synthesis_Lineage_Tests : IntegrationTestBase
         Assert.Equal(doneSyn2Id.Value, latest2.GetProperty("id").GetGuid());
         Assert.Equal("Completed", latest2.GetProperty("status").GetString());
     }
-
-    private static async Task<JsonElement> GetLatestSynthesisAsync(HttpClient client, Guid jobId)
-    {
-        var resp = await client.GetAsync($"/api/research/jobs/{jobId}/syntheses/latest");
-        resp.EnsureSuccessStatusCode();
-
-        var json = await resp.Content.ReadFromJsonAsync<JsonElement>();
-        var synthesis = json.GetProperty("synthesis");
-        Assert.Equal(JsonValueKind.Object, synthesis.ValueKind);
-        return synthesis;
-    }
-
-    private static async Task<Guid> CreateJobAsync(HttpClient client, string query)
-    {
-        var createReq = new
-        {
-            query,
-            clarifications = Array.Empty<object>(),
-            breadth = 2,
-            depth = 2,
-            language = "en",
-            region = (string?)null,
-            webhook = (object?)null
-        };
-
-        var resp = await client.PostAsJsonAsync("/api/research/jobs", createReq);
-        resp.EnsureSuccessStatusCode();
-
-        var json = await resp.Content.ReadFromJsonAsync<JsonElement>();
-        return json.GetProperty("jobId").GetGuid();
-    }
 }

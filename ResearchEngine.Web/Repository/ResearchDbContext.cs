@@ -19,6 +19,8 @@ public sealed class ResearchDbContext : DbContext
     public DbSet<SynthesisSection> SynthesisSections => Set<SynthesisSection>();
     public DbSet<SynthesisSourceOverride> SynthesisSourceOverrides => Set<SynthesisSourceOverride>();
     public DbSet<SynthesisLearningOverride> SynthesisLearningOverrides => Set<SynthesisLearningOverride>();
+    public DbSet<LearningGroup> LearningGroups => Set<LearningGroup>();
+    public DbSet<LearningGroupEmbedding> LearningGroupEmbeddings => Set<LearningGroupEmbedding>();
 
     public ResearchDbContext(
         DbContextOptions<ResearchDbContext> options,
@@ -43,6 +45,8 @@ public sealed class ResearchDbContext : DbContext
         ConfigureSynthesisSection(modelBuilder);
         ConfigureSynthesisSourceOverride(modelBuilder);
         ConfigureSynthesisLearningOverride(modelBuilder);
+        ConfigureLearningGroup(modelBuilder);
+        ConfigureLearningGroupEmbedding(modelBuilder);
     }
 
     private static void ConfigureResearchJob(ModelBuilder modelBuilder)
@@ -141,9 +145,9 @@ public sealed class ResearchDbContext : DbContext
         entity.ToTable("sources");
         entity.HasKey(s => s.Id);
 
-        entity.Property(s => s.Url)
+        entity.Property(s => s.Reference)
             .IsRequired()
-            .HasMaxLength(2000);
+            .HasMaxLength(4000);
 
         entity.Property(s => s.ContentHash)
             .IsRequired()
@@ -164,8 +168,8 @@ public sealed class ResearchDbContext : DbContext
         entity.Property(s => s.CreatedAt)
             .HasDefaultValueSql("now() at time zone 'utc'");
 
-        // Dedupe: the same URL should not be inserted twice for the same job.
-        entity.HasIndex(s => new { s.JobId, s.Url }).IsUnique();
+        // Dedupe: the same ref should not be inserted twice for the same job.
+        entity.HasIndex(s => new { s.JobId, s.Reference }).IsUnique();
 
         // Useful for caching/dedupe by content.
         entity.HasIndex(s => s.ContentHash);
@@ -195,6 +199,9 @@ public sealed class ResearchDbContext : DbContext
         entity.Property(l => l.Text)
             .IsRequired();
 
+        entity.Property(l => l.IsUserProvided)
+            .IsRequired();
+
         entity.Property(l => l.ImportanceScore)
             .HasColumnType("real")
             .IsRequired();
@@ -205,9 +212,8 @@ public sealed class ResearchDbContext : DbContext
         entity.Property(l => l.CreatedAt)
             .HasDefaultValueSql("now() at time zone 'utc'");
 
-        // Relationships
         entity.HasOne(l => l.Job)
-            .WithMany() // learnings reachable via Sources; not directly via Job collection
+            .WithMany()
             .HasForeignKey(l => l.JobId)
             .OnDelete(DeleteBehavior.Cascade);
 
@@ -216,9 +222,14 @@ public sealed class ResearchDbContext : DbContext
             .HasForeignKey(l => l.SourceId)
             .OnDelete(DeleteBehavior.Cascade);
 
-        // Indexing
+        entity.HasOne(l => l.Group)
+            .WithMany(g => g.Learnings)
+            .HasForeignKey(l => l.LearningGroupId)
+            .OnDelete(DeleteBehavior.Restrict); // avoid accidental mass deletions
+
         entity.HasIndex(l => new { l.JobId, l.SourceId });
         entity.HasIndex(l => new { l.SourceId, l.QueryHash });
+        entity.HasIndex(l => new { l.JobId, l.LearningGroupId });
     }
 
     private void ConfigureLearningEmbedding(ModelBuilder modelBuilder)
@@ -393,5 +404,71 @@ public sealed class ResearchDbContext : DbContext
             .WithMany() // no nav required
             .HasForeignKey(x => x.LearningId)
             .OnDelete(DeleteBehavior.Cascade);
+    }
+
+    private static void ConfigureLearningGroup(ModelBuilder modelBuilder)
+    {
+        var entity = modelBuilder.Entity<LearningGroup>();
+
+        entity.ToTable("learning_groups");
+        entity.HasKey(g => g.Id);
+
+        entity.Property(g => g.CanonicalText)
+            .IsRequired();
+
+        entity.Property(g => g.CanonicalImportanceScore)
+            .HasColumnType("real")
+            .IsRequired();
+
+        entity.Property(g => g.MemberCount)
+            .IsRequired();
+
+        entity.Property(g => g.DistinctSourceCount)
+            .IsRequired();
+
+        entity.Property(g => g.CreatedAt)
+            .HasDefaultValueSql("now() at time zone 'utc'");
+
+        entity.Property(g => g.UpdatedAt)
+            .HasDefaultValueSql("now() at time zone 'utc'");
+
+        entity.HasOne(g => g.Job)
+            .WithMany()
+            .HasForeignKey(g => g.JobId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        entity.HasMany(g => g.Learnings)
+            .WithOne(l => l.Group)
+            .HasForeignKey(l => l.LearningGroupId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        entity.HasIndex(g => new { g.JobId, g.UpdatedAt });
+    }
+    
+    private void ConfigureLearningGroupEmbedding(ModelBuilder modelBuilder)
+    {
+        var entity = modelBuilder.Entity<LearningGroupEmbedding>();
+
+        entity.ToTable("learning_group_embeddings");
+        entity.HasKey(e => e.Id);
+
+        entity.Property(e => e.Vector)
+            .IsRequired()
+            .HasColumnType($"vector({_embeddingDimensions})");
+
+        entity.Property(e => e.CreatedAt)
+            .HasDefaultValueSql("now() at time zone 'utc'");
+
+        entity.HasOne(e => e.Group)
+            .WithOne(g => g.Embedding)
+            .HasForeignKey<LearningGroupEmbedding>(e => e.LearningGroupId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        entity.HasIndex(i => i.Vector)
+            .HasMethod("ivfflat")
+            .HasOperators("vector_cosine_ops")
+            .HasStorageParameter("lists", 100);
+
+        entity.HasIndex(e => e.LearningGroupId).IsUnique();
     }
 }

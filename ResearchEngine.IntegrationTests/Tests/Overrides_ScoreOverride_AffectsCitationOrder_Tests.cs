@@ -1,5 +1,7 @@
 using System.Net.Http.Json;
 using System.Text.Json;
+using Microsoft.Extensions.DependencyInjection;
+using ResearchEngine.Domain;
 using ResearchEngine.IntegrationTests.Helpers;
 using ResearchEngine.IntegrationTests.Infrastructure;
 
@@ -49,58 +51,61 @@ public sealed class Overrides_ScoreOverride_AffectsCitationOrder_Tests : Integra
         Assert.NotEqual(Guid.Empty, baselineId);
         Assert.NotEqual(Guid.Empty, boostedId);
 
-        // 3) checkpoint
-        var afterEventId = await SseTestHelpers.GetMaxEventIdAsync(client, jobId);
+        // 3) Create a new synthesis row WITHOUT running via the HTTP endpoint (deterministic)
+        using var scope = Factory.Services.CreateScope();
+        var store = scope.ServiceProvider.GetRequiredService<IResearchJobStore>();
+        var synthesisService = scope.ServiceProvider.GetRequiredService<IReportSynthesisService>();
 
-        // 4) start regeneration with scoreOverride boosting the second learning
-        var regenReq = new
+        var parent = await store.GetLatestSynthesisAsync(jobId, CancellationToken.None);
+        var parentId = parent?.Id;
+
+        var synthesisId = await synthesisService.StartSynthesisAsync(
+            jobId: jobId,
+            parentSynthesisId: parentId,
+            outline: null,
+            instructions: "Use retrieved learnings and include citations.",
+            ct: CancellationToken.None);
+
+        Assert.NotEqual(Guid.Empty, synthesisId);
+
+        // 4) Apply scoreOverride to THIS synthesis BEFORE running it
+        var learningOverrides = new object[]
         {
-            parentSynthesisId = (Guid?)null,
-            useLatestAsParent = true,
-            outline = (string?)null,
-            instructions = "Use retrieved learnings and include citations.",
-            sourceOverrides = (object?)null,
-            learningOverrides = new[]
-            {
-                new { learningId = boostedId, scoreOverride = 1.0f, excluded = (bool?)null, pinned = (bool?)null }
-            }
+            new { learningId = boostedId, scoreOverride = 1.0f, excluded = (bool?)null, pinned = (bool?)null }
         };
 
-        var regenResp = await client.PostAsJsonAsync($"/api/research/jobs/{jobId}/syntheses", regenReq);
-        regenResp.EnsureSuccessStatusCode();
+        var ovResp = await client.PutAsJsonAsync(
+            $"/api/research/syntheses/{synthesisId}/overrides/learnings",
+            learningOverrides);
 
-        var regenJson = await regenResp.Content.ReadFromJsonAsync<JsonElement>();
-        var expectedSynthesisId = regenJson.GetProperty("synthesisId").GetGuid();
+        ovResp.EnsureSuccessStatusCode();
 
-        // 5) wait done after checkpoint
-        var (synStatus, doneSynId, _) = await SseTestHelpers.WaitForDoneAfterAsync(
-            client,
-            jobId,
-            afterEventId,
-            TimeSpan.FromSeconds(60));
-
-        Assert.Equal("Completed", synStatus);
-        Assert.True(doneSynId.HasValue);
-        Assert.Equal(expectedSynthesisId, doneSynId.Value);
+        // 5) Now run the synthesis (overrides will be observed during retrieval)
+        await synthesisService.RunExistingSynthesisAsync(
+            synthesisId: synthesisId,
+            progress: null,
+            ct: CancellationToken.None);
 
         // 6) pull synthesis and compare citation positions
-        var synResp = await client.GetAsync($"/api/research/syntheses/{expectedSynthesisId}");
+        var synResp = await client.GetAsync($"/api/research/syntheses/{synthesisId}");
         synResp.EnsureSuccessStatusCode();
 
         var synDoc = await synResp.Content.ReadFromJsonAsync<JsonElement>();
-  
+
+        Assert.Equal("Completed", synDoc.GetProperty("status").GetString());
+
         var sections = synDoc.GetProperty("sections").EnumerateArray().ToList();
         Assert.True(sections.Count > 0);
 
-        var allMarkdown = string.Join("\n\n", sections.Select(s => s.GetProperty("contentMarkdown").GetString() ?? ""));
+        var allMarkdown = string.Join(
+            "\n\n",
+            sections.Select(s => s.GetProperty("contentMarkdown").GetString() ?? ""));
 
         var boostedCitation  = $"[lrn:{boostedId:N}]";
         var baselineCitation = $"[lrn:{baselineId:N}]";
 
         Assert.Contains(boostedCitation, allMarkdown);
 
-        // We only enforce relative order if baseline is present in the final text.
-        // If baseline isn't used, that's acceptable.
         var boostedIdx = allMarkdown.IndexOf(boostedCitation, StringComparison.Ordinal);
         Assert.True(boostedIdx >= 0);
 

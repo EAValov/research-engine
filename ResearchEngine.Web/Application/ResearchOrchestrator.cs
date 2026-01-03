@@ -251,7 +251,8 @@ public sealed class ResearchOrchestrator(
         // 2) Upsert Source
         var source = await jobStore.UpsertSourceAsync(
             jobId: job.Id,
-            url: url,
+            reference: url,
+            kind: SourceKind.Web,
             content: content,
             title: null,
             language: job.TargetLanguage,
@@ -274,7 +275,7 @@ public sealed class ResearchOrchestrator(
                 sourceId: source.Id,
                 query: job.Query,
                 clarificationsText: clarificationsText,
-                sourceUrl: source.Url,
+                sourceUrl: source.Reference,
                 sourceContent: source.Content,
                 targetLanguage: job.TargetLanguage,
                 computeEmbeddings: true,

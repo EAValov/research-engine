@@ -4,7 +4,8 @@ using Microsoft.AspNetCore.Mvc;
 using ResearchEngine.Domain;
 
 namespace ResearchEngine.Web;
-public static class ResearchJobsApi
+
+public static partial class ResearchJobsApi
 {
     public static void MapResearchJobsApi(this WebApplication app)
     {
@@ -16,12 +17,17 @@ public static class ResearchJobsApi
         api.MapGet("/jobs/{jobId:guid}", GetJobAsync);
 
         api.MapGet("/jobs/{jobId:guid}/sources", ListSourcesAsync);
+
         api.MapGet("/jobs/{jobId:guid}/learnings", ListLearningsAsync);
+        api.MapPost("/jobs/{jobId:guid}/learnings", AddLearningAsync);
 
         api.MapPost("/jobs/{jobId:guid}/syntheses", StartSynthesisAsync);
         api.MapGet("/jobs/{jobId:guid}/syntheses/latest", GetLatestSynthesisAsync);
 
         api.MapGet("/syntheses/{synthesisId:guid}", GetSynthesisAsync);
+
+        api.MapPut("/syntheses/{synthesisId:guid}/overrides/sources", UpsertSynthesisSourceOverridesAsync);
+        api.MapPut("/syntheses/{synthesisId:guid}/overrides/learnings", UpsertSynthesisLearningOverridesAsync);
 
         api.MapGet("/jobs/{jobId:guid}/events", ListEventsAsync);
         api.MapGet("/jobs/{jobId:guid}/events/stream", StreamEventsAsync);
@@ -54,7 +60,7 @@ public static class ResearchJobsApi
         if (string.IsNullOrEmpty(language))
             (language, region) = await protocolService.AutoSelectLanguageRegionAsync(request.Query, clarifications, ct);
 
-        // Create job row + start run in background (your new orchestrator contract)
+        // Create job row + start run
         var jobId = await orchestrator.StartJobAsync(
             request.Query,
             clarifications,
@@ -72,6 +78,7 @@ public static class ResearchJobsApi
                 self = $"/api/research/jobs/{jobId}",
                 sources = $"/api/research/jobs/{jobId}/sources",
                 learnings = $"/api/research/jobs/{jobId}/learnings",
+                addLearning = $"/api/research/jobs/{jobId}/learnings",
                 startSynthesis = $"/api/research/jobs/{jobId}/syntheses",
                 latestSynthesis = $"/api/research/jobs/{jobId}/syntheses/latest",
                 events = $"/api/research/jobs/{jobId}/events",
@@ -108,7 +115,6 @@ public static class ResearchJobsApi
             updatedAt = job.UpdatedAt,
             clarifications = job.Clarifications.Select(c => new { c.Question, c.Answer }),
 
-            // synthesis info instead of job.ReportMarkdown
             latestSynthesis = latestSynthesis is null ? null : new
             {
                 id = latestSynthesis.Id,
@@ -141,7 +147,7 @@ public static class ResearchJobsApi
             sources = sources.Select(s => new
             {
                 sourceId = s.SourceId,
-                url = s.Url,
+                reference = s.Reference, // was url
                 title = s.Title,
                 language = s.Language,
                 region = s.Region,
@@ -153,7 +159,7 @@ public static class ResearchJobsApi
         return Results.Ok(response);
     }
 
-   private static async Task<IResult> ListLearningsAsync(
+    private static async Task<IResult> ListLearningsAsync(
         Guid jobId,
         [AsParameters] ListLearningsRequest req,
         IResearchJobStore jobStore,
@@ -179,7 +185,7 @@ public static class ResearchJobsApi
             {
                 learningId = l.LearningId,
                 sourceId = l.SourceId,
-                sourceUrl = l.SourceUrl,
+                sourceReference = l.SourceReference,
                 importanceScore = l.ImportanceScore,
                 createdAt = l.CreatedAt,
                 text = l.Text
@@ -187,6 +193,51 @@ public static class ResearchJobsApi
         };
 
         return Results.Ok(response);
+    }
+
+    private static async Task<IResult> AddLearningAsync(
+        Guid jobId,
+        [FromBody] AddLearningRequest request,
+        IResearchJobStore jobStore,
+        ILearningIntelService learningIntelService,
+        CancellationToken ct)
+    {
+        var job = await jobStore.GetJobAsync(jobId, ct);
+        if (job is null)
+            return Results.NotFound();
+
+        if (request is null || string.IsNullOrWhiteSpace(request.Text))
+            return Results.BadRequest(new { error = "Text is required." });
+
+        var score = request.ImportanceScore ?? 1.0f;
+        if (float.IsNaN(score) || score <= 0) score = 1.0f;
+        score = Math.Clamp(score, 0.0f, 1.0f);
+
+        // Adds learning + creates/uses source + computes embedding + assigns group + persists
+        var learning = await learningIntelService.AddUserLearningAsync(
+            jobId: jobId,
+            text: request.Text,
+            importanceScore: score,
+            reference: request.Reference,
+            evidenceText: request.EvidenceText,
+            language: request.Language,
+            region: request.Region,
+            ct: ct);
+
+        // Respond with created object
+        return Results.Ok(new
+        {
+            jobId,
+            learning = new
+            {
+                learningId = learning.Id,
+                sourceId = learning.SourceId,
+                learningGroupId = learning.LearningGroupId,
+                importanceScore = learning.ImportanceScore,
+                createdAt = learning.CreatedAt,
+                text = learning.Text
+            }
+        });
     }
 
     // ---------------- synthesis ----------------
@@ -212,7 +263,7 @@ public static class ResearchJobsApi
             parentId = latest?.Id;
         }
 
-        // Create synthesis row NOW (so client can watch events / status)
+        // Create synthesis row NOW
         var synthesis = await jobStore.CreateSynthesisAsync(
             jobId: jobId,
             parentSynthesisId: parentId,
@@ -220,18 +271,7 @@ public static class ResearchJobsApi
             instructions: request.Instructions,
             ct: ct);
 
-        // Persist overrides (optional)
-        if (request.SourceOverrides is { Count: > 0 })
-        {
-            await jobStore.AddOrUpdateSynthesisSourceOverridesAsync(
-                synthesis.Id, request.SourceOverrides, ct);
-        }
-
-        if (request.LearningOverrides is { Count: > 0 })
-        {
-            await jobStore.AddOrUpdateSynthesisLearningOverridesAsync(
-                synthesis.Id, request.LearningOverrides, ct);
-        }
+        // NOTE: overrides moved to separate endpoints
 
         // Fire-and-forget synthesis run
         _ = Task.Run(async () =>
@@ -240,7 +280,7 @@ public static class ResearchJobsApi
             {
                 await synthesisService.RunExistingSynthesisAsync(
                     synthesisId: synthesis.Id,
-                    progress: null, // start from scratch
+                    progress: null,
                     ct: CancellationToken.None);
             }
             catch (Exception ex)
@@ -259,12 +299,62 @@ public static class ResearchJobsApi
             {
                 self = $"/api/research/syntheses/{synthesis.Id}",
                 latest = $"/api/research/jobs/{jobId}/syntheses/latest",
+                overridesSources = $"/api/research/syntheses/{synthesis.Id}/overrides/sources",
+                overridesLearnings = $"/api/research/syntheses/{synthesis.Id}/overrides/learnings",
                 events = $"/api/research/jobs/{jobId}/events",
                 stream = $"/api/research/jobs/{jobId}/events/stream"
             }
         };
 
         return Results.Ok(response);
+    }
+
+    // ---------------- overrides (separate endpoints) ----------------
+
+    private static async Task<IResult> UpsertSynthesisSourceOverridesAsync(
+        Guid synthesisId,
+        [FromBody] IReadOnlyList<SynthesisSourceOverrideDto> overrides,
+        IResearchJobStore jobStore,
+        CancellationToken ct)
+    {
+        var syn = await jobStore.GetSynthesisAsync(synthesisId, ct);
+        if (syn is null)
+            return Results.NotFound();
+
+        var list = overrides?.ToList() ?? new List<SynthesisSourceOverrideDto>();
+        if (list.Count == 0)
+            return Results.Ok(new { synthesisId, updated = 0 });
+
+        await jobStore.AddOrUpdateSynthesisSourceOverridesAsync(synthesisId, list, ct);
+
+        return Results.Ok(new
+        {
+            synthesisId,
+            updated = list.Count
+        });
+    }
+
+    private static async Task<IResult> UpsertSynthesisLearningOverridesAsync(
+        Guid synthesisId,
+        [FromBody] IReadOnlyList<SynthesisLearningOverrideDto> overrides,
+        IResearchJobStore jobStore,
+        CancellationToken ct)
+    {
+        var syn = await jobStore.GetSynthesisAsync(synthesisId, ct);
+        if (syn is null)
+            return Results.NotFound();
+
+        var list = overrides?.ToList() ?? new List<SynthesisLearningOverrideDto>();
+        if (list.Count == 0)
+            return Results.Ok(new { synthesisId, updated = 0 });
+
+        await jobStore.AddOrUpdateSynthesisLearningOverridesAsync(synthesisId, list, ct);
+
+        return Results.Ok(new
+        {
+            synthesisId,
+            updated = list.Count
+        });
     }
 
     private static async Task<IResult> GetLatestSynthesisAsync(
@@ -280,7 +370,6 @@ public static class ResearchJobsApi
         if (syn is null)
             return Results.Ok(new { jobId, synthesis = (object?)null });
 
-        // Defensive: keep stable order
         var sections = (syn.Sections ?? Array.Empty<SynthesisSection>())
             .OrderBy(s => s.Index)
             .Select(s => new
@@ -404,7 +493,6 @@ public static class ResearchJobsApi
         using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(ct, httpContext.RequestAborted);
         var token = linkedCts.Token;
 
-        // highest event id we've actually written to the client
         var lastSentId = lastId;
 
         static bool IsTerminal(ResearchEventStage stage)
@@ -412,7 +500,6 @@ public static class ResearchJobsApi
 
         async Task<bool> TryWriteEventAsync(ResearchEvent ev, CancellationToken t)
         {
-            // Dedupe between replay and live
             if (ev.Id <= Volatile.Read(ref lastSentId))
                 return false;
 
@@ -423,7 +510,6 @@ public static class ResearchJobsApi
 
         async Task WriteDoneNowAsync(ResearchEvent terminalEvent, CancellationToken t)
         {
-            // Use numeric id for maximum SSE client compatibility
             var doneId = Volatile.Read(ref lastSentId) + 1;
 
             await WriteSseAsync(
@@ -435,21 +521,18 @@ public static class ResearchJobsApi
                 {
                     jobId,
                     status = terminalEvent.Stage.ToString(),
-                    // Requires ResearchEvent.SynthesisId? to exist (nullable)
                     synthesisId = terminalEvent.SynthesisId
                 },
                 token: t);
 
-            // After "done", we end the stream deterministically.
             linkedCts.Cancel();
         }
 
-        // 1) Subscribe FIRST to close race window
+        // Subscribe FIRST
         await using var subscription = await eventBus.SubscribeAsync(
             jobId,
             async (ev, t) =>
             {
-                // If request already shutting down, ignore.
                 if (t.IsCancellationRequested)
                     return;
 
@@ -460,7 +543,7 @@ public static class ResearchJobsApi
             },
             token);
 
-        // 2) Replay stored events AFTER subscribing
+        // Replay stored events AFTER subscribing
         var storedEvents = await jobStore.GetEventsAsync(jobId, token);
 
         foreach (var e in storedEvents.Where(e => e.Id > lastId).OrderBy(e => e.Id))
@@ -477,7 +560,6 @@ public static class ResearchJobsApi
             }
         }
 
-        // 3) Keep connection open until completion/disconnect
         try
         {
             while (!token.IsCancellationRequested)
@@ -485,7 +567,7 @@ public static class ResearchJobsApi
         }
         catch (OperationCanceledException)
         {
-            // expected (completion or client disconnect)
+            // expected
         }
     }
 

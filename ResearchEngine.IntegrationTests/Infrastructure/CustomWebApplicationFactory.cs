@@ -15,10 +15,12 @@ namespace ResearchEngine.IntegrationTests.Infrastructure;
 public sealed class CustomWebApplicationFactory : WebApplicationFactory<Program>
 {
     private readonly ContainersFixture _containers;
+    private readonly string _dbConnectionString;
 
-    public CustomWebApplicationFactory(ContainersFixture containers)
+    public CustomWebApplicationFactory(ContainersFixture containers, string dbConnectionString)
     {
         _containers = containers;
+        _dbConnectionString = dbConnectionString;
     }
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
@@ -33,7 +35,7 @@ public sealed class CustomWebApplicationFactory : WebApplicationFactory<Program>
 
             cfg.AddInMemoryCollection(new Dictionary<string, string?>
             {
-                ["ConnectionStrings:ResearchDb"] = _containers.Postgres.GetConnectionString(),
+                ["ConnectionStrings:ResearchDb"] = _dbConnectionString,
                 ["RedisEventBusOptions:ConnectionString"] = redisConn,
 
                 ["EmbeddingConfig:Endpoint"] = "http://fake",
@@ -45,7 +47,7 @@ public sealed class CustomWebApplicationFactory : WebApplicationFactory<Program>
 
         builder.ConfigureServices(services =>
         {
-            // Replace external dependencies with fakes
+            // fakes...
             services.RemoveAll<ISearchClient>();
             services.RemoveAll<ICrawlClient>();
             services.RemoveAll<IChatModel>();
@@ -57,12 +59,11 @@ public sealed class CustomWebApplicationFactory : WebApplicationFactory<Program>
             services.AddSingleton<IEmbeddingModel, FakeEmbeddingModel>();
             services.AddSingleton<ITokenizer, FakeTokenizer>();
 
-            // allows us to override the IChatModel impelmentation
             services.AddSingleton<FakeChatModel>();
-            services.AddSingleton<IChatModel>(sp => sp.GetRequiredService<FakeChatModel>());        
+            services.AddSingleton<IChatModel>(sp => sp.GetRequiredService<FakeChatModel>());
 
+            // Redis
             services.RemoveAll<IConnectionMultiplexer>();
-
             var redisHost = _containers.Redis.Hostname;
             var redisPort = _containers.Redis.GetMappedPublicPort(6379);
 
@@ -75,40 +76,32 @@ public sealed class CustomWebApplicationFactory : WebApplicationFactory<Program>
                     ConnectTimeout = 10000,
                     SyncTimeout = 15000,
                     KeepAlive = 10,
+                    ResolveDns = false,
                 };
-
                 opts.EndPoints.Add(redisHost, redisPort);
-
-                // Optional but helps local/podman DNS oddities
-                opts.ResolveDns = false;
-
                 return ConnectionMultiplexer.Connect(opts);
             });
 
-            // Ensure DbContext uses container connection string.
-            // Your Program likely registers this already; we remove and re-add to be safe.
+            // DbContext (pointing to per-test database)
+            services.RemoveAll<ResearchDbContext>();
             services.RemoveAll<DbContextOptions<ResearchDbContext>>();
             services.RemoveAll<IDbContextFactory<ResearchDbContext>>();
 
             services.AddDbContextFactory<ResearchDbContext>(opt =>
             {
-                opt.UseNpgsql(_containers.Postgres.GetConnectionString());
+                opt.UseNpgsql(_dbConnectionString, npgsql =>
+                {
+                    npgsql.UseVector();
+                    npgsql.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery);
+                });
             });
 
-            // Run migrations once host is built
-            var sp = services.BuildServiceProvider();
-            using var scope = sp.CreateScope();
-            var dbFactory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<ResearchDbContext>>();
-            using var db = dbFactory.CreateDbContext();
-            db.Database.Migrate();
-
-            services.AddAuthentication(options => {
+            services.AddAuthentication(options =>
+            {
                 options.DefaultAuthenticateScheme = TestAuthHandler.Scheme;
                 options.DefaultChallengeScheme = TestAuthHandler.Scheme;
-            }).AddScheme<AuthenticationSchemeOptions, TestAuthHandler>(
-                TestAuthHandler.Scheme, _ => { });
+            }).AddScheme<AuthenticationSchemeOptions, TestAuthHandler>(TestAuthHandler.Scheme, _ => { });
 
-            // Ensure every endpoint sees an authenticated user by default
             services.AddAuthorization(options =>
             {
                 options.FallbackPolicy = new AuthorizationPolicyBuilder()

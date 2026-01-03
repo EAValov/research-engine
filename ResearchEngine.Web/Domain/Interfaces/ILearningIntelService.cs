@@ -23,4 +23,14 @@ public interface ILearningIntelService
         string? region = null,
         int topK = 20,
         CancellationToken ct = default);
+
+    Task<Learning> AddUserLearningAsync(
+        Guid jobId,
+        string text,
+        float importanceScore = 1.0f,
+        string? reference = null,
+        string? evidenceText = null,
+        string? language = null,
+        string? region = null,
+        CancellationToken ct = default);
 }

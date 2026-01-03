@@ -6,7 +6,7 @@ using ResearchEngine.Domain;
 
 namespace ResearchEngine.Infrastructure;
 
-public sealed class PostgresResearchJobStore(
+public sealed partial class PostgresResearchJobStore(
     IDbContextFactory<ResearchDbContext> dbContextFactory,
     IResearchEventBus eventBus,
     ILogger<IResearchJobStore> logger
@@ -130,17 +130,18 @@ public sealed class PostgresResearchJobStore(
 
     public async Task<Source> UpsertSourceAsync(
         Guid jobId,
-        string url,
+        string reference,
         string content,
         string? title,
         string? language,
         string? region,
+        SourceKind kind,
         CancellationToken ct = default)
     {
         await using var db = await dbContextFactory.CreateDbContextAsync(ct);
 
         var existing = await db.Sources
-            .FirstOrDefaultAsync(s => s.JobId == jobId && s.Url == url, ct);
+            .FirstOrDefaultAsync(s => s.JobId == jobId && s.Reference == reference, ct);
 
         var contentHash = ComputeSha256(content);
 
@@ -148,6 +149,7 @@ public sealed class PostgresResearchJobStore(
         {
             var contentChanged = !string.Equals(existing.ContentHash, contentHash, StringComparison.Ordinal);
 
+            existing.Kind = kind;
             existing.ContentHash = contentHash;
             existing.Content = content;
             existing.Title = title;
@@ -156,11 +158,10 @@ public sealed class PostgresResearchJobStore(
 
             if (contentChanged)
             {
-                // Delete stale learnings for this source.
-                // Cascades will remove LearningEmbeddings via FK if configured (recommended).
+                // Delete only extracted learnings for this source.
                 await db.Learnings
-                    .Where(l => l.SourceId == existing.Id)
-                    .ExecuteDeleteAsync(ct);
+                    .Where(l => l.SourceId == existing.Id && l.IsUserProvided == false)
+                    .ExecuteDeleteAsync(ct); // cascade with embeddings
             }
 
             await db.SaveChangesAsync(ct);
@@ -173,7 +174,8 @@ public sealed class PostgresResearchJobStore(
         {
             Id = Guid.NewGuid(),
             JobId = jobId,
-            Url = url,
+            Reference = reference,
+            Kind = kind,
             ContentHash = contentHash,
             Content = content,
             Title = title,
@@ -366,6 +368,9 @@ public sealed class PostgresResearchJobStore(
             if (l.CreatedAt == default)
                 l.CreatedAt = DateTimeOffset.UtcNow;
 
+            if (l.LearningGroupId == Guid.Empty)
+                throw new InvalidOperationException("LearningGroupId must be assigned before saving learnings.");
+
             if (l.EvidenceText.Length > maxEvidenceLen)
                 l.EvidenceText = l.EvidenceText[..maxEvidenceLen];
 
@@ -488,7 +493,7 @@ public sealed class PostgresResearchJobStore(
             .OrderByDescending(s => s.CreatedAt)
             .Select(s => new SourceListItemDto(
                 s.Id,
-                s.Url,
+                s.Reference,
                 s.Title,
                 s.Language,
                 s.Region,
@@ -523,7 +528,7 @@ public sealed class PostgresResearchJobStore(
             .Select(l => new LearningListItemDto(
                 l.Id,
                 l.SourceId,
-                l.Source.Url,
+                l.Source.Reference,
                 l.ImportanceScore,
                 l.CreatedAt,
                 l.Text))
@@ -597,6 +602,182 @@ public sealed class PostgresResearchJobStore(
             .Take(Math.Clamp(topK, 1, 200));
 
         return await q.ToListAsync(ct);
+    }
+
+    public async Task<IReadOnlyList<LearningGroup>> VectorSearchLearningGroupsAsync(
+        Vector queryVector,
+        Guid jobId,
+        int topK,
+        CancellationToken ct = default)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(ct);
+
+        var q = db.LearningGroups
+            .AsNoTracking()
+            .Include(g => g.Embedding)
+            .Where(g => g.JobId == jobId)
+            .Where(g => g.Embedding != null)
+            .OrderBy(g => g.Embedding!.Vector.CosineDistance(queryVector))
+            .Take(Math.Clamp(topK, 1, 50));
+
+        return await q.ToListAsync(ct);
+    }
+
+    public async Task<LearningGroup> CreateLearningGroupAsync(
+        Guid jobId,
+        string canonicalText,
+        float canonicalImportanceScore,
+        ReadOnlyMemory<float> embeddingVector,
+        CancellationToken ct = default)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(ct);
+
+        var now = DateTimeOffset.UtcNow;
+
+        var group = new LearningGroup
+        {
+            Id = Guid.NewGuid(),
+            JobId = jobId,
+            CanonicalText = canonicalText.Trim(),
+            CanonicalImportanceScore = canonicalImportanceScore,
+            MemberCount = 0,
+            DistinctSourceCount = 0,
+            CreatedAt = now,
+            UpdatedAt = now,
+            Embedding = new LearningGroupEmbedding
+            {
+                Id = Guid.NewGuid(),
+                LearningGroupId = Guid.Empty, // set after group id known
+                Vector = new Vector(embeddingVector),
+                CreatedAt = now
+            }
+        };
+
+        group.Embedding.LearningGroupId = group.Id;
+
+        db.LearningGroups.Add(group);
+        await db.SaveChangesAsync(ct);
+
+        return group;
+    }
+
+    public async Task<int> UpdateLearningGroupCanonicalAsync(
+        Guid groupId,
+        string canonicalText,
+        float canonicalImportanceScore,
+        ReadOnlyMemory<float> embeddingVector,
+        CancellationToken ct = default)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(ct);
+
+        var g = await db.LearningGroups
+            .Include(x => x.Embedding)
+            .FirstOrDefaultAsync(x => x.Id == groupId, ct);
+
+        if (g is null) return 0;
+
+        g.CanonicalText = canonicalText.Trim();
+        g.CanonicalImportanceScore = canonicalImportanceScore;
+        g.UpdatedAt = DateTimeOffset.UtcNow;
+
+        if (g.Embedding is null)
+        {
+            g.Embedding = new LearningGroupEmbedding
+            {
+                Id = Guid.NewGuid(),
+                LearningGroupId = g.Id,
+                Vector = new Vector(embeddingVector),
+                CreatedAt = DateTimeOffset.UtcNow
+            };
+        }
+        else
+        {
+            g.Embedding.Vector = new Vector(embeddingVector);
+            g.Embedding.CreatedAt = DateTimeOffset.UtcNow;
+        }
+
+        return await db.SaveChangesAsync(ct);
+    }
+
+    public async Task<int> RecomputeLearningGroupStatsAsync(Guid groupId, CancellationToken ct = default)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(ct);
+
+        var g = await db.LearningGroups.FirstOrDefaultAsync(x => x.Id == groupId, ct);
+        if (g is null) return 0;
+
+        var members = await db.Learnings
+            .AsNoTracking()
+            .Where(l => l.LearningGroupId == groupId)
+            .Select(l => new { l.Id, l.SourceId })
+            .ToListAsync(ct);
+
+        g.MemberCount = members.Count;
+        g.DistinctSourceCount = members.Select(x => x.SourceId).Distinct().Count();
+        g.UpdatedAt = DateTimeOffset.UtcNow;
+
+        return await db.SaveChangesAsync(ct);
+    }
+
+    public async Task<IReadOnlyList<LearningGroupHit>> VectorSearchLearningGroupsWithDistanceAsync(
+        Vector queryVector,
+        Guid jobId,
+        int topK,
+        CancellationToken ct = default)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(ct);
+
+        var q = db.LearningGroups
+            .AsNoTracking()
+            .Include(g => g.Embedding)
+            .Where(g => g.JobId == jobId)
+            .Where(g => g.Embedding != null)
+            .Select(g => new
+            {
+                Group = g,
+                Dist = g.Embedding!.Vector.CosineDistance(queryVector)
+            })
+            .OrderBy(x => x.Dist)
+            .Take(Math.Clamp(topK, 1, 50));
+
+        var rows = await q.ToListAsync(ct);
+        return rows.Select(r => new LearningGroupHit(r.Group, (float)r.Dist)).ToList();
+    }
+
+    public async Task<Source> GetOrCreateUserSourceAsync(Guid jobId, CancellationToken ct = default)
+    {
+        const string userRef = "user:manual";
+
+        await using var db = await dbContextFactory.CreateDbContextAsync(ct);
+
+        var existing = await db.Sources
+            .FirstOrDefaultAsync(s => s.JobId == jobId && s.Reference == userRef, ct);
+
+        if (existing is not null)
+            return existing;
+
+        var now = DateTimeOffset.UtcNow;
+
+        // Placeholder content so ContentHash is stable; may be unused.
+        var content = "User-provided references and notes.";
+
+        var source = new Source
+        {
+            Id = Guid.NewGuid(),
+            JobId = jobId,
+            Reference = userRef,
+            Kind = SourceKind.User,
+            Content = content,
+            ContentHash = ComputeSha256(content),
+            Title = "User-provided",
+            Language = null,
+            Region = null,
+            CreatedAt = now
+        };
+
+        db.Sources.Add(source);
+        await db.SaveChangesAsync(ct);
+        return source;
     }
 
     private static string ComputeSha256(string input)

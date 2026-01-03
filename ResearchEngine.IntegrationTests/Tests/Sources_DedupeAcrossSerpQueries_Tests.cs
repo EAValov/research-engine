@@ -58,7 +58,7 @@ public sealed class Sources_DedupeAcrossSerpQueries_Tests : IntegrationTestBase
         var sources = sourcesJson.GetProperty("sources").EnumerateArray().ToList();
         Assert.True(sources.Count > 0);
 
-        var urls = sources.Select(s => s.GetProperty("url").GetString() ?? "").ToList();
+        var urls = sources.Select(s => s.GetProperty("reference").GetString() ?? "").ToList();
         Assert.True(urls.All(u => !string.IsNullOrWhiteSpace(u)));
 
         // ensure no duplicates
