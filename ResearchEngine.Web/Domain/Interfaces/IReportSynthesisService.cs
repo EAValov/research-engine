@@ -7,7 +7,7 @@ public interface IReportSynthesisService
     /// <summary>
     /// Creates a synthesis row and returns its id. No long-running work here.
     /// </summary>
-    Task<Guid> StartSynthesisAsync(
+    Task<Guid> CreateSynthesisAsync(
         Guid jobId,
         Guid? parentSynthesisId,
         string? outline,
@@ -15,11 +15,20 @@ public interface IReportSynthesisService
         CancellationToken ct);
 
     /// <summary>
-    /// Runs an already-created synthesis row by id (long-running),
-    /// updates status + report markdown in DB.
+    /// Run exisitng synthesis.
+    /// Used in the ResearchOrchestrator for the initial research run.
+    /// Also for tests.
     /// </summary>
-    Task RunExistingSynthesisAsync(
-        Guid synthesisId,
-        ResearchProgressTracker? progress,
-        CancellationToken ct);
+    Task RunSynthesisAsync(Guid synthesisId, ResearchProgressTracker? progress, CancellationToken ct);
+
+    /// <summary>
+    /// Enqueue the exiting synthesis run.
+    /// Returns Hangfire job id.
+    /// </summary>
+    string EnqueueSynthesisRun(Guid synthesisId);
+
+    /// <summary>
+    /// Exposed for Hangfire.
+    /// </summary>
+    Task RunSynthesisBackgroundAsync(Guid synthesisId);
 }

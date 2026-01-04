@@ -1,5 +1,6 @@
 using System.Net.Http.Json;
 using System.Text.Json;
+using Hangfire;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -23,6 +24,8 @@ public sealed class Sources_DedupeAcrossSerpQueries_Tests : IntegrationTestBase
         {
             builder.ConfigureServices(services =>
             {
+                services.RemoveAll<IBackgroundJobClient>();
+                services.AddSingleton<IBackgroundJobClient, InlineBackgroundJobClient>(); // required for Factory overrides
                 services.RemoveAll<ISearchClient>();
                 services.AddSingleton<ISearchClient>(new OverlapSearchClient());
             });
@@ -30,22 +33,8 @@ public sealed class Sources_DedupeAcrossSerpQueries_Tests : IntegrationTestBase
 
         using var client = overlapFactory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
 
-        var createReq = new
-        {
-            query = "Test query where search results overlap across serp queries.",
-            clarifications = Array.Empty<object>(),
-            breadth = 2,
-            depth = 2,
-            language = "en",
-            region = (string?)null,
-            webhook = (object?)null
-        };
-
-        var createResp = await client.PostAsJsonAsync("/api/research/jobs", createReq);
-        createResp.EnsureSuccessStatusCode();
-
-        var createJson = await createResp.Content.ReadFromJsonAsync<JsonElement>();
-        var jobId = createJson.GetProperty("jobId").GetGuid();
+        var jobId = await CreateJobAsync(client, "Test query that will fail during searching.");
+        Assert.NotEqual(Guid.Empty, jobId);
 
         var (status, _, _) = await SseTestHelpers.WaitForDoneAsync(client, jobId, TimeSpan.FromSeconds(60));
         Assert.Equal("Completed", status);

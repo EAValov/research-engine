@@ -1,3 +1,5 @@
+using Hangfire;
+using Hangfire.PostgreSql;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
@@ -23,17 +25,58 @@ Log.Logger = new LoggerConfiguration()
 builder.Logging.ClearProviders();
 builder.Host.UseSerilog();
 
+var researchDb = builder.Configuration.GetConnectionString("ResearchDb")
+    ?? throw new InvalidOperationException("Missing connection string: ResearchDb");
+
+// Prefer explicit HangfireDb, fallback to researchDb if not provided
+var hangfireDb = builder.Configuration.GetConnectionString("HangfireDb") ?? researchDb;
+
 // ---------- DB ----------
 builder.Services.AddDbContextFactory<ResearchDbContext>(options =>
 {
     options.UseNpgsql(
-        builder.Configuration.GetConnectionString("ResearchDb"),
+        researchDb,
         npgsql =>
         {
             npgsql.UseVector();
             npgsql.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery);
         });
 });
+
+// ---- Hangfire ----
+builder.Services.AddHangfire((sp, cfg) =>
+{
+    var storageOptions = new PostgreSqlStorageOptions
+    {
+        PrepareSchemaIfNecessary = !builder.Environment.IsEnvironment("Testing"), // don't do it for testing
+        SchemaName = "hangfire"
+    };
+
+    var pollMs = builder.Configuration.GetValue<int?>("Hangfire:QueuePollMs");
+    if(pollMs.HasValue)
+        storageOptions.QueuePollInterval = TimeSpan.FromMilliseconds(pollMs.Value);
+
+    cfg.UsePostgreSqlStorage(
+        opts => opts.UseNpgsqlConnection(hangfireDb),
+        storageOptions);
+
+    if (builder.Environment.IsEnvironment("Testing"))
+    {
+        cfg.UseFilter(new AutomaticRetryAttribute { Attempts = 0 }); // no retries in tests
+    }
+});
+
+var enableHangfireServer = builder.Configuration.GetValue("Hangfire:EnableServer", true);
+
+if (enableHangfireServer && !builder.Environment.IsEnvironment("Testing"))
+{
+    builder.Services.AddHangfireServer(options =>
+    {
+        options.WorkerCount = builder.Configuration.GetValue("Hangfire:WorkerCount", 2);
+        options.Queues = ["jobs", "synthesis"];
+        options.ServerName = $"api-{Environment.MachineName}";
+    });
+}
 
 // ---------- Http ----------
 builder.Services.AddHttpClient();
@@ -169,6 +212,7 @@ app.MapResearchProtocolApi();
 
 app.MapOpenApi();
 app.MapScalarApiReference();
+app.UseHangfireDashboard("/hangfire");
 
 // ---------- Migrations (prod only) ----------
 if (!app.Environment.IsEnvironment("Testing"))

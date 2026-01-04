@@ -2,6 +2,8 @@ using ResearchEngine.Configuration;
 using ResearchEngine.Domain;
 using System.Text;
 using Microsoft.Extensions.Options;
+using Hangfire;
+using Hangfire.States;
 
 namespace ResearchEngine.Application;
 
@@ -13,6 +15,7 @@ public sealed class ResearchOrchestrator(
     IQueryPlanningService queryPlanningService,
     ILearningIntelService learningIntelService,
     IReportSynthesisService reportSynthesisService,
+    IBackgroundJobClient backgroundJobs,
     ILogger<ResearchOrchestrator> logger)
     : IResearchOrchestrator
 {
@@ -44,27 +47,23 @@ public sealed class ResearchOrchestrator(
             ct: ct);
 
         // 2) Run in background (do NOT tie to request cancellation)
-        _ = Task.Run(async () =>
-        {
-            try
-            {
-                await RunJobAsync(job.Id, CancellationToken.None);
-            }
-            catch (Exception ex)
-            {
-                // RunJobAsync already appends Failed event + sets status,
-                // but keep a log just in case.
-                logger.LogError(ex, "Background RunJobAsync failed for job {JobId}", job.Id);
-            }
-        });
+        backgroundJobs.Create(
+            Hangfire.Common.Job.FromExpression<IResearchOrchestrator>(o =>
+                o.RunJobBackgroundAsync(job.Id)),  
+            new EnqueuedState("jobs"));
 
         return job.Id;
     }
 
+    // Wrapper for Hangfire invocation
+    [AutomaticRetry(Attempts = 3, DelaysInSeconds = new[] { 30, 300, 1800 })]
+    public Task RunJobBackgroundAsync(Guid jobId)
+        => RunJobAsync(jobId, CancellationToken.None);
+
     /// <summary>
     /// Worker entrypoint (used by background execution / tests).
     /// </summary>
-    public async Task RunJobAsync(Guid jobId, CancellationToken ct = default)
+    private async Task RunJobAsync(Guid jobId, CancellationToken ct = default)
     {
         var job = await jobStore.GetJobAsync(jobId, ct)
             ?? throw new ArgumentException("Job not found", nameof(jobId));
@@ -115,7 +114,7 @@ public sealed class ResearchOrchestrator(
                 "Generating final report",
                 ct);
 
-            var synthesisId = await reportSynthesisService.StartSynthesisAsync(
+            var synthesisId = await reportSynthesisService.CreateSynthesisAsync(
                 jobId: job.Id,
                 parentSynthesisId: null,
                 outline: null,
@@ -128,7 +127,8 @@ public sealed class ResearchOrchestrator(
                 $"Synthesis started (synthesisId={synthesisId})",
                 ct);
 
-            await reportSynthesisService.RunExistingSynthesisAsync(synthesisId, progress, ct);
+            await reportSynthesisService.RunSynthesisAsync(synthesisId, progress, ct);
+
 
             // Job becomes completed when synthesis completes
             job.Status = ResearchJobStatus.Completed;

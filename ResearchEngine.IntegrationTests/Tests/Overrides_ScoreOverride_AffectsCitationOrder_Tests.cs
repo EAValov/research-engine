@@ -59,7 +59,7 @@ public sealed class Overrides_ScoreOverride_AffectsCitationOrder_Tests : Integra
         var parent = await store.GetLatestSynthesisAsync(jobId, CancellationToken.None);
         var parentId = parent?.Id;
 
-        var synthesisId = await synthesisService.StartSynthesisAsync(
+        var synthesisId = await synthesisService.CreateSynthesisAsync(
             jobId: jobId,
             parentSynthesisId: parentId,
             outline: null,
@@ -81,7 +81,7 @@ public sealed class Overrides_ScoreOverride_AffectsCitationOrder_Tests : Integra
         ovResp.EnsureSuccessStatusCode();
 
         // 5) Now run the synthesis (overrides will be observed during retrieval)
-        await synthesisService.RunExistingSynthesisAsync(
+        await synthesisService.RunSynthesisAsync(
             synthesisId: synthesisId,
             progress: null,
             ct: CancellationToken.None);

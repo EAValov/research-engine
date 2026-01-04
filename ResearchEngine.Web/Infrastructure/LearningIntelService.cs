@@ -349,7 +349,7 @@ public sealed class LearningIntelService(
             var best = hits.FirstOrDefault();
             var bestSim = best is null ? 0f : 1f - best.CosineDistance;
 
-            logger.LogDebug("Group assign: bestDist={Dist} bestSim={Sim}", best?.CosineDistance, bestSim);
+            // logger.LogDebug("Group assign: bestDist={Dist} bestSim={Sim}", best?.CosineDistance, bestSim);
 
             if (best is not null && bestSim >= GroupAssignSimilarityThreshold)
             {

@@ -11,18 +11,17 @@ public sealed class Outline_Contract_Tests : IntegrationTestBase
 {
     public Outline_Contract_Tests(ContainersFixture containers) : base(containers) { }
 
-    [Fact]
+   [Fact]
     public async Task Regenerate_WithOutline_EnforcesSectionOrder_AndConclusionLast()
     {
         using var client = CreateClient();
 
         // 1) Create job and wait until initial run finishes (first "done")
         var jobId = await CreateJobAsync(client, "Test query: outline contract.");
-        var (jobStatus, initialSynId, _) =
+        var (jobStatus, _, _) =
             await SseTestHelpers.WaitForDoneAsync(client, jobId, TimeSpan.FromSeconds(60));
 
         Assert.Equal("Completed", jobStatus);
-        Assert.True(initialSynId is null || initialSynId != Guid.Empty);
 
         // 2) Take checkpoint so we don't accidentally read the OLD done again
         var checkpoint = await SseTestHelpers.GetMaxEventIdAsync(client, jobId);
@@ -30,41 +29,43 @@ public sealed class Outline_Contract_Tests : IntegrationTestBase
         // 3) Provide strict outline JSON where conclusion is NOT last (server should normalize)
         var outlineJson = """
         {
-          "sections": [
+        "sections": [
             { "sectionKey": null, "index": 1, "title": "Intro", "description": "Brief intro.", "isConclusion": false },
             { "sectionKey": null, "index": 2, "title": "Conclusion", "description": "Wrap up.", "isConclusion": true },
             { "sectionKey": null, "index": 3, "title": "Details", "description": "Core details.", "isConclusion": false }
-          ]
+        ]
         }
         """;
 
-        // 4) Start regeneration synthesis using latest as parent + outline
-        var startReq = new
+        // 4) Create regeneration synthesis row using latest as parent + outline (NO run yet)
+        var createReq = new
         {
             parentSynthesisId = (Guid?)null,
             useLatestAsParent = true,
             outline = outlineJson,
-            instructions = "Use the outline strictly.",
-            sourceOverrides = (object[]?)null,
-            learningOverrides = (object[]?)null
+            instructions = "Use the outline strictly."
         };
 
-        var startResp = await client.PostAsJsonAsync($"/api/research/jobs/{jobId}/syntheses", startReq);
-        startResp.EnsureSuccessStatusCode();
+        var createResp = await client.PostAsJsonAsync($"/api/research/jobs/{jobId}/syntheses", createReq);
+        createResp.EnsureSuccessStatusCode();
 
-        var startJson = await startResp.Content.ReadFromJsonAsync<JsonElement>();
-        var expectedSynthesisId = startJson.GetProperty("synthesisId").GetGuid();
-        Assert.NotEqual(Guid.Empty, expectedSynthesisId);
+        var createJson = await createResp.Content.ReadFromJsonAsync<JsonElement>();
+        var synthesisId = createJson.GetProperty("synthesisId").GetGuid();
+        Assert.NotEqual(Guid.Empty, synthesisId);
 
-        // 5) Wait for NEXT "done" after checkpoint and ensure it's the synthesis we started
+        // 5) Run the synthesis (Hangfire enqueue)
+        var runResp = await client.PostAsync($"/api/research/syntheses/{synthesisId}/run", content: null);
+        runResp.EnsureSuccessStatusCode();
+
+        // 6) Wait for NEXT "done" after checkpoint and ensure it's the synthesis we started
         var (synStatus, doneSynthesisId, _) =
             await SseTestHelpers.WaitForDoneAfterAsync(client, jobId, checkpoint, TimeSpan.FromSeconds(60));
 
         Assert.Equal("Completed", synStatus);
         Assert.True(doneSynthesisId.HasValue);
-        Assert.Equal(expectedSynthesisId, doneSynthesisId.Value);
+        Assert.Equal(synthesisId, doneSynthesisId.Value);
 
-        // 6) Pull synthesis directly by id
+        // 7) Pull synthesis directly by id
         var synResp = await client.GetAsync($"/api/research/syntheses/{doneSynthesisId.Value}");
         synResp.EnsureSuccessStatusCode();
 
@@ -76,12 +77,12 @@ public sealed class Outline_Contract_Tests : IntegrationTestBase
         var sections = synJson.GetProperty("sections").EnumerateArray().ToList();
         Assert.Equal(3, sections.Count);
 
-        var sections_text = sections.Select(s => $"{s.GetProperty("title").GetString()}|{s.GetProperty("isConclusion").GetBoolean()}");
-
+        // Must be returned in ascending index order
         var indices = sections.Select(s => s.GetProperty("index").GetInt32()).ToList();
         for (int i = 1; i < indices.Count; i++)
             Assert.True(indices[i] >= indices[i - 1], "Sections must be returned in ascending index order.");
 
+        // Exactly 1 conclusion and it must be last
         var isConclusion = sections.Select(s => s.GetProperty("isConclusion").GetBoolean()).ToList();
         Assert.Equal(1, isConclusion.Count(x => x));
         Assert.True(isConclusion[^1], "Conclusion must be the last section.");

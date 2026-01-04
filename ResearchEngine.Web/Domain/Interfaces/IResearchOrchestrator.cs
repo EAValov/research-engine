@@ -17,6 +17,7 @@ public interface IResearchOrchestrator
 
     /// <summary>
     /// Worker entrypoint (used by background execution / tests).
+    /// Wrapper for Hangfire invocation
     /// </summary>
-    Task RunJobAsync(Guid jobId, CancellationToken ct = default);
+    public Task RunJobBackgroundAsync(Guid jobId);
 }

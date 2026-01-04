@@ -1,5 +1,6 @@
 using System.Net.Http.Json;
 using System.Text.Json;
+using Hangfire;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
@@ -24,6 +25,9 @@ public sealed class SynthesisFailure_MarksSynthesisFailed_Tests : IntegrationTes
         {
             builder.ConfigureServices(services =>
             {
+                services.RemoveAll<IBackgroundJobClient>();
+                services.AddSingleton<IBackgroundJobClient, InlineBackgroundJobClient>(); // required for Factory overrides
+                
                 services.RemoveAll<IChatModel>();
                 services.AddSingleton<IChatModel>(sp =>
                     new FailOnToolsChatModel(sp.GetRequiredService<FakeChatModel>()));
@@ -32,22 +36,8 @@ public sealed class SynthesisFailure_MarksSynthesisFailed_Tests : IntegrationTes
 
         using var client = failingFactory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
 
-        var createReq = new
-        {
-            query = "Test query: synthesis should fail at writing stage.",
-            clarifications = Array.Empty<object>(),
-            breadth = 2,
-            depth = 2,
-            language = "en",
-            region = (string?)null,
-            webhook = (object?)null
-        };
-
-        var createResp = await client.PostAsJsonAsync("/api/research/jobs", createReq);
-        createResp.EnsureSuccessStatusCode();
-
-        var createJson = await createResp.Content.ReadFromJsonAsync<JsonElement>();
-        var jobId = createJson.GetProperty("jobId").GetGuid();
+        var jobId = await CreateJobAsync(client, "Test query that will fail during searching.");
+        Assert.NotEqual(Guid.Empty, jobId);
 
         // Wait for terminal done (job may still be Completed or Failed depending on your orchestration contract)
         var (status, _, _) = await SseTestHelpers.WaitForDoneAsync(client, jobId, TimeSpan.FromSeconds(60));

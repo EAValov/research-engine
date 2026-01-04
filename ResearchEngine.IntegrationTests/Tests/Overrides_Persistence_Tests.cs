@@ -12,7 +12,7 @@ namespace ResearchEngine.IntegrationTests.Tests;
 public sealed class Overrides_Persistence_Tests : IntegrationTestBase
 {
     public Overrides_Persistence_Tests(ContainersFixture containers) : base(containers) { }
-
+    
     [Fact]
     public async Task StartSynthesis_PersistsSourceAndLearningOverrides_AndSnapshotReturnsThem()
     {
@@ -39,8 +39,8 @@ public sealed class Overrides_Persistence_Tests : IntegrationTestBase
         // 3) checkpoint so we get the NEXT done for this synthesis run
         var checkpoint = await SseTestHelpers.GetMaxEventIdAsync(client, jobId);
 
-        // 4) Start synthesis (regen) WITHOUT overrides in body
-        var req = new
+        // 4) Create synthesis row (NO run yet)
+        var createReq = new
         {
             parentSynthesisId = (Guid?)null,
             useLatestAsParent = true,
@@ -48,14 +48,14 @@ public sealed class Overrides_Persistence_Tests : IntegrationTestBase
             instructions = "Test overrides"
         };
 
-        var startResp = await client.PostAsJsonAsync($"/api/research/jobs/{jobId}/syntheses", req);
-        startResp.EnsureSuccessStatusCode();
+        var createResp = await client.PostAsJsonAsync($"/api/research/jobs/{jobId}/syntheses", createReq);
+        createResp.EnsureSuccessStatusCode();
 
-        var startJson = await startResp.Content.ReadFromJsonAsync<JsonElement>();
-        var expectedSynthesisId = startJson.GetProperty("synthesisId").GetGuid();
-        Assert.NotEqual(Guid.Empty, expectedSynthesisId);
+        var createJson = await createResp.Content.ReadFromJsonAsync<JsonElement>();
+        var synthesisId = createJson.GetProperty("synthesisId").GetGuid();
+        Assert.NotEqual(Guid.Empty, synthesisId);
 
-        // 4.1) Apply overrides via NEW endpoints (before waiting done)
+        // 5) Apply overrides via separate calls
         var sourceOverrides = new object[]
         {
             new { sourceId, excluded = true, pinned = (bool?)null }
@@ -68,30 +68,34 @@ public sealed class Overrides_Persistence_Tests : IntegrationTestBase
         };
 
         var srcOvResp = await client.PutAsJsonAsync(
-            $"/api/research/syntheses/{expectedSynthesisId}/overrides/sources",
+            $"/api/research/syntheses/{synthesisId}/overrides/sources",
             sourceOverrides);
         srcOvResp.EnsureSuccessStatusCode();
 
         var lrnOvResp = await client.PutAsJsonAsync(
-            $"/api/research/syntheses/{expectedSynthesisId}/overrides/learnings",
+            $"/api/research/syntheses/{synthesisId}/overrides/learnings",
             learningOverrides);
         lrnOvResp.EnsureSuccessStatusCode();
 
-        // 5) Wait for NEXT done and ensure it matches this synthesis
+        // 6) Run synthesis (Hangfire enqueue) AFTER overrides are saved
+        var runResp = await client.PostAsync($"/api/research/syntheses/{synthesisId}/run", content: null);
+        runResp.EnsureSuccessStatusCode();
+
+        // 7) Wait for NEXT done and ensure it matches this synthesis
         var (synStatus, doneSynthesisId, _) =
             await SseTestHelpers.WaitForDoneAfterAsync(client, jobId, checkpoint, TimeSpan.FromSeconds(60));
 
         Assert.Equal("Completed", synStatus);
         Assert.True(doneSynthesisId.HasValue);
-        Assert.Equal(expectedSynthesisId, doneSynthesisId.Value);
+        Assert.Equal(synthesisId, doneSynthesisId.Value);
 
-        // 6) Query overrides snapshot directly via store (DI)
+        // 8) Query overrides snapshot directly via store (DI)
         using var scope = Factory.Services.CreateScope();
         var store = scope.ServiceProvider.GetRequiredService<IResearchJobStore>();
 
-        var snapshot = await store.GetSynthesisOverridesAsync(expectedSynthesisId, CancellationToken.None);
+        var snapshot = await store.GetSynthesisOverridesAsync(synthesisId, CancellationToken.None);
 
-        Assert.Equal(expectedSynthesisId, snapshot.SynthesisId);
+        Assert.Equal(synthesisId, snapshot.SynthesisId);
         Assert.Equal(jobId, snapshot.JobId);
 
         Assert.True(snapshot.SourceOverridesBySourceId.TryGetValue(sourceId, out var so));
@@ -104,4 +108,5 @@ public sealed class Overrides_Persistence_Tests : IntegrationTestBase
         Assert.True(lo2.Pinned == true);
         Assert.True(lo2.ScoreOverride.HasValue);
     }
+
 }

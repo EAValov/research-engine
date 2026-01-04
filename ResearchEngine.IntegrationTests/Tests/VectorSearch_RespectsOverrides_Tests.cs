@@ -38,7 +38,7 @@ public sealed class VectorSearch_RespectsOverrides_Tests : IntegrationTestBase
         var parent = await store.GetLatestSynthesisAsync(jobId, CancellationToken.None);
         var parentId = parent?.Id;
 
-        var synthesisId = await synthesisService.StartSynthesisAsync(
+        var synthesisId = await synthesisService.CreateSynthesisAsync(
             jobId: jobId,
             parentSynthesisId: parentId,
             outline: null,
@@ -60,7 +60,7 @@ public sealed class VectorSearch_RespectsOverrides_Tests : IntegrationTestBase
         ovResp.EnsureSuccessStatusCode();
 
         // 5) Run synthesis so overrides take effect
-        await synthesisService.RunExistingSynthesisAsync(
+        await synthesisService.RunSynthesisAsync(
             synthesisId: synthesisId,
             progress: null,
             ct: CancellationToken.None);

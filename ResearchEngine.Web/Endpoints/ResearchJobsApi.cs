@@ -21,13 +21,13 @@ public static partial class ResearchJobsApi
         api.MapGet("/jobs/{jobId:guid}/learnings", ListLearningsAsync);
         api.MapPost("/jobs/{jobId:guid}/learnings", AddLearningAsync);
 
-        api.MapPost("/jobs/{jobId:guid}/syntheses", StartSynthesisAsync);
         api.MapGet("/jobs/{jobId:guid}/syntheses/latest", GetLatestSynthesisAsync);
-
         api.MapGet("/syntheses/{synthesisId:guid}", GetSynthesisAsync);
 
+        api.MapPost("/jobs/{jobId:guid}/syntheses", CreateSynthesisAsync);      
         api.MapPut("/syntheses/{synthesisId:guid}/overrides/sources", UpsertSynthesisSourceOverridesAsync);
         api.MapPut("/syntheses/{synthesisId:guid}/overrides/learnings", UpsertSynthesisLearningOverridesAsync);
+        api.MapPost("/syntheses/{synthesisId:guid}/run", RunSynthesisAsync);     
 
         api.MapGet("/jobs/{jobId:guid}/events", ListEventsAsync);
         api.MapGet("/jobs/{jobId:guid}/events/stream", StreamEventsAsync);
@@ -241,8 +241,11 @@ public static partial class ResearchJobsApi
     }
 
     // ---------------- synthesis ----------------
-
-    private static async Task<IResult> StartSynthesisAsync(
+    /// <summary>
+    /// Creates a synthesis row and returns the id. No long-running work.
+    /// Client can then apply overrides and call /run.
+    /// </summary>
+    private static async Task<IResult> CreateSynthesisAsync(
         Guid jobId,
         [FromBody] StartSynthesisRequest request,
         IResearchJobStore jobStore,
@@ -263,48 +266,88 @@ public static partial class ResearchJobsApi
             parentId = latest?.Id;
         }
 
-        // Create synthesis row NOW
-        var synthesis = await jobStore.CreateSynthesisAsync(
+        // Create synthesis row ONLY
+        var synthesisId = await synthesisService.CreateSynthesisAsync(
             jobId: jobId,
             parentSynthesisId: parentId,
             outline: request.Outline,
             instructions: request.Instructions,
             ct: ct);
 
-        // Fire-and-forget synthesis run
-        _ = Task.Run(async () =>
-        {
-            try
-            {
-                await synthesisService.RunExistingSynthesisAsync(
-                    synthesisId: synthesis.Id,
-                    progress: null,
-                    ct: CancellationToken.None);
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"[deep-research-synthesis] RunSynthesisAsync failed: {ex}");
-            }
-        });
-
         var response = new
         {
             jobId,
-            synthesisId = synthesis.Id,
-            status = synthesis.Status.ToString(),
-            createdAt = synthesis.CreatedAt,
+            synthesisId,
             links = new
             {
-                self = $"/api/research/syntheses/{synthesis.Id}",
+                self = $"/api/research/syntheses/{synthesisId}",
+                run = $"/api/research/syntheses/{synthesisId}/run",
                 latest = $"/api/research/jobs/{jobId}/syntheses/latest",
-                overridesSources = $"/api/research/syntheses/{synthesis.Id}/overrides/sources",
-                overridesLearnings = $"/api/research/syntheses/{synthesis.Id}/overrides/learnings",
+                overridesSources = $"/api/research/syntheses/{synthesisId}/overrides/sources",
+                overridesLearnings = $"/api/research/syntheses/{synthesisId}/overrides/learnings",
                 events = $"/api/research/jobs/{jobId}/events",
                 stream = $"/api/research/jobs/{jobId}/events/stream"
             }
         };
 
         return Results.Ok(response);
+    }
+
+    /// <summary>
+    /// Enqueues the synthesis run via Hangfire (durable queue).
+    /// </summary>
+    private static async Task<IResult> RunSynthesisAsync(
+        Guid synthesisId,
+        IResearchJobStore jobStore,
+        IReportSynthesisService synthesisService,
+        CancellationToken ct)
+    {
+        // Validate synthesis exists and fetch jobId for links
+        var syn = await jobStore.GetSynthesisAsync(synthesisId, ct);
+        if (syn is null)
+            return Results.NotFound();
+
+        // If terminal, don't enqueue again (idempotent API behavior)
+        if (syn.Status is SynthesisStatus.Completed or SynthesisStatus.Failed)
+        {
+            return Results.Ok(new
+            {
+                jobId = syn.JobId,
+                synthesisId = syn.Id,
+                status = syn.Status.ToString(),
+                createdAt = syn.CreatedAt,
+                completedAt = syn.CompletedAt,
+                message = "Synthesis is already in a terminal state.",
+                links = new
+                {
+                    self = $"/api/research/syntheses/{syn.Id}",
+                    latest = $"/api/research/jobs/{syn.JobId}/syntheses/latest",
+                    events = $"/api/research/jobs/{syn.JobId}/events",
+                    stream = $"/api/research/jobs/{syn.JobId}/events/stream"
+                }
+            });
+        }
+
+        // Enqueue long-running work (queue name: "Synthesis")
+       var hangfireJobId = synthesisService.EnqueueSynthesisRun(syn.Id);
+
+        return Results.Accepted($"/api/research/syntheses/{syn.Id}", new
+        {
+            jobId = syn.JobId,
+            synthesisId = syn.Id,
+            hangfireJobId,
+            status = syn.Status.ToString(),
+            createdAt = syn.CreatedAt,
+            links = new
+            {
+                self = $"/api/research/syntheses/{syn.Id}",
+                latest = $"/api/research/jobs/{syn.JobId}/syntheses/latest",
+                overridesSources = $"/api/research/syntheses/{syn.Id}/overrides/sources",
+                overridesLearnings = $"/api/research/syntheses/{syn.Id}/overrides/learnings",
+                events = $"/api/research/jobs/{syn.JobId}/events",
+                stream = $"/api/research/jobs/{syn.JobId}/events/stream"
+            }
+        });
     }
 
     // ---------------- overrides (separate endpoints) ----------------

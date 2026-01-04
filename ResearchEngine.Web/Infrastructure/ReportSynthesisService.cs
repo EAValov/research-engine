@@ -1,6 +1,8 @@
 using System.ComponentModel;
 using System.Text;
 using System.Text.Json;
+using Hangfire;
+using Hangfire.States;
 using Microsoft.Extensions.AI;
 using ResearchEngine.Application;
 using ResearchEngine.Domain;
@@ -13,11 +15,11 @@ public sealed class ReportSynthesisService(
     ITokenizer tokenizer,
     ILearningIntelService learningIntelService,
     IResearchJobStore jobStore,
+    IBackgroundJobClient backgroundJobs,
     ILogger<ReportSynthesisService> logger
 ) : IReportSynthesisService
 {
-
-    public async Task<Guid> StartSynthesisAsync(
+    public async Task<Guid> CreateSynthesisAsync(
         Guid jobId,
         Guid? parentSynthesisId,
         string? outline,
@@ -34,7 +36,20 @@ public sealed class ReportSynthesisService(
         return synthesis.Id;
     }
 
-    public async Task RunExistingSynthesisAsync(Guid synthesisId, ResearchProgressTracker? progress, CancellationToken ct)
+    public string EnqueueSynthesisRun(Guid synthesisId)
+    {
+        // Schedule *this* method (wrapper), not RunSynthesisAsync with CancellationToken param
+        return backgroundJobs.Create(
+            Hangfire.Common.Job.FromExpression<ReportSynthesisService>(svc =>
+                svc.RunSynthesisBackgroundAsync(synthesisId)),
+            new EnqueuedState("synthesis"));
+    }
+
+    [AutomaticRetry(Attempts = 3, DelaysInSeconds = new[] { 30, 300, 1800 })]
+    public Task RunSynthesisBackgroundAsync(Guid synthesisId)
+        => RunSynthesisAsync(synthesisId, progress: null, ct: CancellationToken.None);
+        
+    public async Task RunSynthesisAsync(Guid synthesisId, ResearchProgressTracker? progress, CancellationToken ct)
     {
         var synthesis = await jobStore.GetSynthesisAsync(synthesisId, ct)
             ?? throw new InvalidOperationException($"Synthesis {synthesisId} not found.");

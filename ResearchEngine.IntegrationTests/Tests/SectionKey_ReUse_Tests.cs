@@ -38,35 +38,36 @@ public sealed class SectionKey_ReUse_Tests : IntegrationTestBase
         // Provide outline with:
         // - 2 reused section keys
         // - 1 new section (sectionKey null)
-        // Note: outline uses 1-based indices, your storage uses 0..N-1, that's fine.
         var outlineJson = $$"""
         {
-          "sections": [
+        "sections": [
             { "sectionKey": "{{reuseA}}", "index": 1, "title": "Reused A", "description": "Should preserve key.", "isConclusion": false },
             { "sectionKey": null,        "index": 2, "title": "New Section", "description": "Should get a new key.", "isConclusion": false },
             { "sectionKey": "{{reuseB}}", "index": 3, "title": "Reused B", "description": "Should preserve key.", "isConclusion": true }
-          ]
+        ]
         }
         """;
 
-        // Start regeneration using s1 as parent
-        var req = new
+        // Start regeneration using s1 as parent (NO run yet)
+        var createReq = new
         {
             parentSynthesisId = s1Id,
             useLatestAsParent = (bool?)null,
             outline = outlineJson,
-            instructions = "Test SectionKey matching.",
-            sourceOverrides = (object?)null,
-            learningOverrides = (object?)null
+            instructions = "Test SectionKey matching."
         };
 
-        var startResp = await client.PostAsJsonAsync($"/api/research/jobs/{jobId}/syntheses", req);
-        startResp.EnsureSuccessStatusCode();
+        var createResp = await client.PostAsJsonAsync($"/api/research/jobs/{jobId}/syntheses", createReq);
+        createResp.EnsureSuccessStatusCode();
 
-        var startJson = await startResp.Content.ReadFromJsonAsync<JsonElement>();
-        var s2Id = startJson.GetProperty("synthesisId").GetGuid();
+        var createJson = await createResp.Content.ReadFromJsonAsync<JsonElement>();
+        var s2Id = createJson.GetProperty("synthesisId").GetGuid();
         Assert.NotEqual(Guid.Empty, s2Id);
         Assert.NotEqual(s1Id, s2Id);
+
+        // Run synthesis
+        var runResp = await client.PostAsync($"/api/research/syntheses/{s2Id}/run", content: null);
+        runResp.EnsureSuccessStatusCode();
 
         var s2 = await WaitForSynthesisCompletedAsync(client, s2Id, timeoutSeconds: 60);
         Assert.Equal("Completed", s2.GetProperty("status").GetString());
@@ -89,6 +90,7 @@ public sealed class SectionKey_ReUse_Tests : IntegrationTestBase
         Assert.Equal(1, conclusionFlags.Count(b => b));
         Assert.True(conclusionFlags[^1]);
     }
+
 
     private static async Task<JsonElement> WaitForSynthesisCompletedAsync(HttpClient client, Guid synthesisId, int timeoutSeconds)
     {

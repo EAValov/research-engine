@@ -415,7 +415,7 @@ public static class OpenAiModelEndpoints
         var cutoffEventId = beforeEvents.Count == 0 ? 0 : beforeEvents[^1].Id;
 
         // Create synthesis row
-        var synthesisId = await synthesisService.StartSynthesisAsync(
+        var synthesisId = await synthesisService.CreateSynthesisAsync(
             jobId: jobId,
             parentSynthesisId: parentId,
             outline: cmd.Outline,
@@ -425,25 +425,15 @@ public static class OpenAiModelEndpoints
         var synShort = synthesisId.ToString("N")[..8];
         var synTag = $"syn:{synShort}";
 
+        // Run synthesis in background (long-running)
+        var hfJobId = synthesisService.EnqueueSynthesisRun(synthesisId);
+
         await writer.BeginThinkAsync(requestId, created, modelName, ct);
 
         await writer.WriteThinkAsync(
             requestId, created, modelName,
-            $"[{jobTag}][{synTag}] Regenerating synthesis (parent={(parentId?.ToString() ?? "none")})\n",
+            $"[{jobTag}][{synTag}] Regenerating synthesis (parent={parentId?.ToString() ?? "none"}) Hangfire job id = {hfJobId}\n",
             ct);
-
-        // Run synthesis in background (long-running)
-        _ = Task.Run(async () =>
-        {
-            try
-            {
-                await synthesisService.RunExistingSynthesisAsync(synthesisId, progress: null, CancellationToken.None);
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"[deep-research-model] Error in RunExistingSynthesisAsync: {ex}");
-            }
-        });
 
         // Stream ONLY new events after cutoff, and stop when this synthesis finishes
         await StreamViaEventBusIntoThinkAsync(

@@ -1,8 +1,8 @@
+using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using ResearchEngine.IntegrationTests.Helpers;
 using ResearchEngine.IntegrationTests.Infrastructure;
-using Xunit;
 
 namespace ResearchEngine.IntegrationTests.Tests;
 
@@ -16,57 +16,69 @@ public sealed class Synthesis_Lineage_Tests : IntegrationTestBase
     {
         using var client = CreateClient();
 
-        // initial job run
+        // 1) initial job run (this still auto-runs the job workflow)
         var jobId = await CreateJobAsync(client, "Test query: synthesis lineage.");
-        var (status1, syn1, _) = await SseTestHelpers.WaitForDoneAsync(client, jobId, TimeSpan.FromSeconds(60));
+        var (status1, syn1FromDone, _) = await SseTestHelpers.WaitForDoneAsync(client, jobId, TimeSpan.FromSeconds(60));
         Assert.Equal("Completed", status1);
 
-        // pull latest synthesis id after initial completion
+        // 2) pull latest synthesis id after initial completion
         var latest1 = await GetLatestSynthesisAsync(client, jobId);
         var syn1Id = latest1.GetProperty("id").GetGuid();
         Assert.NotEqual(Guid.Empty, syn1Id);
 
-        // checkpoint
+        // syn1FromDone can be null depending on your done payload; we trust latest endpoint.
+        // But if it is present, it should match latest.
+        if (syn1FromDone.HasValue)
+            Assert.Equal(syn1Id, syn1FromDone.Value);
+
+        // 3) checkpoint so we only observe events from the regeneration run
         var checkpoint = await SseTestHelpers.GetMaxEventIdAsync(client, jobId);
 
-        // start regen using latest as parent
-        var startReq = new
+        // 4) create a new synthesis row (NO long-running work here)
+        var createReq = new
         {
             parentSynthesisId = (Guid?)null,
             useLatestAsParent = true,
             outline = (string?)null,
-            instructions = "Regenerate with lineage test",
-            sourceOverrides = (object[]?)null,
-            learningOverrides = (object[]?)null
+            instructions = "Regenerate with lineage test"
         };
 
-        var startResp = await client.PostAsJsonAsync($"/api/research/jobs/{jobId}/syntheses", startReq);
-        startResp.EnsureSuccessStatusCode();
+        var createResp = await client.PostAsJsonAsync($"/api/research/jobs/{jobId}/syntheses", createReq);
+        createResp.EnsureSuccessStatusCode();
 
-        var startJson = await startResp.Content.ReadFromJsonAsync<JsonElement>();
-        var expectedSyn2Id = startJson.GetProperty("synthesisId").GetGuid();
+        var createJson = await createResp.Content.ReadFromJsonAsync<JsonElement>();
+        var syn2Id = createJson.GetProperty("synthesisId").GetGuid();
+        Assert.NotEqual(Guid.Empty, syn2Id);
 
-        // wait for regen done AFTER checkpoint
-        var (status2, doneSyn2Id, _) =
+        // 5) verify syn2 exists and has correct parent set BEFORE running
+        var syn2BeforeRunResp = await client.GetAsync($"/api/research/syntheses/{syn2Id}");
+        syn2BeforeRunResp.EnsureSuccessStatusCode();
+
+        var syn2BeforeRun = await syn2BeforeRunResp.Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.Equal(syn2Id, syn2BeforeRun.GetProperty("id").GetGuid());
+
+        // parent is set at creation time
+        var parentId = syn2BeforeRun.GetProperty("parentSynthesisId").GetGuid();
+        Assert.Equal(syn1Id, parentId);
+
+        // 6) start the synthesis run (Hangfire enqueue)
+        var runResp = await client.PostAsync($"/api/research/syntheses/{syn2Id}/run", content: null);
+        Assert.True(
+            runResp.StatusCode is HttpStatusCode.Accepted or HttpStatusCode.OK,
+            $"Expected 202 Accepted (or 200 OK if already terminal), got {(int)runResp.StatusCode} {runResp.StatusCode}");
+
+        // 7) wait for regen done AFTER checkpoint; ensure it matches syn2
+        var (status2, doneSynId, _) =
             await SseTestHelpers.WaitForDoneAfterAsync(client, jobId, checkpoint, TimeSpan.FromSeconds(60));
 
         Assert.Equal("Completed", status2);
-        Assert.True(doneSyn2Id.HasValue);
-        Assert.Equal(expectedSyn2Id, doneSyn2Id.Value);
+        Assert.True(doneSynId.HasValue);
+        Assert.Equal(syn2Id, doneSynId.Value);
 
-        // fetch synthesis 2 and check parent linkage
-        var syn2Resp = await client.GetAsync($"/api/research/syntheses/{doneSyn2Id.Value}");
-        syn2Resp.EnsureSuccessStatusCode();
-
-        var syn2Json = await syn2Resp.Content.ReadFromJsonAsync<JsonElement>();
-        Assert.Equal(doneSyn2Id.Value, syn2Json.GetProperty("id").GetGuid());
-
-        var parentId = syn2Json.GetProperty("parentSynthesisId").GetGuid();
-        Assert.Equal(syn1Id, parentId);
-
-        // latest should now be syn2
+        // 8) latest should now be syn2
         var latest2 = await GetLatestSynthesisAsync(client, jobId);
-        Assert.Equal(doneSyn2Id.Value, latest2.GetProperty("id").GetGuid());
+        Assert.Equal(syn2Id, latest2.GetProperty("id").GetGuid());
         Assert.Equal("Completed", latest2.GetProperty("status").GetString());
     }
 }
