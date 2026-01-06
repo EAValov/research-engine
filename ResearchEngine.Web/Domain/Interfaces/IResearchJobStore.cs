@@ -63,9 +63,15 @@ public interface IResearchJobStore
         IEnumerable<Learning> learnings,
         CancellationToken ct = default);
 
-     Task<IReadOnlyList<SourceListItemDto>> ListSourcesAsync(Guid jobId, CancellationToken ct = default);
+    Task<LearningGroupCardDto?> GetLearningGroupCardByLearningIdAsync(Guid learningId, CancellationToken ct = default);
+    Task<IReadOnlyList<ResolvedLearningGroupDto>> ResolveLearningGroupsBatchAsync(IReadOnlyList<Guid> learningIds, CancellationToken ct = default);
 
-     Task<PagedResult<LearningListItemDto>> ListLearningsAsync(
+    Task<bool> SoftDeleteLearningAsync(Guid jobId, Guid learningId, CancellationToken ct = default);
+    Task<bool> SoftDeleteSourceAsync(Guid jobId, Guid sourceId, CancellationToken ct = default);
+
+    Task<IReadOnlyList<SourceListItemDto>> ListSourcesAsync(Guid jobId, CancellationToken ct = default);
+
+    Task<PagedResult<LearningListItemDto>> ListLearningsAsync(
         Guid jobId,
         int skip = 0,
         int take = 200,

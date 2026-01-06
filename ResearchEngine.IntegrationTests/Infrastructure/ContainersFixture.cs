@@ -81,6 +81,8 @@ public sealed class ContainersFixture : IAsyncLifetime
 
         Environment.SetEnvironmentVariable("Hangfire__QueuePollMs", "200");
 
+        Environment.SetEnvironmentVariable("IpRateLimiting__Enabled", "false");
+
         // Build single shared factory (ONE host for all tests)
         Factory = new CustomWebApplicationFactory(this);
 

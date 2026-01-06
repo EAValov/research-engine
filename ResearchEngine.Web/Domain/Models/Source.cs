@@ -30,6 +30,7 @@ public sealed class Source
     public string? Region { get; set; }
 
     public DateTimeOffset CreatedAt { get; set; }
+    public DateTimeOffset? DeletedAt { get; set; }
 
     public ICollection<Learning> Learnings { get; set; } = new List<Learning>();
 }

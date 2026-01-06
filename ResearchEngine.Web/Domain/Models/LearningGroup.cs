@@ -36,3 +36,26 @@ public sealed class LearningGroupEmbedding
     public Vector Vector { get; set; } = null!;
     public DateTimeOffset CreatedAt { get; set; }
 }
+
+public sealed record LearningGroupCardDto(
+    Guid GroupId,
+    Guid JobId,
+    string CanonicalText,
+    float CanonicalImportanceScore,
+    int MemberCount,
+    int DistinctSourceCount,
+    Guid RepresentativeLearningId,
+    string RepresentativeLearningText,
+    IReadOnlyList<GroupEvidenceItemDto> Evidence);
+
+public sealed record GroupEvidenceItemDto(
+    Guid LearningId,
+    Guid SourceId,
+    string SourceReference,
+    float ImportanceScore,
+    string Text,
+    DateTimeOffset CreatedAt);
+
+public sealed record ResolvedLearningGroupDto(
+    Guid LearningId,
+    LearningGroupCardDto? Group); // null if not found/deleted

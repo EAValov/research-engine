@@ -116,7 +116,8 @@ namespace ResearchEngine.Web.Migrations
                     Kind = table.Column<int>(type: "integer", nullable: false),
                     Language = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: true),
                     Region = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true),
-                    CreatedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false, defaultValueSql: "now() at time zone 'utc'")
+                    CreatedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false, defaultValueSql: "now() at time zone 'utc'"),
+                    DeletedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true)
                 },
                 constraints: table =>
                 {
@@ -193,7 +194,8 @@ namespace ResearchEngine.Web.Migrations
                     Text = table.Column<string>(type: "text", nullable: false),
                     ImportanceScore = table.Column<float>(type: "real", nullable: false),
                     EvidenceText = table.Column<string>(type: "text", nullable: false),
-                    CreatedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false, defaultValueSql: "now() at time zone 'utc'")
+                    CreatedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false, defaultValueSql: "now() at time zone 'utc'"),
+                    DeletedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true)
                 },
                 constraints: table =>
                 {
@@ -360,6 +362,11 @@ namespace ResearchEngine.Web.Migrations
                 columns: new[] { "JobId", "UpdatedAt" });
 
             migrationBuilder.CreateIndex(
+                name: "IX_learnings_JobId_DeletedAt",
+                table: "learnings",
+                columns: new[] { "JobId", "DeletedAt" });
+
+            migrationBuilder.CreateIndex(
                 name: "IX_learnings_JobId_LearningGroupId",
                 table: "learnings",
                 columns: new[] { "JobId", "LearningGroupId" });
@@ -388,6 +395,11 @@ namespace ResearchEngine.Web.Migrations
                 name: "IX_sources_ContentHash",
                 table: "sources",
                 column: "ContentHash");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_sources_JobId_DeletedAt",
+                table: "sources",
+                columns: new[] { "JobId", "DeletedAt" });
 
             migrationBuilder.CreateIndex(
                 name: "IX_sources_JobId_Reference",

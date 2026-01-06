@@ -168,11 +168,18 @@ public sealed class ResearchDbContext : DbContext
         entity.Property(s => s.CreatedAt)
             .HasDefaultValueSql("now() at time zone 'utc'");
 
+        entity.Property(s => s.DeletedAt);
+
+        // global filter (hides soft-deleted sources everywhere unless IgnoreQueryFilters)
+        entity.HasQueryFilter(s => s.DeletedAt == null);
+
         // Dedupe: the same ref should not be inserted twice for the same job.
         entity.HasIndex(s => new { s.JobId, s.Reference }).IsUnique();
 
         // Useful for caching/dedupe by content.
         entity.HasIndex(s => s.ContentHash);
+
+        entity.HasIndex(s => new { s.JobId, s.DeletedAt });
 
         entity.HasOne(s => s.Job)
             .WithMany(j => j.Sources)
@@ -212,6 +219,11 @@ public sealed class ResearchDbContext : DbContext
         entity.Property(l => l.CreatedAt)
             .HasDefaultValueSql("now() at time zone 'utc'");
 
+        entity.Property(l => l.DeletedAt);
+
+        // global filter
+        entity.HasQueryFilter(l => l.DeletedAt == null);
+
         entity.HasOne(l => l.Job)
             .WithMany()
             .HasForeignKey(l => l.JobId)
@@ -230,6 +242,7 @@ public sealed class ResearchDbContext : DbContext
         entity.HasIndex(l => new { l.JobId, l.SourceId });
         entity.HasIndex(l => new { l.SourceId, l.QueryHash });
         entity.HasIndex(l => new { l.JobId, l.LearningGroupId });
+        entity.HasIndex(l => new { l.JobId, l.DeletedAt });
     }
 
     private void ConfigureLearningEmbedding(ModelBuilder modelBuilder)
@@ -258,6 +271,7 @@ public sealed class ResearchDbContext : DbContext
             .HasStorageParameter("lists", 100);
 
         entity.HasIndex(e => e.LearningId).IsUnique();
+        entity.HasQueryFilter(e => e.Learning.DeletedAt == null);
     }
 
     private static void ConfigureSynthesis(ModelBuilder modelBuilder)
@@ -373,6 +387,8 @@ public sealed class ResearchDbContext : DbContext
             .WithMany() // no nav required
             .HasForeignKey(x => x.SourceId)
             .OnDelete(DeleteBehavior.Cascade);
+
+        entity.HasQueryFilter(e => e.Source.DeletedAt == null);
     }
 
     private static void ConfigureSynthesisLearningOverride(ModelBuilder modelBuilder)
@@ -404,6 +420,8 @@ public sealed class ResearchDbContext : DbContext
             .WithMany() // no nav required
             .HasForeignKey(x => x.LearningId)
             .OnDelete(DeleteBehavior.Cascade);
+        
+        entity.HasQueryFilter(e => e.Learning.DeletedAt == null);
     }
 
     private static void ConfigureLearningGroup(ModelBuilder modelBuilder)

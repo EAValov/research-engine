@@ -26,6 +26,8 @@ public sealed class Learning
     public string EvidenceText { get; set; } = null!;
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 
+    public DateTimeOffset? DeletedAt { get; set; }
+
     public LearningEmbedding Embedding { get; set; } = null!;
 }
 
@@ -47,3 +49,4 @@ public sealed record LearningListItemDto(
     float ImportanceScore,
     DateTimeOffset CreatedAt,
     string Text);
+

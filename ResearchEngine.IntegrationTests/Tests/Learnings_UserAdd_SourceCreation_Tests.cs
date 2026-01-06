@@ -1,4 +1,3 @@
-using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using ResearchEngine.IntegrationTests.Helpers;
@@ -21,7 +20,7 @@ public sealed class Learnings_UserAdd_SourceCreation_Tests : IntegrationTestBase
         var (status, _, _) = await SseTestHelpers.WaitForDoneAsync(client, jobId, TimeSpan.FromSeconds(60));
         Assert.Equal("Completed", status);
 
-        // 2) Add user learning WITHOUT reference
+        // 2) Add user learning without reference
         var addReq = new
         {
             text = "User learning: base editing can reduce indels vs nuclease editing in some contexts.",
@@ -61,8 +60,7 @@ public sealed class Learnings_UserAdd_SourceCreation_Tests : IntegrationTestBase
 
         Assert.False(string.IsNullOrWhiteSpace(reference));
 
-        // We don't have "Kind" in the list response, so this is the best observable assertion.
-        // Your store method is named GetOrCreateUserSourceAsync -> typically uses "user:manual" or "user:*".
+        // TODO: We don't have "Kind" in the list response, so this is the best observable assertion.
         Assert.StartsWith("user:", reference, StringComparison.OrdinalIgnoreCase);
     }
 }

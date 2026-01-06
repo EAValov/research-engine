@@ -5,32 +5,39 @@ using ResearchEngine.Domain;
 
 namespace ResearchEngine.Web;
 
-public static partial class ResearchJobsApi
+public static partial class ResearchApi
 {
-    public static void MapResearchJobsApi(this WebApplication app)
+    public static void MapResearchApi(this WebApplication app)
     {
         var api = app.MapGroup("/api/research")
             .WithTags("Research Jobs API")
-            .RequireAuthorization();
+            .RequireAuthorization()
+            .RequireRateLimiting("ResearchRead");
 
-        api.MapPost("/jobs", CreateJobAsync);
+        api.MapPost("/jobs", CreateJobAsync).RequireRateLimiting("ResearchWrite");
         api.MapGet("/jobs/{jobId:guid}", GetJobAsync);
 
         api.MapGet("/jobs/{jobId:guid}/sources", ListSourcesAsync);
 
         api.MapGet("/jobs/{jobId:guid}/learnings", ListLearningsAsync);
-        api.MapPost("/jobs/{jobId:guid}/learnings", AddLearningAsync);
+        api.MapPost("/jobs/{jobId:guid}/learnings", AddLearningAsync).RequireRateLimiting("ResearchWrite");
 
         api.MapGet("/jobs/{jobId:guid}/syntheses/latest", GetLatestSynthesisAsync);
         api.MapGet("/syntheses/{synthesisId:guid}", GetSynthesisAsync);
 
-        api.MapPost("/jobs/{jobId:guid}/syntheses", CreateSynthesisAsync);      
-        api.MapPut("/syntheses/{synthesisId:guid}/overrides/sources", UpsertSynthesisSourceOverridesAsync);
-        api.MapPut("/syntheses/{synthesisId:guid}/overrides/learnings", UpsertSynthesisLearningOverridesAsync);
-        api.MapPost("/syntheses/{synthesisId:guid}/run", RunSynthesisAsync);     
+        api.MapPost("/jobs/{jobId:guid}/syntheses", CreateSynthesisAsync).RequireRateLimiting("ResearchWrite");      
+        api.MapPut("/syntheses/{synthesisId:guid}/overrides/sources", UpsertSynthesisSourceOverridesAsync).RequireRateLimiting("ResearchWrite");
+        api.MapPut("/syntheses/{synthesisId:guid}/overrides/learnings", UpsertSynthesisLearningOverridesAsync).RequireRateLimiting("ResearchWrite");
+        api.MapPost("/syntheses/{synthesisId:guid}/run", RunSynthesisAsync).RequireRateLimiting("ResearchWrite");     
 
         api.MapGet("/jobs/{jobId:guid}/events", ListEventsAsync);
         api.MapGet("/jobs/{jobId:guid}/events/stream", StreamEventsAsync);
+
+        api.MapGet("/learnings/{learningId:guid}/group", GetLearningGroupByLearningIdAsync);
+        api.MapPost("/learnings/groups/resolve", ResolveLearningGroupsBatchAsync).RequireRateLimiting("ResearchWrite");
+
+        api.MapDelete("/jobs/{jobId:guid}/learnings/{learningId:guid}", SoftDeleteLearningAsync).RequireRateLimiting("ResearchWrite");
+        api.MapDelete("/jobs/{jobId:guid}/sources/{sourceId:guid}", SoftDeleteSourceAsync).RequireRateLimiting("ResearchWrite");
     }
 
     // ---------------- jobs ----------------
@@ -610,6 +617,58 @@ public static partial class ResearchJobsApi
         {
             // expected
         }
+    }
+
+    private static async Task<IResult> GetLearningGroupByLearningIdAsync(
+        Guid learningId,
+        IResearchJobStore jobStore,
+        CancellationToken ct)
+    {
+        var card = await jobStore.GetLearningGroupCardByLearningIdAsync(learningId, ct);
+        if (card is null)
+            return Results.NotFound();
+
+        return Results.Ok(card);
+    }
+
+    private static async Task<IResult> ResolveLearningGroupsBatchAsync(
+        [FromBody] BatchResolveLearningGroupsRequest request,
+        IResearchJobStore jobStore,
+        CancellationToken ct)
+    {
+        if (request is null || request.LearningIds is null || request.LearningIds.Count == 0)
+            return Results.BadRequest(new { error = "learningIds is required." });
+
+        var items = await jobStore.ResolveLearningGroupsBatchAsync(request.LearningIds, ct);
+        return Results.Ok(new BatchResolveLearningGroupsResponse(items));
+    }
+
+    private static async Task<IResult> SoftDeleteLearningAsync(
+        Guid jobId,
+        Guid learningId,
+        IResearchJobStore jobStore,
+        CancellationToken ct)
+    {
+        var job = await jobStore.GetJobAsync(jobId, ct);
+        if (job is null)
+            return Results.NotFound();
+
+        var ok = await jobStore.SoftDeleteLearningAsync(jobId, learningId, ct);
+        return ok ? Results.NoContent() : Results.NotFound();
+    }
+
+    private static async Task<IResult> SoftDeleteSourceAsync(
+        Guid jobId,
+        Guid sourceId,
+        IResearchJobStore jobStore,
+        CancellationToken ct)
+    {
+        var job = await jobStore.GetJobAsync(jobId, ct);
+        if (job is null)
+            return Results.NotFound();
+
+        var ok = await jobStore.SoftDeleteSourceAsync(jobId, sourceId, ct);
+        return ok ? Results.NoContent() : Results.NotFound();
     }
 
     // ---------------- helpers ----------------

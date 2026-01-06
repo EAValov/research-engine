@@ -780,6 +780,192 @@ public sealed partial class PostgresResearchJobStore(
         return source;
     }
 
+    public async Task<LearningGroupCardDto?> GetLearningGroupCardByLearningIdAsync(Guid learningId, CancellationToken ct = default)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(ct);
+
+        // Learning is filtered by query filter (DeletedAt == null), and Source too.
+        var learning = await db.Learnings
+            .AsNoTracking()
+            .Include(l => l.Source)
+            .Include(l => l.Group)
+            .FirstOrDefaultAsync(l => l.Id == learningId, ct);
+
+        if (learning is null)
+            return null;
+
+        // Load top evidence items from the group (non-deleted only due to query filters).
+        var evidence = await db.Learnings
+            .AsNoTracking()
+            .Include(l => l.Source)
+            .Where(l => l.LearningGroupId == learning.LearningGroupId)
+            .OrderByDescending(l => l.ImportanceScore)
+            .ThenByDescending(l => l.CreatedAt)
+            .Take(10)
+            .Select(l => new GroupEvidenceItemDto(
+                l.Id,
+                l.SourceId,
+                l.Source.Reference,
+                l.ImportanceScore,
+                l.Text,
+                l.CreatedAt))
+            .ToListAsync(ct);
+
+        // Representative = top by score, stable tie-breaker.
+        var rep = evidence.FirstOrDefault();
+        if (rep is null)
+        {
+            // Should not happen if learning exists, but keep safe.
+            rep = new GroupEvidenceItemDto(
+                learning.Id, learning.SourceId, learning.Source.Reference, learning.ImportanceScore, learning.Text, learning.CreatedAt);
+        }
+
+        var g = learning.Group;
+
+        return new LearningGroupCardDto(
+            GroupId: g.Id,
+            JobId: g.JobId,
+            CanonicalText: g.CanonicalText,
+            CanonicalImportanceScore: g.CanonicalImportanceScore,
+            MemberCount: g.MemberCount,
+            DistinctSourceCount: g.DistinctSourceCount,
+            RepresentativeLearningId: rep.LearningId,
+            RepresentativeLearningText: rep.Text,
+            Evidence: evidence);
+    }
+
+    public async Task<IReadOnlyList<ResolvedLearningGroupDto>> ResolveLearningGroupsBatchAsync(
+        IReadOnlyList<Guid> learningIds,
+        CancellationToken ct = default)
+    {
+        if (learningIds is null || learningIds.Count == 0)
+            return Array.Empty<ResolvedLearningGroupDto>();
+
+        // Avoid duplicates
+        var unique = learningIds.Where(id => id != Guid.Empty).Distinct().ToList();
+        if (unique.Count == 0)
+            return Array.Empty<ResolvedLearningGroupDto>();
+
+        await using var db = await dbContextFactory.CreateDbContextAsync(ct);
+
+        // Map learningId -> groupId (query filters remove deleted learnings)
+        var mapRows = await db.Learnings
+            .AsNoTracking()
+            .Where(l => unique.Contains(l.Id))
+            .Select(l => new { l.Id, l.LearningGroupId })
+            .ToListAsync(ct);
+
+        var groupIds = mapRows.Select(x => x.LearningGroupId).Distinct().ToList();
+
+        // Preload groups
+        var groups = await db.LearningGroups
+            .AsNoTracking()
+            .Where(g => groupIds.Contains(g.Id))
+            .ToDictionaryAsync(g => g.Id, ct);
+
+        // For evidence, take top N per group (simple approach: one query per group is fine for small batch;
+        // if you want perf, we can do window functions later).
+        var groupCards = new Dictionary<Guid, LearningGroupCardDto>();
+
+        foreach (var gid in groupIds)
+        {
+            if (!groups.TryGetValue(gid, out var g))
+                continue;
+
+            var evidence = await db.Learnings
+                .AsNoTracking()
+                .Include(l => l.Source)
+                .Where(l => l.LearningGroupId == gid)
+                .OrderByDescending(l => l.ImportanceScore)
+                .ThenByDescending(l => l.CreatedAt)
+                .Take(10)
+                .Select(l => new GroupEvidenceItemDto(
+                    l.Id,
+                    l.SourceId,
+                    l.Source.Reference,
+                    l.ImportanceScore,
+                    l.Text,
+                    l.CreatedAt))
+                .ToListAsync(ct);
+
+            var rep = evidence.FirstOrDefault();
+            if (rep is null)
+                continue;
+
+            groupCards[gid] = new LearningGroupCardDto(
+                GroupId: g.Id,
+                JobId: g.JobId,
+                CanonicalText: g.CanonicalText,
+                CanonicalImportanceScore: g.CanonicalImportanceScore,
+                MemberCount: g.MemberCount,
+                DistinctSourceCount: g.DistinctSourceCount,
+                RepresentativeLearningId: rep.LearningId,
+                RepresentativeLearningText: rep.Text,
+                Evidence: evidence);
+        }
+
+        // Preserve input order (including duplicates) in response
+        var learningToGroup = mapRows.ToDictionary(x => x.Id, x => x.LearningGroupId);
+
+        var result = new List<ResolvedLearningGroupDto>(learningIds.Count);
+
+        foreach (var lid in learningIds)
+        {
+            if (lid == Guid.Empty || !learningToGroup.TryGetValue(lid, out var gid) || !groupCards.TryGetValue(gid, out var card))
+                result.Add(new ResolvedLearningGroupDto(lid, null));
+            else
+                result.Add(new ResolvedLearningGroupDto(lid, card));
+        }
+
+        return result;
+    }
+
+    public async Task<bool> SoftDeleteLearningAsync(Guid jobId, Guid learningId, CancellationToken ct = default)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(ct);
+
+        // Use IgnoreQueryFilters to allow deleting even if already deleted
+        var entity = await db.Learnings
+            .IgnoreQueryFilters()
+            .FirstOrDefaultAsync(l => l.Id == learningId && l.JobId == jobId, ct);
+
+        if (entity is null)
+            return false;
+
+        if (entity.DeletedAt is not null)
+            return true; // idempotent
+
+        entity.DeletedAt = DateTimeOffset.UtcNow;
+        await db.SaveChangesAsync(ct);
+        return true;
+    }
+
+    public async Task<bool> SoftDeleteSourceAsync(Guid jobId, Guid sourceId, CancellationToken ct = default)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(ct);
+
+        var src = await db.Sources
+            .IgnoreQueryFilters()
+            .FirstOrDefaultAsync(s => s.Id == sourceId && s.JobId == jobId, ct);
+
+        if (src is null)
+            return false;
+
+        var now = DateTimeOffset.UtcNow;
+
+        if (src.DeletedAt is null)
+            src.DeletedAt = now;
+
+        // Also soft-delete learnings under this source (idempotent)
+        await db.Learnings
+            .IgnoreQueryFilters()
+            .Where(l => l.SourceId == sourceId && l.JobId == jobId && l.DeletedAt == null)
+            .ExecuteUpdateAsync(s => s.SetProperty(l => l.DeletedAt, now), ct);
+
+        await db.SaveChangesAsync(ct);
+        return true;
+    }
+
     private static string ComputeSha256(string input)
     {
         using var sha = System.Security.Cryptography.SHA256.Create();

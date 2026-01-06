@@ -12,7 +12,10 @@ using ResearchEngine.Web.Authentication;
 using ResearchEngine.Web.OpenAI;
 using Scalar.AspNetCore;
 using Serilog;
+using AspNetCoreRateLimit;
+using Microsoft.Extensions.Caching.StackExchangeRedis;
 using StackExchange.Redis;
+using Microsoft.AspNetCore.HttpOverrides;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -135,6 +138,34 @@ builder.Services.AddSingleton<IConnectionMultiplexer>(
 // Event bus
 builder.Services.AddSingleton<IResearchEventBus, RedisResearchEventBus>();
 
+var ipRateLimitingSection = builder.Configuration.GetSection("IpRateLimiting");
+var ipRateLimitingEnabled =
+    builder.Configuration.GetValue<bool>("IpRateLimiting:Enabled") &&
+    ipRateLimitingSection.Exists() &&
+    ipRateLimitingSection.GetSection("GeneralRules").GetChildren().Any();
+
+if (ipRateLimitingEnabled)
+{
+    builder.Services.AddOptions();
+    builder.Services.AddMemoryCache();
+
+    builder.Services.AddStackExchangeRedisCache(options =>
+    {
+        options.Configuration = redisOptions.ConnectionString;
+        options.InstanceName = "ratelimit:";
+    });
+
+    builder.Services.Configure<IpRateLimitOptions>(ipRateLimitingSection);
+    builder.Services.Configure<IpRateLimitPolicies>(
+        builder.Configuration.GetSection("IpRateLimitPolicies"));
+
+    builder.Services.AddSingleton<IProcessingStrategy, AsyncKeyLockProcessingStrategy>();
+
+    builder.Services.AddSingleton<IIpPolicyStore, DistributedCacheIpPolicyStore>();
+    builder.Services.AddSingleton<IRateLimitCounterStore, DistributedCacheRateLimitCounterStore>();
+    builder.Services.AddSingleton<IRateLimitConfiguration, RateLimitConfiguration>();
+}
+
 // ---------- Search & Crawl ----------
 builder.Services.Configure<FirecrawlOptions>(
     builder.Configuration.GetSection(nameof(FirecrawlOptions)));
@@ -195,6 +226,20 @@ builder.Services.AddOpenApi();
 
 var app = builder.Build();
 
+if (ipRateLimitingEnabled)
+{   
+    // if we're behind the reverse-proxy
+    var options = new ForwardedHeadersOptions {
+        ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto,
+    };
+
+    options.KnownProxies.Clear();
+    options.KnownIPNetworks.Clear();
+    
+    app.UseForwardedHeaders(options);
+    app.UseIpRateLimiting();
+}
+
 app.UseAuthentication();
 app.UseAuthorization();
 
@@ -206,8 +251,9 @@ app.MapHealthChecks("/health/ready",
     new HealthCheckOptions { Predicate = check => check.Tags.Contains("ready") });
 
 // ---------- API ----------
+app.MapResearchApi();
+
 app.MapResearchModel();
-app.MapResearchJobsApi();
 app.MapResearchProtocolApi();
 
 app.MapOpenApi();

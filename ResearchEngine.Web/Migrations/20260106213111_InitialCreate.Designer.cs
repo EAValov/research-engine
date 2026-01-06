@@ -13,7 +13,7 @@ using ResearchEngine.Infrastructure;
 namespace ResearchEngine.Web.Migrations
 {
     [DbContext(typeof(ResearchDbContext))]
-    [Migration("20260101191906_InitialCreate")]
+    [Migration("20260106213111_InitialCreate")]
     partial class InitialCreate
     {
         /// <inheritdoc />
@@ -21,7 +21,7 @@ namespace ResearchEngine.Web.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "10.0.0")
+                .HasAnnotation("ProductVersion", "10.0.1")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.HasPostgresExtension(modelBuilder, "vector");
@@ -69,6 +69,9 @@ namespace ResearchEngine.Web.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasDefaultValueSql("now() at time zone 'utc'");
 
+                    b.Property<DateTimeOffset?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<string>("EvidenceText")
                         .IsRequired()
                         .HasColumnType("text");
@@ -100,6 +103,8 @@ namespace ResearchEngine.Web.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("LearningGroupId");
+
+                    b.HasIndex("JobId", "DeletedAt");
 
                     b.HasIndex("JobId", "LearningGroupId");
 
@@ -312,6 +317,9 @@ namespace ResearchEngine.Web.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasDefaultValueSql("now() at time zone 'utc'");
 
+                    b.Property<DateTimeOffset?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<Guid>("JobId")
                         .HasColumnType("uuid");
 
@@ -338,6 +346,8 @@ namespace ResearchEngine.Web.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("ContentHash");
+
+                    b.HasIndex("JobId", "DeletedAt");
 
                     b.HasIndex("JobId", "Reference")
                         .IsUnique();

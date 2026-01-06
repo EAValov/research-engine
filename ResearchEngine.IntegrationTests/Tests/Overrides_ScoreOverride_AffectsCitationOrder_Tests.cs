@@ -17,23 +17,7 @@ public sealed class Overrides_ScoreOverride_AffectsCitationOrder_Tests : Integra
     {
         using var client = CreateClient();
 
-        // 1) create job + wait done
-        var createReq = new
-        {
-            query = "Test query for score override ordering.",
-            clarifications = Array.Empty<object>(),
-            breadth = 2,
-            depth = 2,
-            language = "en",
-            region = (string?)null,
-            webhook = (object?)null
-        };
-
-        var createResp = await client.PostAsJsonAsync("/api/research/jobs", createReq);
-        createResp.EnsureSuccessStatusCode();
-
-        var createJson = await createResp.Content.ReadFromJsonAsync<JsonElement>();
-        var jobId = createJson.GetProperty("jobId").GetGuid();
+        var jobId = await CreateJobAsync(client, "Test query for score override ordering.");
 
         var (status, _, _) = await SseTestHelpers.WaitForDoneAsync(client, jobId, TimeSpan.FromSeconds(60));
         Assert.Equal("Completed", status);
