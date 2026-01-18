@@ -28,7 +28,13 @@ namespace ResearchEngine.Web.Migrations
                     TargetLanguage = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: false),
                     Region = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true),
                     CreatedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false, defaultValueSql: "now() at time zone 'utc'"),
-                    UpdatedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false, defaultValueSql: "now() at time zone 'utc'")
+                    UpdatedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false, defaultValueSql: "now() at time zone 'utc'"),
+                    HangfireJobId = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
+                    CancelRequested = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
+                    CancelRequestedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    CancelReason = table.Column<string>(type: "character varying(2000)", maxLength: 2000, nullable: true),
+                    DeletedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    DeletedReason = table.Column<string>(type: "character varying(2000)", maxLength: 2000, nullable: true)
                 },
                 constraints: table =>
                 {
@@ -390,6 +396,16 @@ namespace ResearchEngine.Web.Migrations
                 name: "IX_research_events_JobId_SynthesisId",
                 table: "research_events",
                 columns: new[] { "JobId", "SynthesisId" });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_research_jobs_DeletedAt",
+                table: "research_jobs",
+                column: "DeletedAt");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_research_jobs_Status",
+                table: "research_jobs",
+                column: "Status");
 
             migrationBuilder.CreateIndex(
                 name: "IX_sources_ContentHash",

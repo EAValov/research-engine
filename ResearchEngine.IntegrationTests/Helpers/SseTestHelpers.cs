@@ -42,7 +42,7 @@ public static class SseTestHelpers
             using var doc = SseReader.ParseJson(frame);
 
             var status = doc.RootElement.GetProperty("status").GetString();
-            Assert.True(status is "Completed" or "Failed");
+            Assert.True(status is "Completed" or "Failed" or "Canceled");
 
             Guid? synthesisId = null;
             if (doc.RootElement.TryGetProperty("synthesisId", out var synEl) &&

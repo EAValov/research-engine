@@ -8,7 +8,6 @@ namespace ResearchEngine.Infrastructure;
 public sealed class ResearchDbContext : DbContext
 {
     private readonly int _embeddingDimensions;
-
     public DbSet<ResearchJob> ResearchJobs => Set<ResearchJob>();
     public DbSet<Clarification> Clarifications => Set<Clarification>();
     public DbSet<ResearchEvent> ResearchEvents => Set<ResearchEvent>();
@@ -77,6 +76,26 @@ public sealed class ResearchDbContext : DbContext
         entity.Property(j => j.UpdatedAt)
             .HasDefaultValueSql("now() at time zone 'utc'");
 
+        entity.Property(j => j.HangfireJobId)
+            .HasMaxLength(100);
+
+        entity.Property(j => j.CancelRequested)
+            .HasDefaultValue(false);
+
+        entity.Property(j => j.CancelRequestedAt);
+
+        entity.Property(j => j.CancelReason)
+            .HasMaxLength(2000);
+
+        entity.Property(j => j.DeletedAt);
+
+        entity.Property(j => j.DeletedReason)
+            .HasMaxLength(2000);
+
+        entity.HasIndex(j => j.DeletedAt);
+
+        entity.HasIndex(j => j.Status);
+
         entity.HasMany(j => j.Sources)
             .WithOne(s => s.Job)
             .HasForeignKey(s => s.JobId)
@@ -86,6 +105,8 @@ public sealed class ResearchDbContext : DbContext
             .WithOne(sy => sy.Job)
             .HasForeignKey(sy => sy.JobId)
             .OnDelete(DeleteBehavior.Cascade);
+
+        entity.HasQueryFilter(j => j.DeletedAt == null);
     }
 
     private static void ConfigureClarification(ModelBuilder modelBuilder)
@@ -110,6 +131,8 @@ public sealed class ResearchDbContext : DbContext
             .WithMany(j => j.Clarifications)
             .HasForeignKey(c => c.JobId)
             .OnDelete(DeleteBehavior.Cascade);
+
+        entity.HasQueryFilter(c => c.Job.DeletedAt == null);
     }
 
     private void ConfigureEvent(ModelBuilder modelBuilder)
@@ -136,6 +159,7 @@ public sealed class ResearchDbContext : DbContext
             .OnDelete(DeleteBehavior.Cascade);
 
         entity.HasIndex(e => new { e.JobId, e.SynthesisId });
+        entity.HasQueryFilter(e => e.Job.DeletedAt == null);
     }
 
     private static void ConfigureSource(ModelBuilder modelBuilder)
@@ -171,7 +195,7 @@ public sealed class ResearchDbContext : DbContext
         entity.Property(s => s.DeletedAt);
 
         // global filter (hides soft-deleted sources everywhere unless IgnoreQueryFilters)
-        entity.HasQueryFilter(s => s.DeletedAt == null);
+        entity.HasQueryFilter(s => s.DeletedAt == null && s.Job.DeletedAt == null);
 
         // Dedupe: the same ref should not be inserted twice for the same job.
         entity.HasIndex(s => new { s.JobId, s.Reference }).IsUnique();
@@ -222,7 +246,7 @@ public sealed class ResearchDbContext : DbContext
         entity.Property(l => l.DeletedAt);
 
         // global filter
-        entity.HasQueryFilter(l => l.DeletedAt == null);
+        entity.HasQueryFilter(l => l.DeletedAt == null && l.Job.DeletedAt == null);
 
         entity.HasOne(l => l.Job)
             .WithMany()
@@ -271,7 +295,7 @@ public sealed class ResearchDbContext : DbContext
             .HasStorageParameter("lists", 100);
 
         entity.HasIndex(e => e.LearningId).IsUnique();
-        entity.HasQueryFilter(e => e.Learning.DeletedAt == null);
+        entity.HasQueryFilter(e => e.Learning.DeletedAt == null && e.Learning.Job.DeletedAt == null);
     }
 
     private static void ConfigureSynthesis(ModelBuilder modelBuilder)
@@ -314,6 +338,7 @@ public sealed class ResearchDbContext : DbContext
 
         entity.HasIndex(s => new { s.JobId, s.CreatedAt });
         entity.HasIndex(s => s.Status);
+        entity.HasQueryFilter(s => s.Job.DeletedAt == null);
     }
 
     private static void ConfigureSynthesisSection(ModelBuilder modelBuilder)
@@ -359,6 +384,7 @@ public sealed class ResearchDbContext : DbContext
 
         // Stable identity within a synthesis (helps avoid duplicates)
         entity.HasIndex(s => new { s.SynthesisId, s.SectionKey }).IsUnique();
+        entity.HasQueryFilter(s => s.Synthesis.Job.DeletedAt == null);
     }
 
     private static void ConfigureSynthesisSourceOverride(ModelBuilder modelBuilder)
@@ -388,7 +414,9 @@ public sealed class ResearchDbContext : DbContext
             .HasForeignKey(x => x.SourceId)
             .OnDelete(DeleteBehavior.Cascade);
 
-        entity.HasQueryFilter(e => e.Source.DeletedAt == null);
+        entity.HasQueryFilter(x =>
+            x.Source.DeletedAt == null &&
+            x.Synthesis.Job.DeletedAt == null);
     }
 
     private static void ConfigureSynthesisLearningOverride(ModelBuilder modelBuilder)
@@ -421,7 +449,9 @@ public sealed class ResearchDbContext : DbContext
             .HasForeignKey(x => x.LearningId)
             .OnDelete(DeleteBehavior.Cascade);
         
-        entity.HasQueryFilter(e => e.Learning.DeletedAt == null);
+        entity.HasQueryFilter(x =>
+            x.Learning.DeletedAt == null &&
+            x.Synthesis.Job.DeletedAt == null);
     }
 
     private static void ConfigureLearningGroup(ModelBuilder modelBuilder)
@@ -461,6 +491,7 @@ public sealed class ResearchDbContext : DbContext
             .OnDelete(DeleteBehavior.Restrict);
 
         entity.HasIndex(g => new { g.JobId, g.UpdatedAt });
+        entity.HasQueryFilter(s => s.Job.DeletedAt == null);
     }
     
     private void ConfigureLearningGroupEmbedding(ModelBuilder modelBuilder)
@@ -488,5 +519,6 @@ public sealed class ResearchDbContext : DbContext
             .HasStorageParameter("lists", 100);
 
         entity.HasIndex(e => e.LearningGroupId).IsUnique();
+        entity.HasQueryFilter(e => e.Group.Job.DeletedAt == null);
     }
 }

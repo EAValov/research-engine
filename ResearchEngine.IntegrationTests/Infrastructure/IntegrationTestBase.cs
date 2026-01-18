@@ -64,7 +64,7 @@ public abstract class IntegrationTestBase
             evResp.EnsureSuccessStatusCode();
 
             var events = await evResp.Content.ReadFromJsonAsync<JsonElement>();
-            var stages = events.EnumerateArray().Select(GenericHelpers.GetStageName).ToList();
+            var stages = events.EnumerateArray().Select(GetStageName).ToList();
 
             if (stages.Contains("Completed")) return;
             if (stages.Contains("Failed")) throw new Xunit.Sdk.XunitException("Job failed unexpectedly.");
@@ -101,5 +101,29 @@ public abstract class IntegrationTestBase
         var synthesis = json.GetProperty("synthesis");
         Assert.Equal(JsonValueKind.Object, synthesis.ValueKind);
         return synthesis;
+    }
+
+    protected static string GetStageName(JsonElement el)
+    {
+        // If el is already the stage value (number/string), interpret it directly.
+        if (el.ValueKind == JsonValueKind.Number)
+            return ((ResearchEventStage)el.GetInt32()).ToString();
+
+        if (el.ValueKind == JsonValueKind.String)
+            return el.GetString()!;
+
+        // Otherwise expect an event object with a "stage" property.
+        if (el.ValueKind == JsonValueKind.Object)
+        {
+            var stageEl = el.GetProperty("stage");
+            return stageEl.ValueKind switch
+            {
+                JsonValueKind.String => stageEl.GetString()!,
+                JsonValueKind.Number => ((ResearchEventStage)stageEl.GetInt32()).ToString(),
+                _ => throw new InvalidOperationException($"Unexpected JSON kind for stage: {stageEl.ValueKind}")
+            };
+        }
+
+        throw new InvalidOperationException($"Unexpected JSON kind for event/stage: {el.ValueKind}");
     }
 }

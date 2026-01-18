@@ -29,5 +29,6 @@ public enum ResearchEventStage
     LearningExtraction,
     Metrics,
     Completed,
+    Canceled,
     Failed
 }

@@ -36,7 +36,6 @@ public sealed class ResearchOrchestrator(
         string? region,
         CancellationToken ct = default)
     {
-        // 1) Create job row
         var job = await jobStore.CreateJobAsync(
             query: query,
             clarifications: clarifications,
@@ -46,11 +45,12 @@ public sealed class ResearchOrchestrator(
             region: region,
             ct: ct);
 
-        // 2) Run in background (do NOT tie to request cancellation)
-        backgroundJobs.Create(
+        var hfId = backgroundJobs.Create(
             Hangfire.Common.Job.FromExpression<IResearchOrchestrator>(o =>
-                o.RunJobBackgroundAsync(job.Id)),  
+                o.RunJobBackgroundAsync(job.Id)),
             new EnqueuedState("jobs"));
+
+        await jobStore.SetJobHangfireIdAsync(job.Id, hfId, ct);
 
         return job.Id;
     }
@@ -65,6 +65,9 @@ public sealed class ResearchOrchestrator(
     /// </summary>
     private async Task RunJobAsync(Guid jobId, CancellationToken ct = default)
     {
+        if (await jobStore.IsJobDeletedAsync(jobId, CancellationToken.None))
+            return;
+
         var job = await jobStore.GetJobAsync(jobId, ct)
             ?? throw new ArgumentException("Job not found", nameof(jobId));
 
@@ -79,6 +82,8 @@ public sealed class ResearchOrchestrator(
 
             var clarifications = job.Clarifications ?? new List<Clarification>();
             var clarificationsText = FormatClarifications(clarifications);
+
+            await ThrowIfCanceledAsync(jobId, ct);
 
             // 1) SERP planning
             var serpQueries = await queryPlanningService.GenerateSerpQueriesAsync(
@@ -99,6 +104,7 @@ public sealed class ResearchOrchestrator(
             // 2) SERP -> URLs -> Sources -> Learnings
             foreach (var serpQuery in serpQueries)
             {
+                await ThrowIfCanceledAsync(jobId, ct);
                 ct.ThrowIfCancellationRequested();
 
                 await ProcessSerpQueryAsync(
@@ -126,9 +132,10 @@ public sealed class ResearchOrchestrator(
                 ResearchEventStage.Summarizing,
                 $"Synthesis started (synthesisId={synthesisId})",
                 ct);
+            
+            await ThrowIfCanceledAsync(jobId, ct);
 
             await reportSynthesisService.RunSynthesisAsync(synthesisId, progress, ct);
-
 
             // Job becomes completed when synthesis completes
             job.Status = ResearchJobStatus.Completed;
@@ -137,6 +144,19 @@ public sealed class ResearchOrchestrator(
             // metrics + done
             progress.MarkAllCompleted();
             await progress.EmitMetricsSummaryAsync(ct);
+        }
+        catch (OperationCanceledException oce)
+        {
+            job.Status = ResearchJobStatus.Canceled;
+            await jobStore.UpdateJobAsync(job, CancellationToken.None);
+
+            await jobStore.AppendEventAsync(
+                jobId,
+                new ResearchEvent(DateTimeOffset.UtcNow, ResearchEventStage.Canceled,
+                    $"Research canceled: {oce.Message}"),
+                CancellationToken.None);
+
+            return; // do not throw -> no Hangfire retry
         }
         catch (Exception ex)
         {
@@ -148,7 +168,7 @@ public sealed class ResearchOrchestrator(
                 new ResearchEvent(DateTimeOffset.UtcNow, ResearchEventStage.Failed, $"Research failed: {ex.Message}"),
                 ct);
 
-            throw;
+            throw; // let Hangfire retry
         }
     }
 
@@ -228,6 +248,12 @@ public sealed class ResearchOrchestrator(
             ResearchEventStage.Searching,
             $"Processed SERP query '{serpQuery}' with {urls.Count} URLs.",
             ct);
+    }
+
+    private async Task ThrowIfCanceledAsync(Guid jobId, CancellationToken ct)
+    {
+        if (await jobStore.IsJobCancelRequestedAsync(jobId, ct))
+            throw new OperationCanceledException($"Job {jobId} canceled.");
     }
 
     private sealed record UrlProcessingSummary(bool UsedCache, bool HadError, int LearningCount);

@@ -1,6 +1,5 @@
 using System.Net.Http.Json;
 using System.Text.Json;
-using ResearchEngine.IntegrationTests.Helpers;
 using ResearchEngine.IntegrationTests.Infrastructure;
 
 namespace ResearchEngine.IntegrationTests.Tests;
@@ -39,7 +38,7 @@ public sealed class Learnings_VectorPath_Tests : IntegrationTestBase
             evResp.EnsureSuccessStatusCode();
 
             var events = await evResp.Content.ReadFromJsonAsync<JsonElement>();
-            var stages = events.EnumerateArray().Select(GenericHelpers.GetStageName).ToList();
+            var stages = events.EnumerateArray().Select(GetStageName).ToList();
 
             if (stages.Contains("Completed"))
                 break;

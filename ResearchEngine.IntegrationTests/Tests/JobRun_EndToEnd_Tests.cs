@@ -54,7 +54,7 @@ public sealed class JobRun_EndToEnd_Tests : IntegrationTestBase
             if (frame.Event == "event")
             {
                 using var doc = SseReader.ParseJson(frame);
-                var stage = GenericHelpers.GetStageName(doc.RootElement.GetProperty("stage"));
+                var stage = GetStageName(doc.RootElement.GetProperty("stage"));
                 Assert.False(string.IsNullOrWhiteSpace(stage));
                 stages.Add(stage!);
             }

@@ -60,13 +60,95 @@ public sealed partial class PostgresResearchJobStore(
     {
         await using var db = await dbContextFactory.CreateDbContextAsync(ct);
 
-        // Keep this lightweight: include sources + syntheses, but do not eager load source content/learnings
         return await db.ResearchJobs
             .Include(j => j.Clarifications)
             .Include(j => j.Events)
             .Include(j => j.Sources)
             .Include(j => j.Syntheses)
-            .FirstOrDefaultAsync(j => j.Id == id, ct);
+            .Where(j => j.Id == id && j.DeletedAt == null)
+            .FirstOrDefaultAsync(ct);
+    }
+
+
+    public async Task<IReadOnlyList<ResearchJob>> ListJobsAsync(CancellationToken ct = default)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(ct);
+
+        return await db.ResearchJobs
+            .Where(j => j.DeletedAt == null)
+            .ToListAsync(ct);
+    }
+
+    public async Task SetJobHangfireIdAsync(Guid jobId, string hangfireJobId, CancellationToken ct = default)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(ct);
+
+        var entity = await db.ResearchJobs.FirstOrDefaultAsync(j => j.Id == jobId, ct);
+        if (entity is null) return;
+
+        entity.HangfireJobId = hangfireJobId;
+        entity.UpdatedAt = DateTimeOffset.UtcNow;
+
+        await db.SaveChangesAsync(ct);
+    }
+
+    public async Task RequestJobCancelAsync(Guid jobId, string? reason, CancellationToken ct = default)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(ct);
+
+        var entity = await db.ResearchJobs.FirstOrDefaultAsync(j => j.Id == jobId, ct);
+        if (entity is null) return;
+
+        if (!entity.CancelRequested)
+        {
+            entity.CancelRequested = true;
+            entity.CancelRequestedAt = DateTimeOffset.UtcNow;
+            entity.CancelReason = string.IsNullOrWhiteSpace(reason) ? null : reason.Trim();
+            entity.UpdatedAt = DateTimeOffset.UtcNow;
+            await db.SaveChangesAsync(ct);
+        }
+    }
+
+    public async Task<bool> IsJobCancelRequestedAsync(Guid jobId, CancellationToken ct = default)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(ct);
+
+        return await db.ResearchJobs
+            .AsNoTracking()
+            .Where(j => j.Id == jobId)
+            .Select(j => j.CancelRequested)
+            .FirstOrDefaultAsync(ct);
+    }
+
+    public async Task<int> SoftDeleteJobAsync(Guid jobId, string? reason, CancellationToken ct = default)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(ct);
+
+        var entity = await db.ResearchJobs.FirstOrDefaultAsync(j => j.Id == jobId, ct);
+        if (entity is null) return 0;
+
+        if (entity.DeletedAt is not null)
+            return 0; // already deleted (idempotent)
+
+        entity.DeletedAt = DateTimeOffset.UtcNow;
+        entity.DeletedReason = string.IsNullOrWhiteSpace(reason) ? null : reason.Trim();
+        entity.CancelRequested = true; // make running workers stop
+        entity.CancelRequestedAt ??= entity.DeletedAt;
+        entity.CancelReason ??= "Deleted by user";
+        entity.UpdatedAt = DateTimeOffset.UtcNow;
+
+        return await db.SaveChangesAsync(ct);
+    }
+
+    public async Task<bool> IsJobDeletedAsync(Guid jobId, CancellationToken ct = default)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(ct);
+
+        return await db.ResearchJobs
+            .AsNoTracking()
+            .Where(j => j.Id == jobId)
+            .Select(j => j.DeletedAt != null)
+            .FirstOrDefaultAsync(ct);
     }
 
     public async Task<int> UpdateJobAsync(ResearchJob job, CancellationToken ct = default)
@@ -315,6 +397,36 @@ public sealed partial class PostgresResearchJobStore(
             .OrderByDescending(s => s.CreatedAt)
             .Include(s => s.Sections.OrderBy(x => x.Index))
             .FirstOrDefaultAsync(ct);
+    }
+
+    public async Task<IReadOnlyList<SynthesisListItemDto>> ListSynthesesAsync(
+        Guid jobId,
+        int skip = 0,
+        int take = 50,
+        CancellationToken ct = default)
+    {
+        skip = Math.Max(skip, 0);
+        take = Math.Clamp(take, 1, 200);
+
+        await using var db = await dbContextFactory.CreateDbContextAsync(ct);
+
+        return await db.Syntheses
+            .AsNoTracking()
+            .Where(s => s.JobId == jobId)
+            .OrderByDescending(s => s.CreatedAt)
+            .Skip(skip)
+            .Take(take)
+            .Select(s => new SynthesisListItemDto(
+                s.Id,
+                s.JobId,
+                s.ParentSynthesisId,
+                s.Status.ToString(),
+                s.CreatedAt,
+                s.CompletedAt,
+                s.ErrorMessage,
+                s.Sections.Count
+            ))
+            .ToListAsync(ct);
     }
 
     public async Task<IReadOnlyList<Learning>> GetLearningsForSourceAndQueryAsync(

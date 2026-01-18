@@ -76,3 +76,14 @@ public sealed record SynthesisOverridesSnapshot(
     Guid JobId,
     IReadOnlyDictionary<Guid, SynthesisSourceOverrideDto> SourceOverridesBySourceId,
     IReadOnlyDictionary<Guid, SynthesisLearningOverrideDto> LearningOverridesByLearningId);
+
+public sealed record SynthesisListItemDto(
+    Guid SynthesisId,
+    Guid JobId,
+    Guid? ParentSynthesisId,
+    string Status,
+    DateTimeOffset CreatedAt,
+    DateTimeOffset? CompletedAt,
+    string? ErrorMessage,
+    int SectionCount
+);

@@ -5,6 +5,7 @@ using System.Text.Encodings.Web;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.Extensions.Options;
 using Microsoft.Net.Http.Headers;
+using Serilog;
 
 namespace ResearchEngine.Web.Authentication;
 
@@ -72,7 +73,6 @@ public sealed class BearerAuthenticationHandler : AuthenticationHandler<BearerAu
         return false;
     }
 }
-
 
 public sealed class BearerAuthenticationOptions : AuthenticationSchemeOptions
 {

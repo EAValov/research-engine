@@ -18,9 +18,20 @@ public interface IResearchJobStore
         CancellationToken ct = default);
 
     Task<ResearchJob?> GetJobAsync(Guid id, CancellationToken ct = default);
+
+    Task<IReadOnlyList<ResearchJob>> ListJobsAsync(CancellationToken ct = default);
     
     Task<int> UpdateJobAsync(ResearchJob job, CancellationToken ct = default);
 
+    Task SetJobHangfireIdAsync(Guid jobId, string hangfireJobId, CancellationToken ct = default);
+
+    Task RequestJobCancelAsync(Guid jobId, string? reason, CancellationToken ct = default);
+
+    Task<bool> IsJobCancelRequestedAsync(Guid jobId, CancellationToken ct = default);
+
+    Task<int> SoftDeleteJobAsync(Guid jobId, string? reason, CancellationToken ct = default);
+    Task<bool> IsJobDeletedAsync(Guid jobId, CancellationToken ct = default);
+    
     Task<Source> UpsertSourceAsync(
         Guid jobId,
         string reference,
@@ -51,6 +62,12 @@ public interface IResearchJobStore
         CancellationToken ct = default);
 
     Task<Synthesis?> GetSynthesisAsync(Guid synthesisId, CancellationToken ct = default);
+
+    Task<IReadOnlyList<SynthesisListItemDto>> ListSynthesesAsync(
+        Guid jobId,
+        int skip = 0,
+        int take = 50,
+        CancellationToken ct = default);
 
     Task<Synthesis?> GetLatestSynthesisAsync(Guid jobId, CancellationToken ct = default);
 
