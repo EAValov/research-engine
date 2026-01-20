@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.RegularExpressions;
+using Microsoft.AspNetCore.SignalR.Protocol;
 using ResearchEngine.Domain;
 
 namespace ResearchEngine.Web.OpenAI;
@@ -1083,10 +1084,17 @@ public static class OpenAiModelEndpoints
 
             total = page.Total;
 
-            foreach (var item in page.Items)
+            foreach (Domain.LearningListItemDto item in page.Items)
             {
                 if (!index.ContainsKey(item.LearningId))
-                    index[item.LearningId] = item;
+                    index[item.LearningId] = new LearningListItemDto(
+                        item.LearningId,
+                        item.SourceId,
+                        item.SourceReference,
+                        item.ImportanceScore,
+                        item.CreatedAt,
+                        item.Text
+                    );
             }
 
             skip += page.Items.Count;
@@ -1098,3 +1106,4 @@ public static class OpenAiModelEndpoints
         return index;
     }
 }
+

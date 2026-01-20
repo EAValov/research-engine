@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using ResearchEngine.Domain;
 
 namespace ResearchEngine.Web;
+
 public static class ResearchProtocolApi
 {
     public static void MapResearchProtocolApi(this WebApplication app)
@@ -10,38 +11,60 @@ public static class ResearchProtocolApi
             .WithTags("Research Protocol API")
             .RequireAuthorization();
 
-        api.MapPost("/clarifications", GenerateClarificationsAsync);
-        api.MapPost("/parameters", SelectParametersAsync);
+        api.MapPost("/clarifications", GenerateClarificationsAsync)
+            .Accepts<ProtocolClarificationsRequest>("application/json")
+            .Produces<ProtocolClarificationsResponse>(StatusCodes.Status200OK)
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status403Forbidden);
+
+        api.MapPost("/parameters", SelectParametersAsync)
+            .Accepts<ProtocolParametersRequest>("application/json")
+            .Produces<ProtocolParametersResponse>(StatusCodes.Status200OK)
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status403Forbidden);
     }
 
+    /// <summary>
+    /// POST /api/research/protocol/clarifications
+    /// Generates clarification questions for a research query.
+    /// </summary>
+    /// <param name="request">Clarification request payload.</param>
+    /// <param name="protocolService">Protocol service.</param>
+    /// <param name="ct">Request cancellation token.</param>
     private static async Task<IResult> GenerateClarificationsAsync(
         [FromBody] ProtocolClarificationsRequest request,
         IResearchProtocolService protocolService,
         CancellationToken ct)
     {
-        var questions = await protocolService.GenerateFeedbackQueriesAsync(request.Query, request.IncludeConfigureQuestions, ct);
-        
-        var response = new
-        {
-            questions
-        };
+        IReadOnlyList<string> questions =
+            await protocolService.GenerateFeedbackQueriesAsync(
+                request.Query,
+                request.IncludeConfigureQuestions,
+                ct);
 
-        return Results.Ok(response);
+        return Results.Ok(new ProtocolClarificationsResponse(questions));
     }
 
+    /// <summary>
+    /// POST /api/research/protocol/parameters
+    /// Selects or auto-computes protocol parameters (breadth, depth, language, region).
+    /// </summary>
+    /// <param name="request">Protocol parameters request.</param>
+    /// <param name="protocolService">Protocol service.</param>
+    /// <param name="ct">Request cancellation token.</param>
     private static async Task<IResult> SelectParametersAsync(
         [FromBody] ProtocolParametersRequest request,
         IResearchProtocolService protocolService,
         CancellationToken ct)
     {
-        // Convert DTOs to domain models for the service
-        var clarifications = request.Clarifications?.Select(c => new Clarification 
-        { 
-            Question = c.Question, 
-            Answer = c.Answer 
+        var clarifications = request.Clarifications?.Select(c => new Clarification
+        {
+            Question = c.Question,
+            Answer = c.Answer
         }).ToList() ?? [];
 
-        // Apply overrides if provided
         int? breadth = null;
         int? depth = null;
         string? language = null;
@@ -49,58 +72,28 @@ public static class ResearchProtocolApi
 
         if (request.Overrides != null)
         {
-            if (request.Overrides.TryGetValue("breadth", out var breadthValue) && breadthValue is int b)
-                breadth = b;
-            
-            if (request.Overrides.TryGetValue("depth", out var depthValue) && depthValue is int d)
-                depth = d;
-                
-            if (request.Overrides.TryGetValue("language", out var languageValue) && languageValue is string l)
-                language = l;
-                
-            if (request.Overrides.TryGetValue("region", out var regionValue) && regionValue is string r)
-                region = r;
+            if (request.Overrides.TryGetValue("breadth", out var b) && b is int bi) breadth = bi;
+            if (request.Overrides.TryGetValue("depth", out var d) && d is int di) depth = di;
+            if (request.Overrides.TryGetValue("language", out var l) && l is string ls) language = ls;
+            if (request.Overrides.TryGetValue("region", out var r) && r is string rs) region = rs;
         }
 
-        // If overrides don't provide all values, compute them using the protocol service
-        if (!breadth.HasValue || !depth.HasValue || string.IsNullOrEmpty(language))
-        {
-            if (!breadth.HasValue || !depth.HasValue)
-            {
-                (breadth, depth) = await protocolService.AutoSelectBreadthDepthAsync(request.Query, clarifications, ct);
-            }
+        if (!breadth.HasValue || !depth.HasValue)
+            (breadth, depth) =
+                await protocolService.AutoSelectBreadthDepthAsync(request.Query, clarifications, ct);
 
-            if (string.IsNullOrEmpty(language))
-            {
-                (language, region) = await protocolService.AutoSelectLanguageRegionAsync(request.Query, clarifications, ct);
-            }
-        }
+        if (string.IsNullOrEmpty(language))
+            (language, region) =
+                await protocolService.AutoSelectLanguageRegionAsync(request.Query, clarifications, ct);
 
-        // Clamp values as required by specification
-        breadth = breadth.HasValue ? Math.Clamp(breadth.Value, 1, 8) : null;
-        depth = depth.HasValue ? Math.Clamp(depth.Value, 1, 4) : null;
-        
-        // Normalize language to 2-letter lowercase
-        if (!string.IsNullOrEmpty(language))
-        {
-            if (language.Length != 2)
-            {
-                language = "en"; // fallback
-            }
-            else
-            {
-                language = language.ToLowerInvariant();
-            }
-        }
+        breadth = Math.Clamp(breadth ?? 2, 1, 8);
+        depth = Math.Clamp(depth ?? 2, 1, 4);
+        language = (language?.Length == 2 ? language.ToLowerInvariant() : "en");
 
-        var response = new
-        {
-            breadth = breadth ?? 2,
-            depth = depth ?? 2,
-            language = language ?? "en",
-            region = string.IsNullOrEmpty(region) ? null : region
-        };
-
-        return Results.Ok(response);
+        return Results.Ok(new ProtocolParametersResponse(
+            Breadth: breadth.Value,
+            Depth: depth.Value,
+            Language: language,
+            Region: region));
     }
 }

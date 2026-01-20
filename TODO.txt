@@ -1,0 +1,2 @@
+1. Grouping distance - currently just the very close almost identical
+2. Console ui
