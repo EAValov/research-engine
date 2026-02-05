@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using System.Text;
 using System.Text.Json;
 using Hangfire;
@@ -59,12 +60,18 @@ public static partial class ResearchApi
             .ProducesProblem(StatusCodes.Status401Unauthorized)
             .ProducesProblem(StatusCodes.Status403Forbidden);
 
-        // SSE stream
+        api.MapPost("/jobs/{jobId:guid}/events/stream-token", CreateEventsStreamTokenAsync)
+        .Produces<CreateSseTokenResponse>(StatusCodes.Status200OK)
+        .ProducesProblem(StatusCodes.Status404NotFound)
+        .ProducesProblem(StatusCodes.Status401Unauthorized)
+        .ProducesProblem(StatusCodes.Status403Forbidden);
+
+        // Stream endpoint (anonymous but ticket-gated)
         api.MapGet("/jobs/{jobId:guid}/events/stream", StreamEventsAsync)
-            .Produces(StatusCodes.Status200OK, contentType: "text/event-stream")
-            .ProducesProblem(StatusCodes.Status404NotFound)
-            .ProducesProblem(StatusCodes.Status401Unauthorized)
-            .ProducesProblem(StatusCodes.Status403Forbidden);
+        .AllowAnonymous()
+        .Produces(StatusCodes.Status200OK, contentType: "text/event-stream")
+        .ProducesProblem(StatusCodes.Status401Unauthorized)
+        .ProducesProblem(StatusCodes.Status404NotFound);
 
         // Learnings
         api.MapGet("/jobs/{jobId:guid}/learnings", ListLearningsAsync)
@@ -669,11 +676,7 @@ public static partial class ResearchApi
             s.CreatedAt,
             s.CompletedAt,
             s.ErrorMessage,
-            s.SectionCount,
-            new SynthesisListItemLinksDto(
-                $"/api/research/syntheses/{s.SynthesisId}",
-                $"/api/research/syntheses/{s.SynthesisId}/run"
-            )
+            s.SectionCount
         )).ToList();
 
         return Results.Ok(new ListSynthesesResponse(
@@ -733,13 +736,7 @@ public static partial class ResearchApi
                 syn.CreatedAt,
                 syn.CompletedAt,
                 syn.ErrorMessage,
-                sections,
-                new SynthesisDtoLinks(
-                    $"/api/research/syntheses/{syn.Id}",
-                    $"/api/research/syntheses/{syn.Id}/run",
-                    $"/api/research/syntheses/{syn.Id}/overrides/sources",
-                    $"/api/research/syntheses/{syn.Id}/overrides/learnings"
-                )
+                sections
             )));
     }
 
@@ -785,13 +782,7 @@ public static partial class ResearchApi
             syn.CreatedAt,
             syn.CompletedAt,
             syn.ErrorMessage,
-            sections,
-            new SynthesisDtoLinks(
-                $"/api/research/syntheses/{syn.Id}",
-                $"/api/research/syntheses/{syn.Id}/run",
-                $"/api/research/syntheses/{syn.Id}/overrides/sources",
-                $"/api/research/syntheses/{syn.Id}/overrides/learnings"
-            )));
+            sections));
     }
 
     /// <summary>
@@ -870,21 +861,75 @@ public static partial class ResearchApi
     }
 
     /// <summary>
-    /// GET /api/research/jobs/{jobId}/events/stream
-    /// Streams job events using Server-Sent Events (replay + live).
+    /// POST /api/research/jobs/{jobId}/events/stream-token
+    /// Mints a short-lived ticket for opening the SSE stream via EventSource (no custom headers).
     /// </summary>
-    /// <param name="httpContext">HTTP context.</param>
+    /// <param name="jobId">Research job id.</param>
+    /// <param name="httpContext">HTTP context (used to build stream URL).</param>
+    /// <param name="user">Authenticated user.</param>
+    /// <param name="jobStore">Job store.</param>
+    /// <param name="tickets">Ticket service.</param>
+    /// <param name="ct">Request cancellation token.</param>
+    private static async Task<IResult> CreateEventsStreamTokenAsync(
+        Guid jobId,
+        HttpContext httpContext,
+        ClaimsPrincipal user,
+        IResearchJobStore jobStore,
+        IJobSseTicketService tickets,
+        CancellationToken ct)
+    {
+        // Ensure job exists (and optionally enforce ownership/authorization)
+        var job = await jobStore.GetJobAsync(jobId, ct);
+        if (job is null)
+            return Results.NotFound();
+
+        // Optional: enforce job ownership here if your store supports it.
+        // Example patterns (choose one that matches your codebase):
+        // await jobStore.AssertUserCanAccessJobAsync(jobId, user, ct);
+        // var can = await jobStore.CanAccessJobAsync(jobId, user, ct); if (!can) return Results.Forbid();
+
+        var ticket = tickets.Create(jobId, user);
+
+        var streamPath = $"/api/research/jobs/{jobId}/events/stream";
+        var streamUrl = $"{streamPath}?ticket={Uri.EscapeDataString(ticket)}";
+
+        var expiresAtUtc = tickets.GetExpiryUtc(ticket);
+
+        return Results.Ok(new CreateSseTokenResponse(
+            JobId: jobId,
+            Ticket: ticket,
+            StreamUrl: streamUrl,
+            ExpiresAtUtc: expiresAtUtc
+        ));
+    }
+
+    /// <summary>
+    /// GET /api/research/jobs/{jobId}/events/stream
+    /// Server-sent events stream of job events (replay + live). Anonymous, but requires a valid ticket.
+    /// </summary>
+    /// <param name="httpContext">HTTP context used for writing SSE.</param>
     /// <param name="jobId">Research job id.</param>
     /// <param name="jobStore">Job store.</param>
-    /// <param name="eventBus">Event bus.</param>
+    /// <param name="eventBus">Event bus for live events.</param>
+    /// <param name="tickets">Ticket validator.</param>
     /// <param name="ct">Request cancellation token.</param>
     private static async Task StreamEventsAsync(
         HttpContext httpContext,
         Guid jobId,
         IResearchJobStore jobStore,
         IResearchEventBus eventBus,
+        IJobSseTicketService tickets,
         CancellationToken ct)
     {
+
+        // Ticket gate (EventSource cannot send Authorization header)
+        var ticket = httpContext.Request.Query["ticket"].ToString();
+        if (string.IsNullOrWhiteSpace(ticket) || !tickets.TryValidate(jobId, ticket, out _))
+        {
+            httpContext.Response.StatusCode = StatusCodes.Status401Unauthorized;
+            return;
+        }
+
         var job = await jobStore.GetJobAsync(jobId, ct);
         if (job is null)
         {

@@ -1,0 +1,75 @@
+/* Base app styling */
+.app {
+    min-height: 100vh;
+    background: var(--bg);
+    color: var(--text);
+}
+
+.header {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    box-shadow: var(--shadow);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 14px;
+}
+
+.brand {
+    text-decoration: none;
+    color: var(--text);
+    font-weight: 800;
+}
+
+.brand:focus-visible {
+    outline: 2px solid var(--border-strong);
+    outline-offset: 2px;
+    border-radius: 8px;
+}
+
+.main {
+    padding: 14px;
+    max-width: 980px;
+    margin: 0 auto;
+}
+
+/* Theme toggle button */
+.theme-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text);
+    border-radius: 999px;
+    padding: 6px 10px;
+    cursor: pointer;
+}
+
+.theme-toggle:hover {
+    border-color: var(--border-strong);
+}
+
+.theme-toggle:focus-visible {
+    outline: 2px solid var(--border-strong);
+    outline-offset: 2px;
+}
+
+.theme-icon {
+    font-size: 1rem;
+    line-height: 1;
+}
+
+.theme-text {
+    font-size: 0.9rem;
+    color: var(--muted);
+}
+
+/* Ensure form controls inherit theme */
+input, textarea, select, button {
+    font: inherit;
+}

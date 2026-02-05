@@ -1,0 +1,156 @@
+.overlay {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    justify-content: flex-end;
+    align-items: stretch;
+    background: rgba(0,0,0,0.35);
+    z-index: 2000;
+
+    /* closed by default */
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 120ms ease-out;
+}
+
+.overlay.open {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.drawer {
+    width: min(560px, 92vw);
+    height: 100vh;
+    background: var(--surface);
+    border-left: 1px solid var(--border);
+    box-shadow: -12px 0 30px rgba(0,0,0,0.35);
+
+    display: flex;
+    flex-direction: column;
+}
+
+.drawer:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: -2px;
+}
+
+.head {
+    display: grid;
+    grid-template-columns: 1fr auto auto;
+    align-items: center;
+    gap: 10px;
+
+    padding: 14px 14px 10px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+}
+
+.title {
+    font-weight: 800;
+    color: var(--text);
+}
+
+.ovr {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    justify-self: end;
+    flex-wrap: wrap;
+}
+
+.ovr-text {
+    color: var(--muted);
+    font-size: 0.9rem;
+    white-space: nowrap;
+}
+
+.ovr-clear {
+    border: 1px solid var(--border);
+    background: var(--surface2);
+    color: var(--text);
+    border-radius: 10px;
+    padding: 6px 10px;
+    cursor: pointer;
+}
+
+.ovr-clear:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
+.ovr-clear:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+}
+
+.x {
+    border: 1px solid var(--border);
+    background: var(--surface2);
+    color: var(--text);
+    border-radius: 10px;
+    width: 36px;
+    height: 36px;
+    cursor: pointer;
+    line-height: 1;
+    font-size: 18px;
+}
+
+.x:hover {
+    filter: brightness(1.05);
+}
+
+.x:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+}
+
+.tabs {
+    display: flex;
+    gap: 8px;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+}
+
+.tab {
+    border: 1px solid var(--border);
+    background: var(--surface2);
+    color: var(--text);
+    border-radius: 999px;
+    padding: 6px 10px;
+    cursor: pointer;
+}
+
+.tab.active {
+    border-color: var(--text);
+}
+
+.tab:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+}
+
+.body {
+    padding: 14px;
+    overflow: auto;
+    flex: 1;
+    background: var(--surface);
+}
+
+/* Make header stack on small screens */
+@media (max-width: 560px) {
+    .head {
+        grid-template-columns: 1fr auto;
+        grid-auto-rows: auto;
+    }
+
+    .ovr {
+        grid-column: 1 / -1;
+        justify-self: start;
+        margin-top: 6px;
+    }
+
+    .ovr-text {
+        white-space: normal;
+    }
+}

@@ -98,9 +98,6 @@ builder.Services
     .AddOptions<LearningSimilarityOptions>()
     .Bind(builder.Configuration.GetSection(nameof(LearningSimilarityOptions)))
     .ValidateDataAnnotations()
-    .Validate(
-        options => options.LocalMinImportance <= options.GlobalMinImportance,
-        "LocalMinImportance must be <= GlobalMinImportance")
     .ValidateOnStart();
 
 // ---------- Validation (Minimal APIs) ----------
@@ -198,6 +195,7 @@ builder.Services.AddScoped<IResearchProtocolService, ResearchProtocolService>();
 builder.Services.AddScoped<ILearningIntelService, LearningIntelService>();
 builder.Services.AddScoped<IQueryPlanningService, QueryPlanningService>();
 builder.Services.AddScoped<IReportSynthesisService, ReportSynthesisService>();
+builder.Services.AddSingleton<IJobSseTicketService, JobSseTicketService>();
 
 builder.Services.AddScoped<IResearchJobStore, PostgresResearchJobStore>();
 
@@ -224,6 +222,20 @@ builder.Services.AddHealthChecks()
 // ---------- OpenAPI ----------
 builder.Services.AddOpenApi();
 
+builder.Services.AddDataProtection();
+builder.Services.AddSingleton(TimeProvider.System);
+
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("BlazorDev", policy =>
+    {
+        policy
+            .WithOrigins("http://localhost:5173", "https://localhost:5001", "http://localhost:5000")
+            .AllowAnyHeader()
+            .AllowAnyMethod();
+    });
+});
+
 var app = builder.Build();
 
 if (ipRateLimitingEnabled)
@@ -240,6 +252,7 @@ if (ipRateLimitingEnabled)
     app.UseIpRateLimiting();
 }
 
+app.UseCors("BlazorDev");  
 app.UseAuthentication();
 app.UseAuthorization();
 
@@ -256,6 +269,8 @@ app.MapResearchApi();
 app.MapResearchModel();
 app.MapResearchProtocolApi();
 
+app.UseCors("BlazorDev");
+
 app.MapOpenApi();
 app.MapScalarApiReference();
 app.UseHangfireDashboard("/hangfire");
@@ -267,5 +282,6 @@ if (!app.Environment.IsEnvironment("Testing"))
     var db = scope.ServiceProvider.GetRequiredService<ResearchDbContext>();
     db.Database.Migrate();
 }
+
 
 app.Run();

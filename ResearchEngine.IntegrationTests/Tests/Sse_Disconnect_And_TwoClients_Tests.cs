@@ -3,6 +3,8 @@ using System.Text.Json;
 using Xunit;
 using ResearchEngine.IntegrationTests.Infrastructure;
 using ResearchEngine.IntegrationTests.Helpers;
+using static ResearchEngine.IntegrationTests.Helpers.SseTestHelpers;
+using ResearchEngine.Web;
 
 namespace ResearchEngine.IntegrationTests.Tests;
 
@@ -18,33 +20,40 @@ public sealed class Sse_Disconnect_And_TwoClients_Tests : IntegrationTestBase
 
         var jobId = await CreateJobAsync(client);
 
-        // Start SSE and read a little, then disconnect early.
-        using (var sseReq = new HttpRequestMessage(HttpMethod.Get, $"/api/research/jobs/{jobId}/events/stream"))
+        using var tokenReq = new HttpRequestMessage(HttpMethod.Post, $"/api/research/jobs/{jobId}/events/stream-token");
+
+        using var tokenResp = await client.SendAsync(tokenReq);
+        tokenResp.EnsureSuccessStatusCode();
+
+        var token = await tokenResp.Content.ReadFromJsonAsync<CreateSseTokenResponse>()
+                    ?? throw new InvalidOperationException("Token response was empty.");
+                    
+        // 2) Open stream with ticket
+        using var req = new HttpRequestMessage(HttpMethod.Get, token.StreamUrl);
+        req.Headers.Add("Accept", "text/event-stream");
+
+        using var resp = await client.SendAsync(req, HttpCompletionOption.ResponseHeadersRead);
+        resp.EnsureSuccessStatusCode();
+
+        await using var stream = await resp.Content.ReadAsStreamAsync();
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+
+        // Read a few frames (or until we see any "event"), then abort.
+        var sawAny = false;
+
+        await foreach (var frame in SseReader.ReadAsync(stream, cts.Token))
         {
-            sseReq.Headers.Add("Accept", "text/event-stream");
-
-            using var sseResp = await client.SendAsync(sseReq, HttpCompletionOption.ResponseHeadersRead);
-            sseResp.EnsureSuccessStatusCode();
-
-            await using var stream = await sseResp.Content.ReadAsStreamAsync();
-
-            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-
-            // Read a few frames (or until we see any "event"), then abort.
-            var sawAny = false;
-
-            await foreach (var frame in SseReader.ReadAsync(stream, cts.Token))
+            if (frame.Event == "event")
             {
-                if (frame.Event == "event")
-                {
-                    sawAny = true;
-                    break;
-                }
+                sawAny = true;
+                break;
             }
-
-            Assert.True(sawAny, "Expected to receive at least one SSE event frame before disconnecting.");
-            // Dispose response => disconnect
         }
+
+        Assert.True(sawAny, "Expected to receive at least one SSE event frame before disconnecting.");
+        // Dispose response => disconnect
+        
 
         // Now ensure the job still completes (use SSE done helper from scratch).
         // We use afterEventId checkpoint so we don't accidentally return a replayed done from an earlier connection.

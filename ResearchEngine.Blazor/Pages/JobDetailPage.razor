@@ -1,0 +1,1006 @@
+@page "/jobs/{JobId:guid}"
+@using ResearchEngine.Blazor.Api
+@using ResearchEngine.Blazor.Components.Common
+@using ResearchEngine.Blazor.Components.Evidence
+@using ResearchEngine.Blazor.Components.Synthesis
+@using ResearchEngine.Blazor.Services
+@using ResearchEngine.Blazor.State
+@using static ResearchEngine.Blazor.Services.JobEventsClient
+@inject IResearchApiClient Api
+@inject JobFacade JobFacade
+@inject JobEventsClient EventsClient
+@inject SynthesisFacade SynthesisFacade
+@inject SynthesisHistoryFacade SynthesisHistory
+@inject OverridesStore Overrides
+@inject SynthesisIterationFacade Iteration
+@inject AppStateStore AppState
+@inject IJSRuntime JS
+
+<h1>Job</h1>
+
+@if (_jobError is not null)
+{
+    <ErrorBanner Error="_jobError" OnRetry="LoadAllAsync" />
+}
+else if (_isJobLoading)
+{
+    <p aria-live="polite">Loading…</p>
+}
+else if (_job is null)
+{
+    <p>Job not found.</p>
+}
+else
+{
+    <section class="job-card" aria-label="Job details">
+        <div class="row">
+            <div class="label">Query</div>
+            <div class="value">@_job.Query</div>
+        </div>
+
+        <div class="row">
+            <div class="label">Status</div>
+            <div class="value">
+                <span class="pill" aria-label="Job status">@CurrentStatusChip</span>
+                @if (!string.IsNullOrWhiteSpace(CurrentStage))
+                {
+                    <span class="stage" aria-label="Current stage">@CurrentStage</span>
+                }
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="label">Created</div>
+            <div class="value">@FormatTime(_job.CreatedAt)</div>
+        </div>
+
+        <div class="toolbar" role="toolbar" aria-label="Job tools">
+            <button type="button"
+                    class="toolbtn"
+                    @onclick="ToggleEvidence"
+                    aria-haspopup="dialog"
+                    aria-expanded="@_evidenceOpen">
+                Evidence
+            </button>
+
+            <button type="button"
+                    class="toolbtn"
+                    @onclick="() => _historyOpen = true"
+                    aria-haspopup="dialog"
+                    aria-expanded="@_historyOpen">
+                History
+            </button>
+
+            @if (CanNewSynthesis)
+            {
+                <button type="button"
+                        class="toolbtn"
+                        @onclick="OpenCreateDialog"
+                        aria-haspopup="dialog"
+                        aria-expanded="@_createDialogOpen">
+                    New synthesis
+                </button>
+            }
+
+            @if (IsRunning)
+            {
+                <button type="button"
+                        class="dangerbtn"
+                        @onclick="CancelAsync"
+                        disabled="@_cancelInFlight"
+                        aria-disabled="@_cancelInFlight">
+                    @(_cancelInFlight ? "Canceling…" : "Cancel job")
+                </button>
+            }
+        </div>
+
+        @if (_cancelError is not null)
+        {
+            <ErrorBanner Error="_cancelError" />
+        }
+    </section>
+
+    <section class="progress" aria-label="Progress">
+        <div class="progress-head">
+            <h2 class="h2">Progress</h2>
+
+            <div class="progress-actions">
+                <label class="check">
+                    <input type="checkbox"
+                           @bind="_followTail"
+                           aria-label="Follow tail (auto-scroll to newest events)" />
+                    <span>Follow tail</span>
+                </label>
+
+                @if (_events.Count > 0)
+                {
+                    <button type="button"
+                            class="secondarybtn"
+                            @onclick="CopyLastAsync"
+                            aria-label="Copy last stage and message">
+                        Copy last
+                    </button>
+                }
+            </div>
+        </div>
+
+        @if (_terminalStatus is not null)
+        {
+            <div class="terminal" role="status" aria-live="polite">
+                <strong>@_terminalStatus</strong>
+                @if (_doneSynthesisId is not null)
+                {
+                    <span class="muted">Synthesis: @_doneSynthesisId</span>
+                }
+            </div>
+        }
+
+        @if (_eventsError is not null)
+        {
+            <ErrorBanner Error="_eventsError" OnRetry="ReloadEventsAsync" />
+        }
+
+        @if (_streamError is not null && IsRunning)
+        {
+            <ErrorBanner Error="_streamError" />
+        }
+
+        @if (_isEventsLoading)
+        {
+            <p aria-live="polite">Loading events…</p>
+        }
+        else if (_events.Count == 0)
+        {
+            <p>No events yet.</p>
+        }
+        else
+        {
+            <ol class="timeline" role="list" @ref="_timelineRef" aria-label="Event timeline">
+                @foreach (var ev in _events)
+                {
+                    <li class="timeline-item" tabindex="0"
+                        aria-label="@($"{FormatTime(ev.Timestamp)} {ev.Stage} {ev.Message}")">
+                        <div class="t-head">
+                            <span class="t-time">@FormatTime(ev.Timestamp)</span>
+                            <span class="t-stage">@ev.Stage</span>
+                        </div>
+                        <div class="t-msg">@ev.Message</div>
+                    </li>
+                }
+            </ol>
+        }
+    </section>
+
+    <section class="report" aria-label="Report">
+        <div class="report-head">
+            <h2 class="h2">Report</h2>
+
+            @if (_selectedSynthesisId is not null)
+            {
+                <div class="report-meta">
+                    <span>Viewing:</span>
+                    <span class="mono">@ShortId(_selectedSynthesisId.Value)</span>
+
+                    <button type="button" class="secondarybtn" @onclick="BackToLatestAsync">
+                        Back to latest
+                    </button>
+                </div>
+            }
+            else if (_reportUpdatedAt is not null)
+            {
+                <div class="toast" role="status" aria-live="polite">
+                    Report updated
+                    <span class="muted">@_reportUpdatedAt.Value.ToLocalTime().ToString("HH:mm:ss")</span>
+                </div>
+            }
+            else if (_latestSynthesis is not null)
+            {
+                <div class="report-meta" aria-label="Synthesis metadata">
+                    <span>Latest synthesis</span>
+                    <span class="dot">•</span>
+                    <span>ID: @_latestSynthesis.Id</span>
+                    <span class="dot">•</span>
+                    <span>Created: @FormatTime(_latestSynthesis.CreatedAt)</span>
+                </div>
+            }
+        </div>
+
+        @if (_iterBusy)
+        {
+            <p aria-live="polite"><strong>Generating new synthesis…</strong></p>
+        }
+
+        @if (_iterError is not null && _lastCreateInput is not null)
+        {
+            <ErrorBanner Error="_iterError" OnRetry="RetryIterationAsync" />
+        }
+
+        @if (_selectedSynthesisError is not null)
+        {
+            <ErrorBanner Error="_selectedSynthesisError" OnRetry="RetrySelectedOpenAsync" />
+        }
+        else if (_selectedSynthesisId is not null)
+        {
+            @if (_selectedLoading)
+            {
+                <p aria-live="polite">Loading synthesis…</p>
+            }
+            else if (!string.IsNullOrWhiteSpace(_synthesisMarkdown))
+            {
+                <MarkdownView Markdown="@_synthesisMarkdown"
+                              OnOpenInLearnings="OpenLearningInDrawer" />
+            }
+            else
+            {
+                <p class="muted">No report content.</p>
+            }
+        }
+        else if (!IsCompleted && !_iterBusy)
+        {
+            <p class="muted">Report will appear when the job completes.</p>
+        }
+        else if (_synthesisLoading && !_iterBusy)
+        {
+            <p aria-live="polite">Loading report…</p>
+        }
+        else if (_synthesisError is not null && !_iterBusy)
+        {
+            <ErrorBanner Error="_synthesisError" OnRetry="LoadLatestSynthesisAsync" />
+        }
+        else if (_synthesisEmpty && !_iterBusy)
+        {
+            <p>No synthesis available yet.</p>
+        }
+        else if (!string.IsNullOrWhiteSpace(_synthesisMarkdown))
+        {
+            <MarkdownView Markdown="@_synthesisMarkdown"
+                          OnOpenInLearnings="OpenLearningInDrawer" />
+        }
+    </section>
+
+    <EvidenceDrawer JobId="JobId"
+                    @bind-IsOpen="_evidenceOpen"
+                    InitialTab="@_evidenceTab"
+                    HighlightLearningId="_highlightLearningId" />
+
+    <SynthesisHistoryDrawer JobId="JobId"
+                           IsOpen="_historyOpen"
+                           IsOpenChanged="v => _historyOpen = v"
+                           CurrentSynthesisId="CurrentSynthesisIdForDrawer"
+                           OpenSynthesis="OpenSynthesisAsync"
+                           UseAsBase="UseAsBaseAsync" />
+
+    <CreateSynthesisDialog IsOpen="_createDialogOpen"
+                           IsOpenChanged="v => _createDialogOpen = v"
+                           HasOverrides="@Overrides.HasAny(JobId)"
+                           OverridesSummary="@BuildOverridesSummary()"
+                           Busy="_iterBusy"
+                           Error="_iterError"
+                           PrefillInstructions="_prefillInstructions"
+                           PrefillOutline="_prefillOutline"
+                           BaseSynthesisId="_baseSynthesisId"
+                           OnCreateAndRun="CreateAndRunSynthesisAsync" />
+}
+
+@code {
+    [Parameter] public Guid JobId { get; set; }
+
+    // Job
+    private bool _isJobLoading = true;
+    private ApiError? _jobError;
+    private GetResearchJobResponse? _job;
+
+    // Evidence drawer
+    private bool _evidenceOpen;
+    private string _evidenceTab = "sources";
+    private Guid? _highlightLearningId;
+
+    // History drawer
+    private bool _historyOpen;
+
+    // Events
+    private bool _isEventsLoading;
+    private ApiError? _eventsError;
+    private ApiError? _streamError;
+
+    private readonly List<PersistedJobEvent> _events = new();
+
+    private string? _terminalStatus;
+    private Guid? _doneSynthesisId;
+
+    private ElementReference _timelineRef;
+    private bool _followTail = true;
+
+    private CancellationTokenSource? _streamCts;
+
+    // Cancel
+    private bool _cancelInFlight;
+    private ApiError? _cancelError;
+
+    // Synthesis rendering state (current markdown + dto)
+    private bool _synthesisLoading;
+    private ApiError? _synthesisError;
+    private bool _synthesisEmpty;
+    private SynthesisDto? _latestSynthesis;
+    private string _synthesisMarkdown = string.Empty;
+    private bool _synthesisLoadedOnce;
+
+    // Selected synthesis mode
+    private Guid? _selectedSynthesisId;
+    private bool _selectedLoading;
+    private ApiError? _selectedSynthesisError;
+    private Guid? _retryOpenId;
+
+    // Iteration UI
+    private bool _createDialogOpen;
+    private bool _iterBusy;
+    private ApiError? _iterError;
+    private CreateSynthesisInput? _lastCreateInput;
+    private DateTimeOffset? _reportUpdatedAt;
+
+    // Create dialog prefill
+    private string? _prefillInstructions;
+    private string? _prefillOutline;
+    private Guid? _baseSynthesisId;
+
+    private bool IsTerminal =>
+        string.Equals(_terminalStatus, "Completed", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(_terminalStatus, "Failed", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(_terminalStatus, "Canceled", StringComparison.OrdinalIgnoreCase);
+
+    private bool IsRunning => !IsTerminal;
+
+    private bool IsCompleted =>
+        string.Equals(_terminalStatus, "Completed", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(_job?.Status?.ToString(), "Completed", StringComparison.OrdinalIgnoreCase);
+
+    private string CurrentStatusChip
+        => _terminalStatus ?? _job?.Status?.ToString() ?? "Unknown";
+
+    private string CurrentStage
+        => _events.Count == 0 ? "" : _events[^1].Stage;
+
+    private bool CanNewSynthesis
+        => IsCompleted || (_latestSynthesis is not null) || (_synthesisLoadedOnce && !_synthesisEmpty);
+
+    private Guid? CurrentSynthesisIdForDrawer => _selectedSynthesisId ?? _latestSynthesis?.Id;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await LoadAllAsync();
+    }
+
+    private async Task LoadAllAsync()
+    {
+        _jobError = null;
+        _eventsError = null;
+        _streamError = null;
+        _cancelError = null;
+
+        _synthesisError = null;
+        _synthesisEmpty = false;
+        _latestSynthesis = null;
+        _synthesisMarkdown = string.Empty;
+        _synthesisLoadedOnce = false;
+
+        _selectedSynthesisId = null;
+        _selectedLoading = false;
+        _selectedSynthesisError = null;
+        _retryOpenId = null;
+
+        _iterError = null;
+        _iterBusy = false;
+        _lastCreateInput = null;
+        _reportUpdatedAt = null;
+
+        _isJobLoading = true;
+        try
+        {
+            _job = await Api.JobsGET2Async(JobId);
+
+            var statusText = _job.Status?.ToString();
+            _terminalStatus = IsTerminalStatus(statusText) ? statusText : null;
+
+            await ReloadEventsAsync();
+
+            // Stop any previous stream + cancel its CTS
+            await StopStreamAsync();
+
+            if (!IsTerminal)
+            {
+                _streamCts = new CancellationTokenSource();
+
+                await EventsClient.StartAsync(
+                    jobId: JobId,
+                    onItem: HandleStreamItemAsync,
+                    onError: HandleStreamErrorAsync,
+                    ct: _streamCts.Token);
+            }
+
+            if (IsCompleted)
+            {
+                await LoadLatestSynthesisAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            _jobError = ApiErrorMapper.Map(ex);
+        }
+        finally
+        {
+            _isJobLoading = false;
+        }
+    }
+
+    private async Task ReloadEventsAsync()
+    {
+        _isEventsLoading = true;
+        _eventsError = null;
+
+        _events.Clear();
+
+        var res = await JobFacade.GetEventsAsync(JobId);
+        if (!res.IsSuccess)
+        {
+            _eventsError = res.Error;
+            _isEventsLoading = false;
+            return;
+        }
+
+        foreach (var dto in res.Data!)
+        {
+            _events.Add(new PersistedJobEvent(dto.Id, dto.Timestamp, dto.Stage, dto.Message));
+        }
+
+        _events.Sort(static (a, b) => a.Id.CompareTo(b.Id));
+        _isEventsLoading = false;
+        _streamError = null;
+
+        if (_events.Count > 0)
+        {
+            var lastStage = _events[^1].Stage;
+            if (IsTerminalStatus(lastStage))
+                _terminalStatus = lastStage;
+        }
+
+        if (_followTail && _events.Count > 0)
+        {
+            _ = InvokeAsync(async () =>
+            {
+                StateHasChanged();
+                await Task.Yield();
+                try { await JS.InvokeVoidAsync("researchEngine.jobEvents.scrollToBottom", _timelineRef); } catch { }
+            });
+        }
+    }
+
+    private Task HandleStreamErrorAsync(ApiError err)
+    {
+        _streamError = err;
+        return InvokeAsync(StateHasChanged);
+    }
+
+    private async Task HandleStreamItemAsync(JobStreamItem item)
+    {
+        if (item.Kind == JobStreamKind.Event && item.Event is not null)
+        {
+            _streamError = null;
+
+            // NOTE:
+            // JobEventsClient is responsible for deduping event ids in the stream.
+            // If the server replays stored events, ensure JobEventsClient seeds/handles that.
+            _events.Add(item.Event);
+            _events.Sort(static (a, b) => a.Id.CompareTo(b.Id));
+
+            await InvokeAsync(async () =>
+            {
+                StateHasChanged();
+                await Task.Yield();
+
+                try
+                {
+                    if (_followTail)
+                        await JS.InvokeVoidAsync("researchEngine.jobEvents.scrollToBottom", _timelineRef);
+                    else
+                        await JS.InvokeVoidAsync("researchEngine.jobEvents.scrollIfNearBottom", _timelineRef);
+                }
+                catch { }
+            });
+
+            return;
+        }
+
+        if (item.Kind == JobStreamKind.Done && item.Done is not null)
+        {
+            _terminalStatus = item.Done.Status;
+            _doneSynthesisId = item.Done.SynthesisId;
+
+            await InvokeAsync(async () =>
+            {
+                await StopStreamAsync();
+
+                if (string.Equals(_terminalStatus, "Completed", StringComparison.OrdinalIgnoreCase))
+                {
+                    // only auto-load latest if user is not viewing a selected synthesis
+                    if (_selectedSynthesisId is null)
+                        await LoadLatestSynthesisAsync();
+                }
+
+                StateHasChanged();
+            });
+        }
+    }
+
+    private async Task StopStreamAsync()
+    {
+        try
+        {
+            _streamCts?.Cancel();
+        }
+        catch { /* ignore */ }
+
+        try
+        {
+            _streamCts?.Dispose();
+        }
+        catch { /* ignore */ }
+        finally
+        {
+            _streamCts = null;
+        }
+
+        try
+        {
+            await EventsClient.StopAsync();
+        }
+        catch { /* ignore */ }
+    }
+
+    private async Task LoadLatestSynthesisAsync()
+    {
+        if (!IsCompleted) return;
+        if (_synthesisLoading) return;
+
+        _synthesisLoading = true;
+        _synthesisError = null;
+        _synthesisEmpty = false;
+
+        var res = await SynthesisFacade.GetLatestSynthesisAsync(JobId);
+        if (!res.IsSuccess)
+        {
+            _synthesisError = res.Error;
+            _synthesisLoading = false;
+            return;
+        }
+
+        var latest = res.Data;
+        _latestSynthesis = latest;
+
+        if (_latestSynthesis is null)
+        {
+            _synthesisEmpty = true;
+            _synthesisMarkdown = string.Empty;
+        }
+        else
+        {
+            _synthesisMarkdown = ComposeMarkdown(_latestSynthesis);
+            _synthesisEmpty = string.IsNullOrWhiteSpace(_synthesisMarkdown);
+        }
+
+        _synthesisLoadedOnce = true;
+        _synthesisLoading = false;
+    }
+
+    private async Task OpenSynthesisAsync(Guid synthesisId)
+    {
+        _selectedSynthesisId = synthesisId;
+        _retryOpenId = synthesisId;
+        _selectedSynthesisError = null;
+
+        _selectedLoading = true;
+        try
+        {
+            var res = await SynthesisHistory.GetSynthesisAsync(synthesisId);
+            if (!res.IsSuccess)
+            {
+                _selectedSynthesisError = res.Error;
+                return;
+            }
+
+            var dto = res.Data!;
+            _synthesisMarkdown = ComposeMarkdown(dto);
+        }
+        finally
+        {
+            _selectedLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private Task RetrySelectedOpenAsync()
+    {
+        if (_retryOpenId is null) return Task.CompletedTask;
+        return OpenSynthesisAsync(_retryOpenId.Value);
+    }
+
+    private async Task BackToLatestAsync()
+    {
+        _selectedSynthesisId = null;
+        _selectedSynthesisError = null;
+        _retryOpenId = null;
+
+        if (IsCompleted)
+            await LoadLatestSynthesisAsync();
+
+        StateHasChanged();
+    }
+
+    private async Task UseAsBaseAsync(SynthesisDto s)
+    {
+        _prefillInstructions = s.Instructions;
+        _prefillOutline = s.Outline;
+        _baseSynthesisId = s.Id;
+
+        _iterError = null;
+        _createDialogOpen = true;
+
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task CreateAndRunSynthesisAsync(CreateSynthesisInput input)
+    {
+        _iterError = null;
+        _iterBusy = true;
+        _lastCreateInput = input;
+        _reportUpdatedAt = null;
+
+        _synthesisError = null;
+        _synthesisEmpty = false;
+        _synthesisLoading = true;
+
+        try
+        {
+            var snapshot = Overrides.GetSnapshot(JobId);
+
+            var res = await Iteration.CreateAndRunAsync(
+                jobId: JobId,
+                instructions: input.Instructions,
+                outline: input.Outline,
+                applyOverrides: input.ApplyOverrides,
+                overrides: snapshot,
+                parentSynthesisId: input.ParentSynthesisId,
+                useLatestAsParent: input.UseLatestAsParent);
+
+            if (!res.IsSuccess)
+            {
+                _iterError = res.Error;
+                _synthesisLoading = false;
+                return;
+            }
+
+            var terminal = res.Data!;
+            if (!string.Equals(terminal.Status, "Completed", StringComparison.OrdinalIgnoreCase))
+            {
+                _iterError = new ApiError(ApiErrorKind.Unexpected, $"Synthesis finished with status: {terminal.Status}. {terminal.Message}");
+                _synthesisLoading = false;
+                return;
+            }
+
+            var synth = await Api.SynthesesGET2Async(terminal.SynthesisId);
+            _latestSynthesis = synth;
+
+            _synthesisMarkdown = ComposeMarkdown(synth);
+            _synthesisLoadedOnce = true;
+            _synthesisEmpty = string.IsNullOrWhiteSpace(_synthesisMarkdown);
+            _synthesisLoading = false;
+
+            _reportUpdatedAt = DateTimeOffset.Now;
+
+            // after creating, go back to latest view
+            _selectedSynthesisId = null;
+            _selectedSynthesisError = null;
+            _retryOpenId = null;
+
+            // clear base prefill
+            _prefillInstructions = null;
+            _prefillOutline = null;
+            _baseSynthesisId = null;
+
+            _createDialogOpen = false;
+        }
+        catch (Exception ex)
+        {
+            _iterError = ApiErrorMapper.Map(ex);
+            _synthesisLoading = false;
+        }
+        finally
+        {
+            _iterBusy = false;
+            StateHasChanged();
+        }
+    }
+
+    private Task RetryIterationAsync()
+    {
+        if (_lastCreateInput is null) return Task.CompletedTask;
+        return CreateAndRunSynthesisAsync(_lastCreateInput);
+    }
+
+    private async Task CancelAsync()
+    {
+        if (!IsRunning || _cancelInFlight) return;
+
+        _cancelError = null;
+        _cancelInFlight = true;
+
+        var res = await JobFacade.CancelJobAsync(JobId);
+        if (!res.IsSuccess)
+        {
+            _cancelError = res.Error;
+            _cancelInFlight = false;
+            return;
+        }
+
+        var hintId = _events.Count == 0 ? 0 : _events[^1].Id;
+        var localEv = new PersistedJobEvent(hintId + 1, DateTimeOffset.Now, "Cancel", "Cancel requested.");
+        _events.Add(localEv);
+        _events.Sort(static (a, b) => a.Id.CompareTo(b.Id));
+
+        _cancelInFlight = false;
+    }
+
+    private async Task CopyLastAsync()
+    {
+        if (_events.Count == 0) return;
+        var last = _events[^1];
+        var text = $"{last.Stage}: {last.Message}";
+        try { await JS.InvokeAsync<bool>("researchEngine.jobEvents.copyText", text); } catch { }
+    }
+
+    private Task OpenLearningInDrawer(Guid learningId)
+    {
+        _evidenceTab = "learnings";
+        _highlightLearningId = learningId;
+        _evidenceOpen = true;
+        return InvokeAsync(StateHasChanged);
+    }
+
+    private void ToggleEvidence()
+    {
+        _evidenceOpen = !_evidenceOpen;
+        if (_evidenceOpen)
+            _highlightLearningId = null;
+    }
+
+    private void OpenCreateDialog()
+    {
+        // default: use latest as parent
+        _prefillInstructions = null;
+        _prefillOutline = null;
+        _baseSynthesisId = null;
+
+        _iterError = null;
+        _createDialogOpen = true;
+    }
+
+    private string BuildOverridesSummary()
+    {
+        var s = Overrides.GetSummary(JobId);
+        return $"Pinned: {s.PinnedSources} sources, {s.PinnedLearnings} learnings · Excluded: {s.ExcludedSources} sources, {s.ExcludedLearnings} learnings";
+    }
+
+    private static bool IsTerminalStatus(string? s)
+        => s is not null && (s.Equals("Completed", StringComparison.OrdinalIgnoreCase)
+                          || s.Equals("Failed", StringComparison.OrdinalIgnoreCase)
+                          || s.Equals("Canceled", StringComparison.OrdinalIgnoreCase));
+
+    private static string FormatTime(DateTimeOffset dto)
+        => dto.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss");
+
+    private static string ShortId(Guid id) => id.ToString("N")[..8];
+
+    // Markdown composition rules:
+    // - order by Index
+    // - heading = ## Title
+    // - content = ContentMarkdown else Summary else "_No content._"
+    private static string ComposeMarkdown(SynthesisDto synthesis)
+    {
+        var sections = (synthesis.Sections ?? Array.Empty<SynthesisSectionDto>())
+            .OrderBy(s => s.Index)
+            .ToList();
+
+        if (sections.Count == 0)
+            return string.Empty;
+
+        var parts = new List<string>(capacity: sections.Count * 2);
+
+        foreach (var s in sections)
+        {
+            var title = string.IsNullOrWhiteSpace(s.Title) ? "Section" : s.Title.Trim();
+            parts.Add($"## {title}");
+
+            if (!string.IsNullOrWhiteSpace(s.ContentMarkdown))
+                parts.Add(s.ContentMarkdown.Trim());
+            else if (!string.IsNullOrWhiteSpace(s.Summary))
+                parts.Add(s.Summary.Trim());
+            else
+                parts.Add("_No content._");
+        }
+
+        return string.Join("\n\n", parts);
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        await StopStreamAsync();
+    }
+}
+
+<style>
+.job-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px;
+    display: grid;
+    gap: 10px;
+}
+
+.row { display: grid; grid-template-columns: 120px 1fr; gap: 10px; align-items: baseline; }
+.label { color: var(--muted); font-size: 0.95rem; }
+.value { color: var(--text); display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+
+.pill {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    font-size: 0.85rem;
+}
+
+.stage {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 999px;
+    border: 1px solid var(--border-strong);
+    font-size: 0.85rem;
+}
+
+.toolbar { margin-top: 6px; display: flex; gap: 8px; flex-wrap: wrap; }
+
+.toolbtn {
+    padding: 8px 10px;
+    border-radius: 10px;
+    border: 1px solid var(--border-strong);
+    background: var(--border-strong);
+    color: var(--bg);
+    cursor: pointer;
+}
+.toolbtn:focus-visible { outline: 2px solid var(--border-strong); outline-offset: 2px; }
+
+.dangerbtn {
+    padding: 8px 10px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text);
+    cursor: pointer;
+}
+.dangerbtn:focus-visible { outline: 2px solid var(--border-strong); outline-offset: 2px; }
+
+.progress {
+    margin-top: 14px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px;
+    background: var(--surface);
+}
+
+.progress-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 10px;
+    flex-wrap: wrap;
+}
+.h2 { font-size: 1rem; margin: 0; }
+
+.progress-actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+
+.check { display: inline-flex; gap: 8px; align-items: center; color: var(--text); }
+.check input { width: 16px; height: 16px; }
+
+.secondarybtn {
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text);
+    border-radius: 10px;
+    padding: 6px 10px;
+    cursor: pointer;
+}
+.secondarybtn:focus-visible { outline: 2px solid var(--border-strong); outline-offset: 2px; }
+
+.terminal {
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 10px;
+    margin: 10px 0;
+    display: flex;
+    gap: 10px;
+    align-items: baseline;
+    flex-wrap: wrap;
+}
+.muted { color: var(--muted); }
+
+.timeline {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    display: grid;
+    gap: 10px;
+    max-height: 48vh;
+    overflow: auto;
+    border-radius: 10px;
+}
+
+.timeline-item {
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 12px;
+    outline: none;
+}
+.timeline-item:focus-visible { outline: 2px solid var(--border-strong); outline-offset: 2px; }
+
+.t-head { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; margin-bottom: 6px; }
+.t-time { color: var(--muted); font-size: 0.9rem; }
+.t-stage { font-weight: 700; color: var(--text); }
+.t-msg { color: var(--text); word-break: break-word; }
+
+.report {
+    margin-top: 14px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px;
+    background: var(--surface);
+}
+
+.report-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 10px;
+}
+
+.report-meta {
+    color: var(--muted);
+    font-size: 0.9rem;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.toast {
+    display: inline-flex;
+    gap: 10px;
+    align-items: baseline;
+    padding: 6px 10px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    background: var(--surface-2, var(--surface));
+    color: var(--text);
+    font-size: 0.9rem;
+}
+
+.mono {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 2px 8px;
+}
+
+.dot { opacity: 0.6; }
+</style>

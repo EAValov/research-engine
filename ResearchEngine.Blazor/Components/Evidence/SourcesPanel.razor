@@ -1,0 +1,178 @@
+@using ResearchEngine.Blazor.Api
+@using ResearchEngine.Blazor.Components.Common
+@using ResearchEngine.Blazor.Services
+@inject EvidenceFacade Evidence
+@inject OverridesStore Overrides
+@inject IJSRuntime JS
+
+<div class="panel">
+    <div class="toolbar">
+        <div class="left">
+            <label class="sr-only" for="src-filter">Filter</label>
+            <input id="src-filter"
+                   class="filter"
+                   placeholder="Filter sources…"
+                   value="@_filter"
+                   @oninput="OnFilterInput" />
+        </div>
+    </div>
+
+    @if (_error is not null)
+    {
+        <ErrorBanner Error="_error" OnRetry="ReloadAsync" />
+    }
+
+    @if (_loading)
+    {
+        <p aria-live="polite">Loading sources…</p>
+    }
+    else if (Filtered().Count == 0)
+    {
+        <p>No sources.</p>
+    }
+    else
+    {
+        <ul class="list" role="list">
+            @foreach (var s in Filtered())
+            {
+                var pinned = Overrides.IsPinnedSource(JobId, s.SourceId);
+                var excluded = Overrides.IsExcludedSource(JobId, s.SourceId);
+
+                <li class="row" tabindex="0">
+                    <div class="main">
+                        <div class="title">
+                            @(string.IsNullOrWhiteSpace(s.Title) ? s.Reference : s.Title)
+                        </div>
+                        @if (!string.IsNullOrWhiteSpace(s.Title))
+                        {
+                            <div class="ref muted">@s.Reference</div>
+                        }
+                        <div class="meta muted">
+                            <span>@s.LearningCount learnings</span>
+                            <span class="dot">•</span>
+                            <span>@s.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</span>
+                        </div>
+                    </div>
+
+                    <div class="toggles" aria-label="Overrides">
+                        <label class="tg">
+                            <input type="checkbox"
+                                   checked="@pinned"
+                                   @onchange="() => TogglePinned(s.SourceId)"
+                                   aria-label="Pin source" />
+                            <span>Pin</span>
+                        </label>
+
+                        <label class="tg">
+                            <input type="checkbox"
+                                   checked="@excluded"
+                                   @onchange="() => ToggleExcluded(s.SourceId)"
+                                   aria-label="Exclude source" />
+                            <span>Exclude</span>
+                        </label>
+                    </div>
+
+                    <div class="actions">
+                        <button type="button" class="ghost" @onclick="() => DeleteAsync(s.SourceId)">Delete</button>
+                    </div>
+                </li>
+            }
+        </ul>
+    }
+</div>
+
+@code {
+    [Parameter] public Guid JobId { get; set; }
+    [Parameter] public bool IsOpen { get; set; }
+
+    [Parameter] public string FilterText { get; set; } = "";
+    [Parameter] public EventCallback<string> FilterTextChanged { get; set; }
+
+    private bool _loading;
+    private ApiError? _error;
+    private readonly List<SourceListItemDto> _items = new();
+    private bool _loadedOnce;
+
+    private string _filter = "";
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_filter != (FilterText ?? ""))
+            _filter = FilterText ?? "";
+
+        if (IsOpen && !_loadedOnce)
+            await ReloadAsync();
+    }
+
+    private async Task ReloadAsync()
+    {
+        _loading = true;
+        _error = null;
+        _items.Clear();
+
+        var res = await Evidence.GetSourcesAsync(JobId);
+        if (!res.IsSuccess)
+        {
+            _error = res.Error;
+            _loading = false;
+            return;
+        }
+
+        _items.AddRange(res.Data ?? Array.Empty<SourceListItemDto>());
+        _loadedOnce = true;
+        _loading = false;
+    }
+
+    private async Task OnFilterInput(ChangeEventArgs e)
+    {
+        _filter = e.Value?.ToString() ?? "";
+        if (FilterTextChanged.HasDelegate)
+            await FilterTextChanged.InvokeAsync(_filter);
+    }
+
+    private List<SourceListItemDto> Filtered()
+    {
+        var f = (_filter ?? "").Trim();
+        if (string.IsNullOrWhiteSpace(f))
+            return _items;
+
+        return _items.Where(x =>
+            ((x.Title ?? "").Contains(f, StringComparison.OrdinalIgnoreCase)) ||
+            ((x.Reference ?? "").Contains(f, StringComparison.OrdinalIgnoreCase))
+        ).ToList();
+    }
+
+    private void TogglePinned(Guid sourceId)
+    {
+        Overrides.TogglePinnedSource(JobId, sourceId);
+        StateHasChanged();
+    }
+
+    private void ToggleExcluded(Guid sourceId)
+    {
+        Overrides.ToggleExcludedSource(JobId, sourceId);
+        StateHasChanged();
+    }
+
+    private async Task DeleteAsync(Guid sourceId)
+    {
+        var ok = false;
+        try { ok = await JS.InvokeAsync<bool>("confirm", "Delete this source?"); } catch { }
+        if (!ok) return;
+
+        _error = null;
+
+        var idx = _items.FindIndex(x => x.SourceId == sourceId);
+        if (idx < 0) return;
+
+        var removed = _items[idx];
+        _items.RemoveAt(idx);
+
+        var res = await Evidence.DeleteSourceAsync(JobId, sourceId);
+        if (!res.IsSuccess)
+        {
+            _items.Insert(idx, removed);
+            _error = res.Error;
+        }
+    }
+}

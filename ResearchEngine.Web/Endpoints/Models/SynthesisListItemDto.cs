@@ -8,5 +8,4 @@ public sealed record SynthesisListItemDto(
     DateTimeOffset CreatedAt,
     DateTimeOffset? CompletedAt,
     string? ErrorMessage,
-    int SectionCount,
-    SynthesisListItemLinksDto Links);
+    int SectionCount);

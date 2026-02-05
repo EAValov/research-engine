@@ -1,0 +1,437 @@
+@using System.Text.Json
+@using Microsoft.AspNetCore.Components.Web
+@using ResearchEngine.Blazor.Components.Common
+@using ResearchEngine.Blazor.Services
+@inject ResearchProtocolFacade Protocol
+@inject JobCreationFacade JobCreation
+@inject NavigationManager Nav
+
+<div class="composer-wrap">
+    <section class="composer" aria-label="New research">
+        <div class="head">
+            <h2 class="title">New Research</h2>
+            <div class="hint">Ask anything. Tune breadth/depth if you want.</div>
+        </div>
+
+        @if (_error is not null)
+        {
+            <ErrorBanner Error="_error" OnRetry="RetryAsync" />
+            @if (_errorStep == Step.Clarifications)
+            {
+                <div class="row-actions">
+                    <button type="button" class="secondary" @onclick="SkipClarificationsAsync">Skip clarifications</button>
+                </div>
+            }
+        }
+
+        <div class="box">
+            <label class="sr-only" for="re-query">Query</label>
+            <textarea id="re-query" class="query" placeholder="Ask anything…" rows="5" @bind-value="_query"
+                @bind-value:event="oninput" @onkeydown="OnQueryKeyDown" aria-describedby="re-query-help"></textarea>
+
+            <div id="re-query-help" class="sr-help">
+                Tip: Press Ctrl+Enter to run.
+            </div>
+
+            <div class="settings-bar">
+                <button type="button" class="secondary" @onclick="ToggleSettings" aria-expanded="@_showSettings"
+                    aria-controls="re-settings">
+                    @(_showSettings ? "Hide settings" : "Settings")
+                </button>
+
+                <label class="chk">
+                    <input type="checkbox" @bind="_askClarifications" />
+                    <span>Ask clarifying questions</span>
+                </label>
+            </div>
+
+            <div id="re-settings" class="settings @(_showSettings ? "" : "hidden")" aria-label="Settings">
+                <div class="setting">
+                    <label for="re-breadth">Breadth</label>
+                    <input id="re-breadth" type="number" min="1" max="8" class="num"
+                        value="@(_breadth?.ToString() ?? "")" placeholder="1-8, more is wider"
+                        title="1-8, more is wider" @oninput="OnBreadthChanged" />
+                </div>
+
+                <div class="setting">
+                    <label for="re-depth">Depth</label>
+                    <input id="re-depth" type="number" min="1" max="4" class="num" value="@(_depth?.ToString() ?? "")"
+                        placeholder="1-4, more is deeper" title="1-4, more is deeper" @oninput="OnDepthChanged" />
+                </div>
+
+                <div class="setting">
+                    <label for="re-lang">Language</label>
+                    <input id="re-lang" class="text" value="@_language" placeholder="2-letter code (e.g., en, de, ru)"
+                        title="2-letter code (e.g., en, de, ru)" @oninput="OnLanguageChanged" inputmode="text"
+                        spellcheck="false" />
+                </div>
+
+                <div class="setting">
+                    <label for="re-region">Region</label>
+                    <input id="re-region" class="text" value="@_region" placeholder="e.g., Russia; Bavaria, Germany"
+                        title="Examples: Russia; Bavaria, Germany" @oninput="OnRegionChanged" />
+                </div>
+            </div>
+
+            @if (_state == ComposerState.LoadingClarifications)
+            {
+                <div class="status" role="status" aria-live="polite">
+                    <span class="spinner" aria-hidden="true"></span>
+                    Generating clarifying questions…
+                </div>
+            }
+            else if (_state == ComposerState.AnsweringClarifications)
+            {
+                <div class="clarifications" aria-label="Clarifying questions">
+                    <div class="clar-head">
+                        <div class="clar-title">Clarifications</div>
+                        <div class="clar-sub">Answer to improve the research plan (optional but recommended).</div>
+                    </div>
+
+                    @for (var i = 0; i < _questions.Count; i++)
+                    {
+                        var q = _questions[i];
+                        <div class="qa">
+                            <div class="q" aria-label="Question">@q</div>
+                            <label class="sr-only" for="@($"qa-{i}")">Answer</label>
+                            <input id="@($"qa-{i}")" class="a" value="@GetAnswer(q)"
+                                @oninput="@(e => SetAnswer(q, e.Value?.ToString() ?? ""))" placeholder="Your answer…" />
+                        </div>
+                    }
+
+                    <div class="row-actions">
+                        <button type="button" class="secondary" @onclick="BackToEditingAsync">Back</button>
+                        <button type="button" class="primary" @onclick="ContinueAfterClarificationsAsync"
+                            disabled="@(!_questions.All(q => !string.IsNullOrWhiteSpace(GetAnswer(q))))">
+                            Continue
+                        </button>
+                    </div>
+
+                    <div class="mini muted">
+                        If you prefer, you can leave answers empty — but it’s best to fill them.
+                    </div>
+                </div>
+            }
+            else if (_state == ComposerState.LoadingParameters)
+            {
+                <div class="status" role="status" aria-live="polite">
+                    <span class="spinner" aria-hidden="true"></span>
+                    Selecting parameters…
+                </div>
+            }
+            else if (_state == ComposerState.CreatingJob)
+            {
+                <div class="status" role="status" aria-live="polite">
+                    <span class="spinner" aria-hidden="true"></span>
+                    Creating job…
+                </div>
+            }
+
+            <div class="footer">
+                <div class="left">
+                    @if (_paramWarning is not null)
+                    {
+                        <div class="warn" role="status" aria-live="polite">@_paramWarning</div>
+                    }
+                </div>
+
+                <button type="button" class="run" @onclick="RunAsync" disabled="@RunDisabled"
+                    aria-disabled="@RunDisabled">
+                    @RunButtonText
+                </button>
+            </div>
+        </div>
+    </section>
+</div>
+
+@code {
+    [Parameter] public EventCallback<Guid> OnJobCreated { get; set; }
+
+    private enum ComposerState
+    {
+        Editing,
+        LoadingClarifications,
+        AnsweringClarifications,
+        LoadingParameters,
+        ReadyToCreate,
+        CreatingJob,
+    }
+
+    private enum Step { None, Clarifications, Parameters, CreateJob }
+
+    private ComposerState _state = ComposerState.Editing;
+
+    private ApiError? _error;
+    private Step _errorStep = Step.None;
+
+    private string _query = "";
+    private bool _askClarifications = true;
+
+    // ✅ Hidden/empty by default; placeholders show suggested params once available.
+    private int? _breadth;
+    private int? _depth;
+    private string _language = "";
+    private string _region = "";
+
+    private bool _userTouchedSettings;
+    private bool _showSettings;
+
+    private readonly List<string> _questions = new();
+    private readonly Dictionary<string, string> _answers = new(StringComparer.Ordinal);
+
+    private (int breadth, int depth, string language, string? region)? _suggestedParams;
+    private string? _paramWarning;
+
+    private bool RunDisabled =>
+    string.IsNullOrWhiteSpace(_query) ||
+    _state is ComposerState.LoadingClarifications or ComposerState.LoadingParameters or ComposerState.CreatingJob;
+
+    private string RunButtonText => _state switch
+    {
+        ComposerState.AnsweringClarifications => "Continue",
+        ComposerState.CreatingJob => "Creating…",
+        _ => "Run research"
+    };
+
+    private void ToggleSettings()
+    {
+        _showSettings = !_showSettings;
+    }
+
+    private async Task RunAsync()
+    {
+        _error = null;
+        _errorStep = Step.None;
+        _paramWarning = null;
+
+        var q = (_query ?? "").Trim();
+        if (string.IsNullOrWhiteSpace(q))
+            return;
+
+        if (_state == ComposerState.AnsweringClarifications)
+        {
+            await ContinueAfterClarificationsAsync();
+            return;
+        }
+
+        await PipelineAsync();
+    }
+
+    private async Task PipelineAsync()
+    {
+        var query = (_query ?? "").Trim();
+
+        _questions.Clear();
+        _answers.Clear();
+
+        if (_askClarifications)
+        {
+            _state = ComposerState.LoadingClarifications;
+            StateHasChanged();
+
+            var cq = await Protocol.GetClarificationQuestionsAsync(query, includeConfigureQuestions: true, CancellationToken.None);
+            if (!cq.IsSuccess)
+            {
+                _error = cq.Error;
+                _errorStep = Step.Clarifications;
+                _state = ComposerState.Editing;
+                return;
+            }
+
+            foreach (var item in (cq.Data ?? Array.Empty<string>()))
+            {
+                var s = (item ?? "").Trim();
+                if (!string.IsNullOrWhiteSpace(s))
+                {
+                    _questions.Add(s);
+                    _answers[s] = "";
+                }
+            }
+
+            if (_questions.Count > 0)
+            {
+                _state = ComposerState.AnsweringClarifications;
+                return;
+            }
+        }
+
+        await ContinueAfterClarificationsAsync();
+    }
+
+    private async Task ContinueAfterClarificationsAsync()
+    {
+        var query = (_query ?? "").Trim();
+
+        _state = ComposerState.LoadingParameters;
+        StateHasChanged();
+
+        var clarifications = BuildClarifications();
+        var overrides = BuildOverrides();
+
+        var pr = await Protocol.GetParametersAsync(query, clarifications, overrides, CancellationToken.None);
+
+        if (!pr.IsSuccess)
+        {
+            _error = pr.Error;
+            _errorStep = Step.Parameters;
+
+            // fallback defaults
+            _paramWarning = "Could not load recommended parameters. Using safe defaults (breadth=2, depth=2, language=en).";
+            _suggestedParams = (2, 2, "en", null);
+
+            _state = ComposerState.ReadyToCreate;
+            await CreateJobAsync();
+            return;
+        }
+
+        _suggestedParams = pr.Data;
+        _state = ComposerState.ReadyToCreate;
+
+        await CreateJobAsync();
+    }
+
+    private async Task CreateJobAsync()
+    {
+        _state = ComposerState.CreatingJob;
+        StateHasChanged();
+
+        var query = (_query ?? "").Trim();
+        var clarifications = BuildClarifications();
+
+        var breadth = Clamp(_breadth ?? _suggestedParams?.breadth ?? 2, 1, 8);
+        var depth = Clamp(_depth ?? _suggestedParams?.depth ?? 2, 1, 4);
+
+        var langRaw = !string.IsNullOrWhiteSpace(_language) ? _language : (_suggestedParams?.language ?? "en");
+        var lang = NormalizeLang(langRaw);
+
+        var regionRaw = !string.IsNullOrWhiteSpace(_region) ? _region.Trim() : (_suggestedParams?.region ?? null);
+        var region = string.IsNullOrWhiteSpace(regionRaw) ? null : regionRaw;
+
+        var cr = await JobCreation.CreateJobAsync(query, clarifications, breadth, depth, lang, region, CancellationToken.None);
+
+        if (!cr.IsSuccess)
+        {
+            _error = cr.Error;
+            _errorStep = Step.CreateJob;
+            _state = ComposerState.ReadyToCreate;
+            return;
+        }
+
+        var jobId = cr.Data;
+
+        if (OnJobCreated.HasDelegate)
+            await OnJobCreated.InvokeAsync(jobId);
+
+        Nav.NavigateTo($"/jobs/{jobId}");
+    }
+
+    private async Task RetryAsync()
+    {
+        _error = null;
+        _errorStep = Step.None;
+        await PipelineAsync();
+    }
+
+    private Task SkipClarificationsAsync()
+    {
+        _askClarifications = false;
+        _questions.Clear();
+        _answers.Clear();
+        _state = ComposerState.Editing;
+        return Task.CompletedTask;
+    }
+
+    private Task BackToEditingAsync()
+    {
+        _state = ComposerState.Editing;
+        return Task.CompletedTask;
+    }
+
+    private List<(string question, string answer)> BuildClarifications()
+    {
+        var list = new List<(string question, string answer)>();
+        foreach (var q in _questions)
+        {
+            list.Add((q, GetAnswer(q)));
+        }
+        return list;
+    }
+
+    private Dictionary<string, object>? BuildOverrides()
+    {
+        if (!_userTouchedSettings)
+            return null;
+
+        var d = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
+
+        if (_breadth is int b) d["breadth"] = Clamp(b, 1, 8);
+        if (_depth is int dep) d["depth"] = Clamp(dep, 1, 4);
+
+        if (!string.IsNullOrWhiteSpace(_language))
+            d["language"] = NormalizeLang(_language);
+
+        var r = string.IsNullOrWhiteSpace(_region) ? null : _region.Trim();
+        if (!string.IsNullOrWhiteSpace(r))
+            d["region"] = r!;
+
+        return d.Count == 0 ? null : d;
+    }
+
+    private string GetAnswer(string question)
+    => _answers.TryGetValue(question, out var a) ? a : "";
+
+    private void SetAnswer(string question, string value)
+    => _answers[question] = (value ?? "").Trim();
+
+    private void OnQueryKeyDown(KeyboardEventArgs e)
+    {
+        if (e.CtrlKey && e.Key == "Enter" && !RunDisabled)
+        {
+            _ = RunAsync();
+        }
+    }
+
+    private void OnBreadthChanged(ChangeEventArgs e)
+    {
+        _userTouchedSettings = true;
+
+        var s = e.Value?.ToString() ?? "";
+        if (string.IsNullOrWhiteSpace(s)) { _breadth = null; return; }
+
+        if (int.TryParse(s, out var v))
+            _breadth = Clamp(v, 1, 8);
+    }
+
+    private void OnDepthChanged(ChangeEventArgs e)
+    {
+        _userTouchedSettings = true;
+
+        var s = e.Value?.ToString() ?? "";
+        if (string.IsNullOrWhiteSpace(s)) { _depth = null; return; }
+
+        if (int.TryParse(s, out var v))
+            _depth = Clamp(v, 1, 4);
+    }
+
+    private void OnLanguageChanged(ChangeEventArgs e)
+    {
+        _userTouchedSettings = true;
+        _language = (e.Value?.ToString() ?? "").Trim();
+    }
+
+    private void OnRegionChanged(ChangeEventArgs e)
+    {
+        _userTouchedSettings = true;
+        _region = (e.Value?.ToString() ?? "").Trim();
+    }
+
+    private static int Clamp(int v, int min, int max) => v < min ? min : (v > max ? max : v);
+
+    private static string NormalizeLang(string s)
+    {
+        s = (s ?? "").Trim().ToLowerInvariant();
+        if (s.Length == 0) return "en";
+        if (s.Length > 8) s = s.Substring(0, 8);
+        return s;
+    }
+}

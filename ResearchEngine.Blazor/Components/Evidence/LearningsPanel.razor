@@ -1,0 +1,315 @@
+@using ResearchEngine.Blazor.Api
+@using ResearchEngine.Blazor.Components.Common
+@using ResearchEngine.Blazor.Services
+@inject EvidenceFacade Evidence
+@inject OverridesStore Overrides
+@inject IJSRuntime JS
+
+<div class="panel">
+    <div class="toolbar">
+        <div class="left">
+            <label class="sr-only" for="lrn-filter">Filter</label>
+            <input id="lrn-filter"
+                   class="filter"
+                   placeholder="Filter learnings…"
+                   value="@_filter"
+                   @oninput="OnFilterInput" />
+        </div>
+
+        <form class="add" @onsubmit="AddAsync">
+            <label class="sr-only" for="lrn-text">Learning</label>
+            <textarea id="lrn-text" class="textarea" required @bind="_newText" rows="2" placeholder="Add learning…"></textarea>
+            <button type="submit" class="primary" disabled="@_addBusy">@(_addBusy ? "Adding…" : "Add")</button>
+        </form>
+    </div>
+
+    @if (IsOpen && HighlightLearningId is not null && !_highlightFound)
+    {
+        <div class="note">
+            Learning not loaded yet. Load more to find it.
+        </div>
+    }
+
+    @if (_error is not null)
+    {
+        <ErrorBanner Error="_error" OnRetry="ReloadAsync" />
+    }
+
+    <ul class="list" role="list">
+        @foreach (var item in Filtered())
+        {
+            var isHighlight = HighlightLearningId is not null && item.LearningId == HighlightLearningId.Value;
+
+            var pinned = Overrides.IsPinnedLearning(JobId, item.LearningId);
+            var excluded = Overrides.IsExcludedLearning(JobId, item.LearningId);
+
+            <li id="@GetRowId(item.LearningId)"
+                class="row @(isHighlight ? "hl" : "")"
+                tabindex="0">
+
+                <div class="top">
+                    <div class="text">@Trunc(item.Text, 220)</div>
+                    <div class="meta">
+                        <span>@item.ImportanceScore.ToString("0.00")</span>
+                        <span class="dot">•</span>
+                        <span>@item.SourceReference</span>
+                        <span class="dot">•</span>
+                        <span>@item.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</span>
+                    </div>
+                </div>
+
+                <div class="bottom">
+                    <div class="toggles" aria-label="Overrides">
+                        <label class="tg">
+                            <input type="checkbox"
+                                   checked="@pinned"
+                                   @onchange="() => TogglePinned(item.LearningId)"
+                                   aria-label="Pin learning" />
+                            <span>Pin</span>
+                        </label>
+
+                        <label class="tg">
+                            <input type="checkbox"
+                                   checked="@excluded"
+                                   @onchange="() => ToggleExcluded(item.LearningId)"
+                                   aria-label="Exclude learning" />
+                            <span>Exclude</span>
+                        </label>
+                    </div>
+
+                    <div class="actions">
+                        <button type="button" class="ghost" @onclick="() => DeleteAsync(item.LearningId)">Delete</button>
+                    </div>
+                </div>
+            </li>
+        }
+    </ul>
+
+    <div class="foot">
+        <button type="button" class="secondary" @onclick="LoadMoreAsync" disabled="@(!_canLoadMore || _busy)">
+            @(_busy ? "Loading…" : "Load more")
+        </button>
+    </div>
+</div>
+
+@code {
+    [Parameter] public Guid JobId { get; set; }
+    [Parameter] public bool IsOpen { get; set; }
+    [Parameter] public Guid? HighlightLearningId { get; set; }
+
+    [Parameter] public string FilterText { get; set; } = "";
+    [Parameter] public EventCallback<string> FilterTextChanged { get; set; }
+
+    [Parameter] public int InitialLoadedCount { get; set; } = 25;
+    [Parameter] public EventCallback<int> LoadedCountChanged { get; set; }
+
+    private readonly List<LearningListItemDto> _items = new();
+    private int _skip = 0;
+    private const int Take = 25;
+
+    private bool _busy;
+    private bool _canLoadMore = true;
+
+    private string _filter = "";
+    private string _newText = "";
+    private bool _addBusy;
+    private ApiError? _error;
+
+    private bool _highlightFound;
+    private bool _restoredToTarget;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_filter != (FilterText ?? ""))
+            _filter = FilterText ?? "";
+
+        if (IsOpen && _items.Count == 0)
+            await ReloadAsync();
+
+        if (IsOpen && !_restoredToTarget)
+            await EnsureLoadedToTargetAsync();
+
+        if (IsOpen)
+            await TryApplyHighlightAsync();
+    }
+
+    private async Task ReloadAsync()
+    {
+        _error = null;
+        _items.Clear();
+        _skip = 0;
+        _canLoadMore = true;
+        _highlightFound = false;
+        _restoredToTarget = false;
+
+        await NotifyLoadedCountAsync();
+        await LoadMoreAsync();
+    }
+
+    private async Task EnsureLoadedToTargetAsync()
+    {
+        // best-effort restore: load pages until we reach InitialLoadedCount or there is no more
+        var target = Math.Max(Take, InitialLoadedCount);
+        if (_items.Count >= target)
+        {
+            _restoredToTarget = true;
+            return;
+        }
+
+        // Avoid infinite loops on errors
+        var safety = 10; // at most 10 additional pages
+        while (_items.Count < target && _canLoadMore && safety-- > 0)
+        {
+            await LoadMoreAsync();
+            if (_error is not null) break;
+        }
+
+        _restoredToTarget = true;
+    }
+
+    private async Task OnFilterInput(ChangeEventArgs e)
+    {
+        _filter = e.Value?.ToString() ?? "";
+        if (FilterTextChanged.HasDelegate)
+            await FilterTextChanged.InvokeAsync(_filter);
+    }
+
+    private async Task LoadMoreAsync()
+    {
+        if (_busy || !_canLoadMore) return;
+
+        _busy = true;
+        _error = null;
+
+        var res = await Evidence.GetLearningsAsync(JobId, _skip, Take);
+        if (!res.IsSuccess)
+        {
+            _error = res.Error;
+            _busy = false;
+            return;
+        }
+
+        var page = res.Data ?? Array.Empty<LearningListItemDto>();
+        _items.AddRange(page);
+
+        _skip += page.Count;
+        _canLoadMore = page.Count == Take;
+
+        _busy = false;
+
+        await NotifyLoadedCountAsync();
+        await TryApplyHighlightAsync();
+    }
+
+    private async ValueTask NotifyLoadedCountAsync()
+    {
+        if (LoadedCountChanged.HasDelegate)
+            await LoadedCountChanged.InvokeAsync(_skip);
+    }
+
+    private async Task AddAsync()
+    {
+        if (_addBusy) return;
+
+        var text = (_newText ?? "").Trim();
+        if (string.IsNullOrWhiteSpace(text)) return;
+
+        _addBusy = true;
+        _error = null;
+
+        var res = await Evidence.AddLearningAsync(JobId, text);
+        if (!res.IsSuccess)
+        {
+            _error = res.Error;
+            _addBusy = false;
+            return;
+        }
+
+        _items.Insert(0, res.Data!);
+        _newText = "";
+        _addBusy = false;
+
+        // loaded count effectively increased by 1 (client-side)
+        _skip += 1;
+        await NotifyLoadedCountAsync();
+        await TryApplyHighlightAsync();
+    }
+
+    private async Task DeleteAsync(Guid learningId)
+    {
+        var ok = false;
+        try { ok = await JS.InvokeAsync<bool>("confirm", "Delete this learning?"); } catch { }
+        if (!ok) return;
+
+        _error = null;
+
+        var idx = _items.FindIndex(x => x.LearningId == learningId);
+        if (idx < 0) return;
+
+        var removed = _items[idx];
+        _items.RemoveAt(idx);
+
+        var res = await Evidence.DeleteLearningAsync(JobId, learningId);
+        if (!res.IsSuccess)
+        {
+            _items.Insert(idx, removed);
+            _error = res.Error;
+            return;
+        }
+
+        // loaded count decreases by 1
+        _skip = Math.Max(0, _skip - 1);
+        await NotifyLoadedCountAsync();
+    }
+
+    private void TogglePinned(Guid learningId)
+    {
+        Overrides.TogglePinnedLearning(JobId, learningId);
+        StateHasChanged();
+    }
+
+    private void ToggleExcluded(Guid learningId)
+    {
+        Overrides.ToggleExcludedLearning(JobId, learningId);
+        StateHasChanged();
+    }
+
+    private IEnumerable<LearningListItemDto> Filtered()
+    {
+        var f = (_filter ?? "").Trim();
+        if (string.IsNullOrWhiteSpace(f))
+            return _items;
+
+        return _items.Where(x =>
+            (x.Text?.Contains(f, StringComparison.OrdinalIgnoreCase) ?? false) ||
+            (x.SourceReference?.Contains(f, StringComparison.OrdinalIgnoreCase) ?? false));
+    }
+
+    private async Task TryApplyHighlightAsync()
+    {
+        _highlightFound = false;
+
+        if (!IsOpen || HighlightLearningId is null) return;
+
+        var id = HighlightLearningId.Value;
+        if (_items.Any(x => x.LearningId == id))
+        {
+            _highlightFound = true;
+
+            try
+            {
+                await JS.InvokeVoidAsync("researchEngine.citations.scrollIntoViewById", GetRowId(id));
+            }
+            catch { }
+        }
+    }
+
+    private static string GetRowId(Guid id) => $"learning-{id:N}";
+
+    private static string Trunc(string? s, int max)
+    {
+        if (string.IsNullOrWhiteSpace(s)) return "";
+        s = s.Trim();
+        return s.Length <= max ? s : s.Substring(0, max) + "…";
+    }
+}

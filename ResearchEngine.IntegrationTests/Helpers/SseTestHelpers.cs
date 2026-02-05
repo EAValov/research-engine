@@ -1,5 +1,6 @@
 using System.Net.Http.Json;
 using System.Text.Json;
+using ResearchEngine.Web;
 
 namespace ResearchEngine.IntegrationTests.Helpers;
 
@@ -14,13 +15,23 @@ public static class SseTestHelpers
         return await WaitForDoneAfterAsync(client, jobId, afterEventId: 0, timeout);
     }
 
-    public static async Task<(string Status, Guid? SynthesisId, int? DoneEventId)> WaitForDoneAfterAsync(
+   public static async Task<(string Status, Guid? SynthesisId, int? DoneEventId)> WaitForDoneAfterAsync(
         HttpClient client,
         Guid jobId,
         int afterEventId,
         TimeSpan timeout)
     {
-        using var req = new HttpRequestMessage(HttpMethod.Get, $"/api/research/jobs/{jobId}/events/stream");
+        // 1) Mint ticket (authorized call)
+        using var tokenReq = new HttpRequestMessage(HttpMethod.Post, $"/api/research/jobs/{jobId}/events/stream-token");
+
+        using var tokenResp = await client.SendAsync(tokenReq);
+        tokenResp.EnsureSuccessStatusCode();
+
+        var token = await tokenResp.Content.ReadFromJsonAsync<CreateSseTokenResponse>()
+                    ?? throw new InvalidOperationException("Token response was empty.");
+
+        // 2) Open stream with ticket
+        using var req = new HttpRequestMessage(HttpMethod.Get, token.StreamUrl);
         req.Headers.Add("Accept", "text/event-stream");
         req.Headers.Add("Last-Event-ID", afterEventId.ToString());
 

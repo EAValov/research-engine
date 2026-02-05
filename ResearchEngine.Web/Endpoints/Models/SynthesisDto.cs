@@ -10,5 +10,4 @@ public sealed record SynthesisDto(
     DateTimeOffset CreatedAt,
     DateTimeOffset? CompletedAt,
     string? ErrorMessage,
-    IReadOnlyList<SynthesisSectionDto> Sections,
-    SynthesisDtoLinks Links);
+    IReadOnlyList<SynthesisSectionDto> Sections);

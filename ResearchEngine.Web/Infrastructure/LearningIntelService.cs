@@ -426,7 +426,7 @@ public sealed class LearningIntelService(
         var queryVector = new Pgvector.Vector(emb.Vector);
 
         var maxK = Math.Clamp(topK, 1, 200);
-        var localMinImportance = _options.LocalMinImportance;
+        var localMinImportance = _options.MinImportance;
 
         // Load overrides once
         var snapshot = await jobStore.GetSynthesisOverridesAsync(synthesisId, ct);

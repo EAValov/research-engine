@@ -1,0 +1,123 @@
+@using ResearchEngine.Blazor.Api
+@using ResearchEngine.Blazor.Components.Common
+@using ResearchEngine.Blazor.Services
+@inject LearningGroupFacade Groups
+
+<div class="popover"
+     id="@PopoverId"
+     role="dialog"
+     aria-label="Learning group"
+     style="@Style"
+     hidden="@(!IsOpen)"
+     tabindex="-1"
+     @ref="_popoverRef">
+    <div class="popover-head">
+        <div class="title">Learning group</div>
+        <button type="button" class="x" @onclick="Close" aria-label="Close">×</button>
+    </div>
+
+    @if (!IsOpen)
+    {
+        @* hidden *@
+    }
+    else if (_loading)
+    {
+        <div class="muted">Loading…</div>
+    }
+    else if (_error is not null)
+    {
+        <ErrorBanner Error="_error" OnRetry="LoadAsync" />
+    }
+    else if (_group is null)
+    {
+        <div class="muted">No group data available.</div>
+        <div class="actions">
+            <button type="button" class="primary" @onclick="OpenInLearnings">Open in Learnings</button>
+        </div>
+    }
+    else
+    {
+        <div class="body">
+            <div class="main">
+                <div class="canon">@_group.CanonicalText</div>
+                <div class="meta">
+                    <span>Score: @_group.CanonicalImportanceScore.ToString("0.00")</span>
+                    <span class="dot">•</span>
+                    <span>Members: @_group.MemberCount</span>
+                    <span class="dot">•</span>
+                    <span>Sources: @_group.DistinctSourceCount</span>
+                </div>
+
+                <div class="subhead">Representative</div>
+                <div class="rep">@_group.RepresentativeLearningText</div>
+
+                @if (_group.Evidence is not null && _group.Evidence.Count > 0)
+                {
+                    <div class="subhead">Evidence (top)</div>
+                    <ul class="evidence" role="list">
+                        @foreach (var ev in _group.Evidence.Take(3))
+                        {
+                            <li class="ev">
+                                <div class="ev-top">
+                                    <span class="src">@ev.SourceReference</span>
+                                    <span class="score">@ev.ImportanceScore.ToString("0.00")</span>
+                                </div>
+                                <div class="ev-text">@ev.Text</div>
+                            </li>
+                        }
+                    </ul>
+                }
+            </div>
+
+            <div class="actions">
+                <button type="button" class="primary" @onclick="OpenInLearnings">Open in Learnings</button>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public Guid LearningId { get; set; }
+    [Parameter] public bool IsOpen { get; set; }
+    [Parameter] public string Style { get; set; } = "";
+    [Parameter] public string PopoverId { get; set; } = "lg-popover";
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public EventCallback<Guid> OnOpenInLearnings { get; set; }
+
+    private ElementReference _popoverRef;
+
+    private bool _loading;
+    private ApiError? _error;
+    private LearningGroupCardDto? _group;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (IsOpen)
+        {
+            await LoadAsync();
+        }
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _error = null;
+
+        var res = await Groups.GetGroupAsync(LearningId);
+        if (!res.IsSuccess)
+        {
+            _error = res.Error;
+            _group = null;
+            _loading = false;
+            return;
+        }
+
+        _group = res.Data;
+        _loading = false;
+    }
+
+    private Task Close() => OnClose.InvokeAsync();
+
+    private Task OpenInLearnings()
+        => OnOpenInLearnings.InvokeAsync(LearningId);
+}

@@ -2,6 +2,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using ResearchEngine.IntegrationTests.Helpers;
 using ResearchEngine.IntegrationTests.Infrastructure;
+using ResearchEngine.Web;
 using Xunit;
 
 namespace ResearchEngine.IntegrationTests.Tests;
@@ -35,16 +36,25 @@ public sealed class JobRun_EndToEnd_Tests : IntegrationTestBase
         var jobId = jobIdEl.GetGuid();
         Assert.NotEqual(Guid.Empty, jobId);
 
-        using var sseReq = new HttpRequestMessage(HttpMethod.Get, $"/api/research/jobs/{jobId}/events/stream");
-        sseReq.Headers.Add("Accept", "text/event-stream");
+        using var tokenReq = new HttpRequestMessage(HttpMethod.Post, $"/api/research/jobs/{jobId}/events/stream-token");
 
-        using var sseResp = await client.SendAsync(sseReq, HttpCompletionOption.ResponseHeadersRead);
-        sseResp.EnsureSuccessStatusCode();
+        using var tokenResp = await client.SendAsync(tokenReq);
+        tokenResp.EnsureSuccessStatusCode();
+
+        var token = await tokenResp.Content.ReadFromJsonAsync<CreateSseTokenResponse>()
+                    ?? throw new InvalidOperationException("Token response was empty.");
+                    
+        // 2) Open stream with ticket
+        using var req = new HttpRequestMessage(HttpMethod.Get, token.StreamUrl);
+        req.Headers.Add("Accept", "text/event-stream");
+
+        using var resp = await client.SendAsync(req, HttpCompletionOption.ResponseHeadersRead);
+        resp.EnsureSuccessStatusCode();
 
         var stages = new List<string>();
         string? terminalStage = null;
 
-        using var sseStream = await sseResp.Content.ReadAsStreamAsync();
+        await using var sseStream = await resp.Content.ReadAsStreamAsync();
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(60));
 
         await foreach (var frame in SseReader.ReadAsync(sseStream, cts.Token))

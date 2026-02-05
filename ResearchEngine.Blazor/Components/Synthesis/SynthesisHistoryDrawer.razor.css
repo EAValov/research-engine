@@ -1,0 +1,63 @@
+.overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.25);
+    display: none;
+    z-index: 1400;
+}
+
+.overlay.open { display: block; }
+
+.drawer {
+    position: absolute;
+    top: 0;
+    right: 0;
+    height: 100%;
+    width: min(520px, 92vw);
+    background: #fff;
+    border-left: 1px solid #e6e6e6;
+    display: grid;
+    grid-template-rows: auto auto 1fr;
+}
+
+.drawer:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
+
+.head {
+    padding: 12px;
+    border-bottom: 1px solid #efefef;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.title { font-weight: 800; color: var(--text); }
+
+.x {
+    border: 1px solid #e6e6e6;
+    background: #fff;
+    border-radius: 10px;
+    width: 32px;
+    height: 32px;
+    cursor: pointer;
+}
+.x:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
+
+.tabs {
+    display: flex;
+    gap: 8px;
+    padding: 10px 12px;
+    border-bottom: 1px solid #efefef;
+}
+
+.tab {
+    border: 1px solid #e6e6e6;
+    background: #fff;
+    border-radius: 999px;
+    padding: 6px 10px;
+    cursor: pointer;
+}
+.tab.active { border-color: var(--text); }
+.tab:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
+
+.body { padding: 12px; overflow: auto; }

@@ -1,0 +1,25 @@
+{
+  "runtime": "Net100",
+  "defaultVariables": null,
+  "documentGenerator": {
+    "fromDocument": {
+      "url": "openapi/v2.json"
+    }
+  },
+  "codeGenerators": {
+    "openApiToCSharpClient": {
+      "className": "ResearchApiClient",
+      "namespace": "ResearchEngine.Blazor.Api",
+      "generateClientClasses": true,
+      "generateClientInterfaces": true,
+      "injectHttpClient": true,
+      "useBaseUrl": false,
+      "generateOptionalParameters": true,
+      "generateNullableReferenceTypes": true,
+      "dateTimeType": "System.DateTimeOffset",
+      "jsonLibrary": "SystemTextJson",
+      "generateJsonMethods": true,
+      "output": "Api/ResearchApiClient.g.cs"
+    }
+  }
+}

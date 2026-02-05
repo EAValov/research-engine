@@ -1,5 +1,7 @@
 using System.Net;
+using System.Net.Http.Json;
 using ResearchEngine.IntegrationTests.Infrastructure;
+using ResearchEngine.Web;
 
 namespace ResearchEngine.IntegrationTests.Tests;
 
@@ -15,11 +17,10 @@ public sealed class Sse_UnknownJob_Tests : IntegrationTestBase
 
         var unknown = Guid.NewGuid();
 
-        using var req = new HttpRequestMessage(HttpMethod.Get, $"/api/research/jobs/{unknown}/events/stream");
-        req.Headers.Add("Accept", "text/event-stream");
+        using var tokenReq = new HttpRequestMessage(HttpMethod.Post, $"/api/research/jobs/{unknown}/events/stream-token");
 
-        using var resp = await client.SendAsync(req, HttpCompletionOption.ResponseHeadersRead);
-        Assert.Equal(HttpStatusCode.NotFound, resp.StatusCode);
+        using var tokenResp = await client.SendAsync(tokenReq);
+        Assert.Equal(HttpStatusCode.NotFound, tokenResp.StatusCode);
     }
 
     [Fact]

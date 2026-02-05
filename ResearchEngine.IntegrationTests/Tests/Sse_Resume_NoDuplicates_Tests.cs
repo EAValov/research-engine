@@ -2,7 +2,9 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using ResearchEngine.IntegrationTests.Helpers;
 using ResearchEngine.IntegrationTests.Infrastructure;
+using ResearchEngine.Web;
 using Xunit;
+using static ResearchEngine.IntegrationTests.Helpers.SseTestHelpers;
 
 namespace ResearchEngine.IntegrationTests.Tests;
 
@@ -31,14 +33,25 @@ public sealed class Sse_Resume_NoDuplicates_Tests : IntegrationTestBase
         // Reconnect with Last-Event-ID and ensure:
         // 1) we do not receive any "event" frames with id <= maxEventIdSeen
         // 2) we eventually get "done"
-        using var req = new HttpRequestMessage(HttpMethod.Get, $"/api/research/jobs/{jobId}/events/stream");
+
+        using var tokenReq = new HttpRequestMessage(HttpMethod.Post, $"/api/research/jobs/{jobId}/events/stream-token");
+
+        using var tokenResp = await client.SendAsync(tokenReq);
+        tokenResp.EnsureSuccessStatusCode();
+
+        var token = await tokenResp.Content.ReadFromJsonAsync<CreateSseTokenResponse>()
+                    ?? throw new InvalidOperationException("Token response was empty.");
+                    
+        // Open stream with ticket
+        using var req = new HttpRequestMessage(HttpMethod.Get, token.StreamUrl);
         req.Headers.Add("Accept", "text/event-stream");
         req.Headers.Add("Last-Event-ID", maxEventIdSeen.ToString());
 
         using var resp = await client.SendAsync(req, HttpCompletionOption.ResponseHeadersRead);
         resp.EnsureSuccessStatusCode();
 
-        using var stream = await resp.Content.ReadAsStreamAsync();
+        await using var stream = await resp.Content.ReadAsStreamAsync();
+
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(60));
 
         string? terminal = null;
@@ -72,13 +85,22 @@ public sealed class Sse_Resume_NoDuplicates_Tests : IntegrationTestBase
         int stopAfterEventFrames,
         TimeSpan timeout)
     {
-        using var req = new HttpRequestMessage(HttpMethod.Get, $"/api/research/jobs/{jobId}/events/stream");
+        using var tokenReq = new HttpRequestMessage(HttpMethod.Post, $"/api/research/jobs/{jobId}/events/stream-token");
+
+        using var tokenResp = await client.SendAsync(tokenReq);
+        tokenResp.EnsureSuccessStatusCode();
+
+        var token = await tokenResp.Content.ReadFromJsonAsync<CreateSseTokenResponse>()
+                    ?? throw new InvalidOperationException("Token response was empty.");
+                    
+        // 2) Open stream with ticket
+        using var req = new HttpRequestMessage(HttpMethod.Get, token.StreamUrl);
         req.Headers.Add("Accept", "text/event-stream");
 
         using var resp = await client.SendAsync(req, HttpCompletionOption.ResponseHeadersRead);
         resp.EnsureSuccessStatusCode();
 
-        using var stream = await resp.Content.ReadAsStreamAsync();
+        await using var stream = await resp.Content.ReadAsStreamAsync();
         using var cts = new CancellationTokenSource(timeout);
 
         var maxId = 0;

@@ -1,0 +1,80 @@
+﻿@inherits LayoutComponentBase
+@using ResearchEngine.Blazor.State
+@inject AppStateStore AppState
+@inject IJSRuntime JS
+
+<div class="app" data-theme="@_applied">
+    <header class="header">
+        <div class="header-left">
+            <a class="brand" href="/" aria-label="Go to job list">Research Engine</a>
+        </div>
+
+        <div class="header-right">
+            <button type="button"
+                    class="theme-toggle"
+                    @onclick="ToggleThemeAsync"
+                    aria-label="@ThemeAriaLabel"
+                    title="@ThemeAriaLabel">
+                <span class="theme-icon" aria-hidden="true">@ThemeGlyph</span>
+                <span class="theme-text">@ThemeLabel</span>
+            </button>
+        </div>
+    </header>
+
+    <main class="main" id="mainContent">
+        @Body
+    </main>
+</div>
+
+@code {
+    // Stored preference: "light" | "dark" | (null/empty/"system") => follow system
+    private string _applied = string.Empty; // actual applied (light|dark)
+
+    private string ThemeLabel => _applied == "dark" ? "Dark" : "Light";
+    private string ThemeGlyph => _applied == "dark" ? "🌙" : "☀️";
+
+    private string ThemeAriaLabel => _applied == "dark"
+        ? "Theme: dark. Click to switch to light."
+        : "Theme: light. Click to switch to dark.";
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+
+        var pref = AppState.GetTheme();
+        try
+        {
+            if (pref is "dark" or "light")
+            {
+                _applied = await JS.InvokeAsync<string>("researchEngine.theme.set", pref);
+            }
+            else
+            {
+                // ✅ default: system theme (but not a user-selectable option)
+                _applied = await JS.InvokeAsync<string>("researchEngine.theme.init");
+            }
+        }
+        catch
+        {
+            _applied = (pref == "dark") ? "dark" : "light";
+        }
+
+        StateHasChanged();
+    }
+
+    private async Task ToggleThemeAsync()
+    {
+        var next = _applied == "dark" ? "light" : "dark";
+
+        AppState.SetTheme(next);
+
+        try
+        {
+            _applied = await JS.InvokeAsync<string>("researchEngine.theme.set", next);
+        }
+        catch
+        {
+            _applied = next;
+        }
+    }
+}

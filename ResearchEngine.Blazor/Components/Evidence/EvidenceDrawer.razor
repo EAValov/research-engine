@@ -1,0 +1,133 @@
+@using ResearchEngine.Blazor.Services
+@inject OverridesStore Overrides
+@inject IJSRuntime JS
+
+<div class="overlay @(IsOpen ? "open" : "")" @onclick="OnOverlayClick" aria-hidden="@(!IsOpen)">
+    <div class="drawer" role="dialog" aria-modal="true" aria-label="Evidence" @onclick:stopPropagation="true">
+        <div class="head">
+            <div class="title">Evidence</div>
+
+            <div class="ovr">
+                <span class="ovr-text">@OverridesText</span>
+                <button type="button" class="ovr-clear" @onclick="ClearOverridesAsync" disabled="@(!HasOverrides)">
+                    Clear overrides
+                </button>
+            </div>
+
+            <button type="button" class="x" @onclick="Close" aria-label="Close">×</button>
+        </div>
+
+        <div class="tabs" role="tablist" aria-label="Evidence tabs">
+            <button type="button"
+                    class="tab @(_activeTab == "sources" ? "active" : "")"
+                    role="tab"
+                    aria-selected="@(_activeTab == "sources")"
+                    @onclick="@(() => SelectTabAsync("sources"))">
+                Sources
+            </button>
+            <button type="button"
+                    class="tab @(_activeTab == "learnings" ? "active" : "")"
+                    role="tab"
+                    aria-selected="@(_activeTab == "learnings")"
+                    @onclick="@(() => SelectTabAsync("learnings"))">
+                Learnings
+            </button>
+        </div>
+
+        <div class="body">
+            @if (_activeTab == "sources")
+            {
+                <SourcesPanel JobId="JobId"
+                              IsOpen="IsOpen"
+                              FilterText="SourcesFilter"
+                              FilterTextChanged="SourcesFilterChanged" />
+            }
+            else
+            {
+                <LearningsPanel JobId="JobId"
+                                IsOpen="IsOpen"
+                                HighlightLearningId="HighlightLearningId"
+                                FilterText="LearningsFilter"
+                                FilterTextChanged="LearningsFilterChanged"
+                                InitialLoadedCount="LearningsLoadedCount"
+                                LoadedCountChanged="LearningsLoadedCountChanged" />
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter] public Guid JobId { get; set; }
+
+    [Parameter] public bool IsOpen { get; set; }
+    [Parameter] public EventCallback<bool> IsOpenChanged { get; set; }
+
+    // Backward-compatible: if you still set InitialTab from parent, it will apply when opening.
+    [Parameter] public string? InitialTab { get; set; } = "sources";
+
+    // Preferred: persistable active tab (two-way)
+    [Parameter] public string ActiveTab { get; set; } = "sources";
+    [Parameter] public EventCallback<string> ActiveTabChanged { get; set; }
+
+    [Parameter] public Guid? HighlightLearningId { get; set; }
+
+    // Persisted filters + paging restore
+    [Parameter] public string SourcesFilter { get; set; } = "";
+    [Parameter] public EventCallback<string> SourcesFilterChanged { get; set; }
+
+    [Parameter] public string LearningsFilter { get; set; } = "";
+    [Parameter] public EventCallback<string> LearningsFilterChanged { get; set; }
+
+    [Parameter] public int LearningsLoadedCount { get; set; } = 25;
+    [Parameter] public EventCallback<int> LearningsLoadedCountChanged { get; set; }
+
+    private string _activeTab = "sources";
+
+    private OverridesSummary Summary => Overrides.GetSummary(JobId);
+    private bool HasOverrides => Overrides.HasAny(JobId);
+
+    private string OverridesText
+        => $"Pinned: {Summary.PinnedSources} sources, {Summary.PinnedLearnings} learnings · Excluded: {Summary.ExcludedSources} sources, {Summary.ExcludedLearnings} learnings";
+
+    protected override void OnParametersSet()
+    {
+        if (!IsOpen)
+            return;
+
+        // Pick tab in this order:
+        // 1) ActiveTab (preferred state binding)
+        // 2) InitialTab (back-compat)
+        var tab = (ActiveTab ?? "").Trim().ToLowerInvariant();
+        if (tab is not ("sources" or "learnings"))
+            tab = (InitialTab ?? "sources").Trim().ToLowerInvariant();
+
+        if (tab is "sources" or "learnings")
+            _activeTab = tab;
+    }
+
+    private Task Close() => IsOpenChanged.InvokeAsync(false);
+
+    private Task OnOverlayClick() => Close();
+
+    private async Task SelectTabAsync(string tab)
+    {
+        _activeTab = tab;
+
+        ActiveTab = tab;
+        if (ActiveTabChanged.HasDelegate)
+            await ActiveTabChanged.InvokeAsync(tab);
+    }
+
+    private async Task ClearOverridesAsync()
+    {
+        if (!HasOverrides) return;
+
+        var ok = false;
+        try { ok = await JS.InvokeAsync<bool>("confirm", "Clear all draft pin/exclude overrides for this job?"); } catch { }
+
+        if (!ok) return;
+
+        Overrides.Clear(JobId);
+        StateHasChanged();
+    }
+}

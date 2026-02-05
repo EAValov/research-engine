@@ -105,6 +105,7 @@ public sealed partial class PostgresResearchJobStore(
             entity.CancelRequestedAt = DateTimeOffset.UtcNow;
             entity.CancelReason = string.IsNullOrWhiteSpace(reason) ? null : reason.Trim();
             entity.UpdatedAt = DateTimeOffset.UtcNow;
+            entity.Status = ResearchJobStatus.Canceled;
             await db.SaveChangesAsync(ct);
         }
     }

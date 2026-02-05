@@ -8,6 +8,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using ResearchEngine.Domain;
 using ResearchEngine.IntegrationTests.Helpers;
 using ResearchEngine.IntegrationTests.Infrastructure;
+using ResearchEngine.Web;
 
 namespace ResearchEngine.IntegrationTests.Tests;
 
@@ -78,7 +79,16 @@ public sealed class JobCancel_Tests : IntegrationTestBase
 
     private static async Task<bool> WaitForAnyStageAsync(HttpClient client, Guid jobId, IReadOnlyCollection<string> anyOfStages, TimeSpan timeout)
     {
-        using var req = new HttpRequestMessage(HttpMethod.Get, $"/api/research/jobs/{jobId}/events/stream");
+        using var tokenReq = new HttpRequestMessage(HttpMethod.Post, $"/api/research/jobs/{jobId}/events/stream-token");
+
+        using var tokenResp = await client.SendAsync(tokenReq);
+        tokenResp.EnsureSuccessStatusCode();
+
+        var token = await tokenResp.Content.ReadFromJsonAsync<CreateSseTokenResponse>()
+                    ?? throw new InvalidOperationException("Token response was empty.");
+                    
+        // Open stream with ticket
+        using var req = new HttpRequestMessage(HttpMethod.Get, token.StreamUrl);
         req.Headers.Add("Accept", "text/event-stream");
 
         using var resp = await client.SendAsync(req, HttpCompletionOption.ResponseHeadersRead);
