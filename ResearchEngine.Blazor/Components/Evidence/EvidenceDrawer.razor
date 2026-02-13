@@ -1,60 +1,77 @@
 @using ResearchEngine.Blazor.Services
+@implements IDisposable
 @inject OverridesStore Overrides
 @inject IJSRuntime JS
 
-<div class="overlay @(IsOpen ? "open" : "")" @onclick="OnOverlayClick" aria-hidden="@(!IsOpen)">
-    <div class="drawer" role="dialog" aria-modal="true" aria-label="Evidence" @onclick:stopPropagation="true">
-        <div class="head">
-            <div class="title">Evidence</div>
+@if (IsOpen)
+{
+    <div class="overlay @(IsOpen ? "open" : "")"
+         role="presentation"
+         @onclick="OnOverlayClick">
+        <div class="drawer"
+             role="dialog"
+             aria-modal="true"
+             aria-label="Evidence"
+             tabindex="-1"
+             @onclick:stopPropagation>
+            <div class="head">
+                <div class="title">Evidence</div>
 
-            <div class="ovr">
-                <span class="ovr-text">@OverridesText</span>
-                <button type="button" class="ovr-clear" @onclick="ClearOverridesAsync" disabled="@(!HasOverrides)">
-                    Clear overrides
+                <div class="ovr">
+                    <div class="ovr-text" title="@OverridesText">@OverridesText</div>
+
+                    <button type="button"
+                            class="ovr-clear"
+                            disabled="@(!HasOverrides)"
+                            @onclick="ClearOverridesAsync">
+                        Clear overrides
+                    </button>
+
+                    <button type="button" class="x" @onclick="Close" aria-label="Close">×</button>
+                </div>
+            </div>
+
+            <div class="tabs" role="tablist" aria-label="Evidence tabs">
+                <button type="button"
+                        class="tab @(_activeTab == "sources" ? "active" : "")"
+                        role="tab"
+                        aria-selected="@(_activeTab == "sources")"
+                        @onclick="@(() => SelectTabAsync("sources"))">
+                    Sources
+                </button>
+
+                <button type="button"
+                        class="tab @(_activeTab == "learnings" ? "active" : "")"
+                        role="tab"
+                        aria-selected="@(_activeTab == "learnings")"
+                        @onclick="@(() => SelectTabAsync("learnings"))">
+                    Learnings
                 </button>
             </div>
 
-            <button type="button" class="x" @onclick="Close" aria-label="Close">×</button>
-        </div>
-
-        <div class="tabs" role="tablist" aria-label="Evidence tabs">
-            <button type="button"
-                    class="tab @(_activeTab == "sources" ? "active" : "")"
-                    role="tab"
-                    aria-selected="@(_activeTab == "sources")"
-                    @onclick="@(() => SelectTabAsync("sources"))">
-                Sources
-            </button>
-            <button type="button"
-                    class="tab @(_activeTab == "learnings" ? "active" : "")"
-                    role="tab"
-                    aria-selected="@(_activeTab == "learnings")"
-                    @onclick="@(() => SelectTabAsync("learnings"))">
-                Learnings
-            </button>
-        </div>
-
-        <div class="body">
-            @if (_activeTab == "sources")
-            {
-                <SourcesPanel JobId="JobId"
-                              IsOpen="IsOpen"
-                              FilterText="SourcesFilter"
-                              FilterTextChanged="SourcesFilterChanged" />
-            }
-            else
-            {
-                <LearningsPanel JobId="JobId"
-                                IsOpen="IsOpen"
-                                HighlightLearningId="HighlightLearningId"
-                                FilterText="LearningsFilter"
-                                FilterTextChanged="LearningsFilterChanged"
-                                InitialLoadedCount="LearningsLoadedCount"
-                                LoadedCountChanged="LearningsLoadedCountChanged" />
-            }
+            <div class="body">
+                @if (_activeTab == "sources")
+                {
+                    <SourcesPanel JobId="JobId"
+                                  IsOpen="IsOpen"
+                                  FilterText="SourcesFilter"
+                                  FilterTextChanged="SourcesFilterChanged"
+                                  OnShowLearningsForSource="ShowLearningsForSourceAsync" />
+                }
+                else
+                {
+                    <LearningsPanel JobId="JobId"
+                                    IsOpen="IsOpen"
+                                    HighlightLearningId="HighlightLearningId"
+                                    FilterText="LearningsFilter"
+                                    FilterTextChanged="LearningsFilterChanged"
+                                    InitialLoadedCount="LearningsLoadedCount"
+                                    LoadedCountChanged="LearningsLoadedCountChanged" />
+                }
+            </div>
         </div>
     </div>
-</div>
+}
 
 @code {
     [Parameter] public Guid JobId { get; set; }
@@ -89,6 +106,16 @@
     private string OverridesText
         => $"Pinned: {Summary.PinnedSources} sources, {Summary.PinnedLearnings} learnings · Excluded: {Summary.ExcludedSources} sources, {Summary.ExcludedLearnings} learnings";
 
+    protected override void OnInitialized()
+    {
+        Overrides.Changed += OnOverridesChanged;
+    }
+
+    public void Dispose()
+    {
+        Overrides.Changed -= OnOverridesChanged;
+    }
+
     protected override void OnParametersSet()
     {
         if (!IsOpen)
@@ -105,8 +132,13 @@
             _activeTab = tab;
     }
 
-    private Task Close() => IsOpenChanged.InvokeAsync(false);
+    private void OnOverridesChanged(Guid jobId)
+    {
+        if (jobId != JobId) return;
+        _ = InvokeAsync(StateHasChanged);
+    }
 
+    private Task Close() => IsOpenChanged.InvokeAsync(false);
     private Task OnOverlayClick() => Close();
 
     private async Task SelectTabAsync(string tab)
@@ -116,6 +148,15 @@
         ActiveTab = tab;
         if (ActiveTabChanged.HasDelegate)
             await ActiveTabChanged.InvokeAsync(tab);
+    }
+
+    private async Task ShowLearningsForSourceAsync(string sourceReference)
+    {
+        // Switch tab and prefill learnings filter with the source reference.
+        await SelectTabAsync("learnings");
+
+        if (LearningsFilterChanged.HasDelegate)
+            await LearningsFilterChanged.InvokeAsync(sourceReference ?? "");
     }
 
     private async Task ClearOverridesAsync()
@@ -128,6 +169,6 @@
         if (!ok) return;
 
         Overrides.Clear(JobId);
-        StateHasChanged();
+        // Counters update via Overrides.Changed.
     }
 }

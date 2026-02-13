@@ -3,7 +3,7 @@
   "defaultVariables": null,
   "documentGenerator": {
     "fromDocument": {
-      "url": "openapi/v2.json"
+      "url": "openapi/v3.yaml"
     }
   },
   "codeGenerators": {

@@ -1,0 +1,21 @@
+Feature requests
+1. initial question adjustment - before running the research, check if the question is sutable for the research.
+If not, make the "Run research" button as warning and suggest the fixed version of the question. User can accept the fixed version / manually change the question or override the warning and run the existing version
+2. Russian language support - add the language selector on header, next to the theme selector.
+3. Add "Export Synthesis" button. Export as PDF or markdown. 
+
+Design adjustments:
+1. Remove the "Jobs" and Query" headers fom the main screen. 
+2. Allign the width of the query panel and Recent panel.
+3. Make corners sharper for panels and buttons. 
+4. Remove the "Copy last" button from the progress tab
+5. Change the "Learning group" popup - remove "Learning group" header and show "Representative" instead. Than the learning group text, the row with score / members / sources. Remove the evidence list and leave the "Open in Learnings" button. This popup shouldn't have the vertical scroll bar.
+6. When clicking on the "Open in Learnings" button in the "Learning group" popup, the Evidence panel should open on the "Learnings" tab with the learnings selected that are corresponding to the Learning group from the popup.
+7. Allign "Pin" "Exclude" and delete buttons ont the "Sources" and "Learnings" tabs in the Evidense panel - put them next to the datetime and allow the URL to take more space.
+8. Instead of the learning tag (ex. [lrn:28aefe8506904301a8f05c214e462e4d]) show the numberic index of the source group. At the bottom of the report display the list of sources: Numeric index and the top url from the learning group.
+9. Change the "Add Learning" ui - instead of the form and "Add" button, display "Add Learning" button. When user click on it, show the popup with the form where user can specify the parameters from AddLearningRequest DTO. 
+
+Bugfix:
+1. When the job is running the status still shows "Pending"
+2. in the "Sources" tabs on the Evidence panel, the css is not appled to the filter.
+3. in the "Sources" tabs on the Evidence panel when clicking on the learnings (Show learnings from this source) the ui displays all the learnings, not the learnings related to source.

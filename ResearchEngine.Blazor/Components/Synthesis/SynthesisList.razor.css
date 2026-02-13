@@ -9,7 +9,8 @@
 }
 
 .row {
-    border: 1px solid #e6e6e6;
+    border: 1px solid var(--border);
+    background: var(--surface2);
     border-radius: 12px;
     padding: 12px;
     display: grid;
@@ -20,9 +21,9 @@
     border-color: var(--text);
 }
 
-.row:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
+.row:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 
-.main { display: grid; gap: 6px; }
+.main { display: grid; gap: 6px; min-width: 0; }
 
 .line {
     display: flex;
@@ -33,7 +34,8 @@
 
 .id {
     font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-    border: 1px solid #e6e6e6;
+    border: 1px solid var(--border);
+    background: var(--surface);
     border-radius: 999px;
     padding: 2px 8px;
     color: var(--text);
@@ -46,7 +48,8 @@
 
 .parent {
     display: inline-block;
-    border: 1px solid #e6e6e6;
+    border: 1px solid var(--border);
+    background: var(--surface);
     border-radius: 999px;
     padding: 2px 8px;
     color: var(--muted);
@@ -66,8 +69,8 @@
 
 .err {
     color: var(--text);
-    background: var(--surface2);
-    border: 1px solid #efefef;
+    background: var(--surface);
+    border: 1px solid var(--border);
     border-radius: 10px;
     padding: 8px 10px;
 }
@@ -80,25 +83,27 @@
 }
 
 .btn {
-    border: 1px solid #e6e6e6;
-    background: #fff;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text);
     border-radius: 10px;
     padding: 6px 10px;
     cursor: pointer;
 }
 
-.btn:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
+.btn:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 
 .ghost {
-    border: 1px solid #e6e6e6;
-    background: #fff;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text);
     border-radius: 10px;
     padding: 6px 10px;
     cursor: pointer;
     opacity: 0.9;
 }
 
-.ghost:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
+.ghost:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 
 .foot {
     display: flex;
@@ -110,8 +115,9 @@
 }
 
 .load {
-    border: 1px solid #e6e6e6;
-    background: #fff;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text);
     border-radius: 10px;
     padding: 8px 12px;
     cursor: pointer;
@@ -122,7 +128,7 @@
     cursor: not-allowed;
 }
 
-.load:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
+.load:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 
 .count {
     color: var(--muted);

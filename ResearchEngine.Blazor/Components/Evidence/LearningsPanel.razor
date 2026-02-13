@@ -120,8 +120,12 @@
 
     protected override async Task OnParametersSetAsync()
     {
-        if (_filter != (FilterText ?? ""))
-            _filter = FilterText ?? "";
+        var incoming = FilterText ?? "";
+        if (string.Equals(incoming, "LearningsFilter", StringComparison.OrdinalIgnoreCase))
+            incoming = "";
+
+        if (_filter != incoming)
+            _filter = incoming;
 
         if (IsOpen && _items.Count == 0)
             await ReloadAsync();

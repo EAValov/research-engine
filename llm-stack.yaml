@@ -78,7 +78,7 @@ spec:
         - name: LD_LIBRARY_PATH
           value: /usr/lib/wsl/lib:${LD_LIBRARY_PATH}
       args:
-        - "NVFP4/Qwen3-30B-A3B-Instruct-2507-FP4"
+        - "nvidia/Qwen3-30B-A3B-NVFP4"
         - "--host"
         - "0.0.0.0"
         - "--port"
@@ -86,7 +86,7 @@ spec:
         - "--quantization"
         - "modelopt"
         - "--gpu-memory-utilization"
-        - "0.91"
+        - "0.9"
         - "--max-model-len"
         - "32768"
         - "--max-num-seqs"
@@ -125,7 +125,7 @@ spec:
           mountPath: /root/.cache/huggingface
 
     - name: open-webui
-      image: ghcr.io/open-webui/open-webui:0.7.2
+      image: ghcr.io/open-webui/open-webui:0.8.0
       ports:
         - containerPort: 8081
       env:

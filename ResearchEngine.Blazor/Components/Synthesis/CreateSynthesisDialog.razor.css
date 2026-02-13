@@ -1,7 +1,7 @@
 .dlg-overlay {
     position: fixed;
     inset: 0;
-    background: rgba(0,0,0,0.25);
+    background: rgba(0,0,0,0.35);
     display: grid;
     place-items: center;
     z-index: 1300;
@@ -10,21 +10,21 @@
 
 .dlg {
     width: min(720px, 100%);
-    background: #fff;
-    border: 1px solid #e6e6e6;
+    background: var(--surface);
+    border: 1px solid var(--border);
     border-radius: 14px;
     padding: 14px;
-    box-shadow: 0 18px 60px rgba(0,0,0,0.12);
+    box-shadow: 0 18px 60px rgba(0,0,0,0.22);
 }
 
-.dlg:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
+.dlg:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 
 .dlg-head {
     display: flex;
     justify-content: space-between;
     align-items: center;
     gap: 12px;
-    border-bottom: 1px solid #efefef;
+    border-bottom: 1px solid var(--border);
     padding-bottom: 10px;
     margin-bottom: 12px;
 }
@@ -32,14 +32,15 @@
 .dlg-title { font-weight: 800; color: var(--text); }
 
 .x {
-    border: 1px solid #e6e6e6;
-    background: #fff;
+    border: 1px solid var(--border);
+    background: var(--surface2);
+    color: var(--text);
     border-radius: 10px;
     width: 32px;
     height: 32px;
     cursor: pointer;
 }
-.x:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
+.x:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 
 .field { display: grid; gap: 6px; margin: 10px 0; }
 .field label { font-weight: 700; color: var(--text); }
@@ -47,15 +48,18 @@
 textarea {
     width: 100%;
     padding: 10px;
-    border: 1px solid #e6e6e6;
+    border: 1px solid var(--border);
+    background: var(--surface2);
+    color: var(--text);
     border-radius: 12px;
     resize: vertical;
     font: inherit;
 }
-textarea:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
+textarea::placeholder { color: var(--muted); }
+textarea:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 
 .inline { display: grid; gap: 6px; }
-.check { display: inline-flex; gap: 8px; align-items: center; }
+.check { display: inline-flex; gap: 8px; align-items: center; color: var(--text); }
 .small { font-size: 0.9rem; }
 
 .hint { margin: 6px 0 12px; }
@@ -74,26 +78,30 @@ textarea:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
     border-radius: 10px;
     border: 1px solid var(--text);
     background: var(--text);
-    color: #fff;
+    color: var(--surface);
     cursor: pointer;
 }
-.primary:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
+.primary:disabled { opacity: 0.6; cursor: not-allowed; }
+.primary:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 
 .secondary {
     padding: 8px 12px;
     border-radius: 10px;
-    border: 1px solid #e6e6e6;
-    background: #fff;
+    border: 1px solid var(--border);
+    background: var(--surface2);
+    color: var(--text);
     cursor: pointer;
 }
-.secondary:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
+.secondary:disabled { opacity: 0.6; cursor: not-allowed; }
+.secondary:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 
 .base {
     display: flex;
     gap: 10px;
     align-items: center;
     flex-wrap: wrap;
-    border: 1px solid #efefef;
+    border: 1px solid var(--border);
+    background: var(--surface2);
     border-radius: 12px;
     padding: 10px;
     margin-bottom: 10px;
@@ -101,7 +109,9 @@ textarea:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
 
 .mono {
     font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-    border: 1px solid #e6e6e6;
+    border: 1px solid var(--border);
+    background: var(--surface);
     border-radius: 999px;
     padding: 2px 8px;
+    color: var(--text);
 }

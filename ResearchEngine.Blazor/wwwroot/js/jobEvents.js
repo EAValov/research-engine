@@ -12,10 +12,27 @@ export function connect(url, dotNetRef) {
   const id = (crypto?.randomUUID?.() ?? ("es_" + Math.random().toString(16).slice(2)));
   sources.set(id, { es, dotNetRef });
 
-  es.onmessage = (e) => {
+  const onAnyEvent = (e) => {
     if (!e || !e.data) return;
     dotNetRef.invokeMethodAsync("OnSseEvent", e.data);
   };
+
+  // Default SSE messages (no explicit `event:` field)
+  es.onmessage = onAnyEvent;
+
+  // Many servers send named events for "normal" items.
+  // Listen to a few common names so we don't miss updates.
+  const possibleNames = [
+    "event",
+    "job",
+    "job-event",
+    "jobEvent",
+    "progress",
+    "update"
+  ];
+  for (const name of possibleNames) {
+    try { es.addEventListener(name, onAnyEvent); } catch { }
+  }
 
   es.addEventListener("done", (e) => {
     if (!e || !e.data) return;

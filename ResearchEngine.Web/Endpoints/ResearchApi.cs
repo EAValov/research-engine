@@ -29,7 +29,7 @@ public static partial class ResearchApi
 
         api.MapPost("/jobs", CreateJobAsync)
             .Accepts<CreateResearchJobRequest>("application/json")
-            .Produces<CreateResearchJobResponse>(StatusCodes.Status200OK)
+            .Produces<CreateResearchJobResponse>(StatusCodes.Status201Created)
             .ProducesProblem(StatusCodes.Status400BadRequest)
             .ProducesProblem(StatusCodes.Status401Unauthorized)
             .ProducesProblem(StatusCodes.Status403Forbidden);
@@ -128,7 +128,7 @@ public static partial class ResearchApi
 
         api.MapPost("/jobs/{jobId:guid}/syntheses", CreateSynthesisAsync)
             .Accepts<StartSynthesisRequest>("application/json")
-            .Produces<CreateSynthesisResponse>(StatusCodes.Status200OK)
+            .Produces<CreateSynthesisResponse>(StatusCodes.Status201Created)
             .ProducesProblem(StatusCodes.Status404NotFound)
             .ProducesProblem(StatusCodes.Status400BadRequest)
             .ProducesProblem(StatusCodes.Status401Unauthorized)

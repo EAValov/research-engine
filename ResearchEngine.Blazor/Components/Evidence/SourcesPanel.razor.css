@@ -1,24 +1,54 @@
-.panel { display: grid; gap: 12px; }
+.panel { display: grid; gap: 12px; min-width: 0; }
+.panel * { min-width: 0; }
 
 .list { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }
 
 .row {
-    border: 1px solid #e6e6e6;
+    border: 1px solid var(--border);
     border-radius: 12px;
     padding: 12px;
     display: grid;
     gap: 10px;
+    background: var(--surface2);
+    min-width: 0;
 }
 
-.row:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
+.row:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 
-.main { display: grid; gap: 6px; }
+.main { display: grid; gap: 6px; min-width: 0; }
 
-.title { color: var(--text); font-weight: 800; }
+.title {
+    color: var(--text);
+    font-weight: 800;
+    overflow-wrap: anywhere;
+}
 
-.ref { color: var(--muted); word-break: break-word; }
+.ref {
+    color: var(--muted);
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
 
 .meta { color: var(--muted); display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+
+.link {
+    border: 0;
+    padding: 0;
+    background: transparent;
+    color: var(--text);
+    text-decoration: underline;
+    cursor: pointer;
+    font: inherit;
+}
+
+.link:hover { filter: brightness(1.08); }
+
+.link:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+    border-radius: 6px;
+}
+
 .dot { opacity: 0.6; }
 
 .muted { color: var(--muted); }
@@ -38,23 +68,24 @@
 }
 
 .tg input { width: 16px; height: 16px; }
-.tg input:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; border-radius: 4px; }
+.tg input:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: 4px; }
 
 .actions { display: flex; justify-content: flex-end; gap: 8px; }
 
 .ghost {
-    border: 1px solid #e6e6e6;
-    background: #fff;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text);
     border-radius: 10px;
     padding: 6px 10px;
     cursor: pointer;
 }
 
-.ghost:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
+.ghost:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 
 @media (min-width: 720px) {
     .row {
-        grid-template-columns: 1fr auto auto;
+        grid-template-columns: minmax(0, 1fr) auto auto;
         align-items: start;
     }
 

@@ -22,6 +22,9 @@ public sealed class OverridesStore
 {
     private readonly AppStateStore _state;
 
+    /// <summary>Raised whenever draft overrides for a job change.</summary>
+    public event Action<Guid>? Changed;
+
     public OverridesStore(AppStateStore state)
     {
         _state = state;
@@ -66,6 +69,8 @@ public sealed class OverridesStore
             ui.Overrides.PinnedLearningIds.Clear();
             ui.Overrides.ExcludedLearningIds.Clear();
         });
+
+        Changed?.Invoke(jobId);
     }
 
     public bool IsPinnedSource(Guid jobId, Guid sourceId)
@@ -102,6 +107,8 @@ public sealed class OverridesStore
             if (!o.PinnedSourceIds.Remove(sourceId))
                 o.PinnedSourceIds.Add(sourceId);
         });
+
+        Changed?.Invoke(jobId);
     }
 
     public void ToggleExcludedSource(Guid jobId, Guid sourceId)
@@ -114,6 +121,8 @@ public sealed class OverridesStore
             if (!o.ExcludedSourceIds.Remove(sourceId))
                 o.ExcludedSourceIds.Add(sourceId);
         });
+
+        Changed?.Invoke(jobId);
     }
 
     public void TogglePinnedLearning(Guid jobId, Guid learningId)
@@ -126,6 +135,8 @@ public sealed class OverridesStore
             if (!o.PinnedLearningIds.Remove(learningId))
                 o.PinnedLearningIds.Add(learningId);
         });
+
+        Changed?.Invoke(jobId);
     }
 
     public void ToggleExcludedLearning(Guid jobId, Guid learningId)
@@ -138,5 +149,7 @@ public sealed class OverridesStore
             if (!o.ExcludedLearningIds.Remove(learningId))
                 o.ExcludedLearningIds.Add(learningId);
         });
+
+        Changed?.Invoke(jobId);
     }
 }

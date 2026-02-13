@@ -8,7 +8,7 @@
 
 <h1>Jobs</h1>
 
-<ResearchComposer OnJobCreated="OnJobCreated" />
+<ResearchComposer />
 
 <section class="jobs" aria-label="Existing jobs">
     <div class="jobs-head">
@@ -92,12 +92,6 @@
         {
             _loading = false;
         }
-    }
-
-    private Task OnJobCreated(Guid jobId)
-    {
-        // Composer already navigates; keeping hook for future store updates.
-        return Task.CompletedTask;
     }
 
     private void OpenJob(Guid jobId) => Nav.NavigateTo($"/jobs/{jobId}");

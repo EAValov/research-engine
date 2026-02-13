@@ -1,16 +1,17 @@
+/* Components/Evidence/EvidenceDrawer.razor.css */
+
 .overlay {
     position: fixed;
     inset: 0;
     display: flex;
     justify-content: flex-end;
     align-items: stretch;
-    background: rgba(0,0,0,0.35);
+    background: var(--overlay);
     z-index: 2000;
 
-    /* closed by default */
     opacity: 0;
     pointer-events: none;
-    transition: opacity 120ms ease-out;
+    transition: opacity 140ms ease-out;
 }
 
 .overlay.open {
@@ -19,7 +20,7 @@
 }
 
 .drawer {
-    width: min(560px, 92vw);
+    width: min(760px, 92vw);
     height: 100vh;
     background: var(--surface);
     border-left: 1px solid var(--border);
@@ -27,18 +28,21 @@
 
     display: flex;
     flex-direction: column;
+
+    overflow: hidden; /* avoid inner horizontal bars */
 }
 
 .drawer:focus-visible {
-    outline: 2px solid var(--focus);
+    outline: 2px solid var(--border-strong);
     outline-offset: -2px;
 }
 
+/* Header */
 .head {
-    display: grid;
-    grid-template-columns: 1fr auto auto;
+    display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 12px;
+    flex-wrap: wrap;
 
     padding: 14px 14px 10px;
     border-bottom: 1px solid var(--border);
@@ -48,20 +52,33 @@
 .title {
     font-weight: 800;
     color: var(--text);
+
+    /* prevent "E v i d e n c e" wrapping */
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+
+    flex: 1 1 auto;
+    min-width: 160px;
 }
 
 .ovr {
     display: inline-flex;
     align-items: center;
     gap: 10px;
-    justify-self: end;
     flex-wrap: wrap;
+
+    flex: 0 1 auto;
+    justify-content: flex-end;
+    min-width: 220px;
+    max-width: 100%;
 }
 
 .ovr-text {
     color: var(--muted);
     font-size: 0.9rem;
-    white-space: nowrap;
+    white-space: normal;
+    max-width: 520px;
 }
 
 .ovr-clear {
@@ -79,7 +96,7 @@
 }
 
 .ovr-clear:focus-visible {
-    outline: 2px solid var(--focus);
+    outline: 2px solid var(--border-strong);
     outline-offset: 2px;
 }
 
@@ -93,17 +110,20 @@
     cursor: pointer;
     line-height: 1;
     font-size: 18px;
+
+    flex: 0 0 auto;
 }
 
 .x:hover {
-    filter: brightness(1.05);
+    filter: brightness(1.06);
 }
 
 .x:focus-visible {
-    outline: 2px solid var(--focus);
+    outline: 2px solid var(--border-strong);
     outline-offset: 2px;
 }
 
+/* Tabs */
 .tabs {
     display: flex;
     gap: 8px;
@@ -122,35 +142,38 @@
 }
 
 .tab.active {
-    border-color: var(--text);
+    border-color: var(--border-strong);
 }
 
 .tab:focus-visible {
-    outline: 2px solid var(--focus);
+    outline: 2px solid var(--border-strong);
     outline-offset: 2px;
 }
 
+/* Body */
 .body {
     padding: 14px;
     overflow: auto;
+    overflow-x: hidden; /* kill horizontal bar */
     flex: 1;
     background: var(--surface);
+
+    /* keeps layout stable when vertical scrollbar appears */
+    scrollbar-gutter: stable;
 }
 
-/* Make header stack on small screens */
+/* Small screens */
 @media (max-width: 560px) {
-    .head {
-        grid-template-columns: 1fr auto;
-        grid-auto-rows: auto;
+    .drawer {
+        width: 100vw;
     }
 
     .ovr {
-        grid-column: 1 / -1;
-        justify-self: start;
-        margin-top: 6px;
+        min-width: 0;
+        justify-content: flex-start;
     }
 
     .ovr-text {
-        white-space: normal;
+        max-width: 100%;
     }
 }

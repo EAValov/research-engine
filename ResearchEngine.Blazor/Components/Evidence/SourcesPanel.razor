@@ -48,7 +48,12 @@
                             <div class="ref muted">@s.Reference</div>
                         }
                         <div class="meta muted">
-                            <span>@s.LearningCount learnings</span>
+                            <button type="button"
+                                    class="link"
+                                    title="Show learnings from this source"
+                                    @onclick="() => ShowLearningsAsync(s.Reference)">
+                                @s.LearningCount learnings
+                            </button>
                             <span class="dot">•</span>
                             <span>@s.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</span>
                         </div>
@@ -88,6 +93,9 @@
     [Parameter] public string FilterText { get; set; } = "";
     [Parameter] public EventCallback<string> FilterTextChanged { get; set; }
 
+    // Used to switch to learnings tab and apply a filter in the parent drawer.
+    [Parameter] public EventCallback<string> OnShowLearningsForSource { get; set; }
+
     private bool _loading;
     private ApiError? _error;
     private readonly List<SourceListItemDto> _items = new();
@@ -97,8 +105,12 @@
 
     protected override async Task OnParametersSetAsync()
     {
-        if (_filter != (FilterText ?? ""))
-            _filter = FilterText ?? "";
+        var incoming = FilterText ?? "";
+        if (string.Equals(incoming, "SourcesFilter", StringComparison.OrdinalIgnoreCase))
+            incoming = "";
+
+        if (_filter != incoming)
+            _filter = incoming;
 
         if (IsOpen && !_loadedOnce)
             await ReloadAsync();
@@ -152,6 +164,12 @@
     {
         Overrides.ToggleExcludedSource(JobId, sourceId);
         StateHasChanged();
+    }
+
+    private async Task ShowLearningsAsync(string? sourceReference)
+    {
+        if (!OnShowLearningsForSource.HasDelegate) return;
+        await OnShowLearningsForSource.InvokeAsync(sourceReference ?? "");
     }
 
     private async Task DeleteAsync(Guid sourceId)

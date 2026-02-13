@@ -4,27 +4,26 @@
 @using ResearchEngine.Blazor.Components.Evidence
 @using ResearchEngine.Blazor.Components.Synthesis
 @using ResearchEngine.Blazor.Services
-@using ResearchEngine.Blazor.State
 @using static ResearchEngine.Blazor.Services.JobEventsClient
+@implements IAsyncDisposable
 @inject IResearchApiClient Api
 @inject JobFacade JobFacade
 @inject JobEventsClient EventsClient
 @inject SynthesisFacade SynthesisFacade
 @inject SynthesisHistoryFacade SynthesisHistory
-@inject OverridesStore Overrides
 @inject SynthesisIterationFacade Iteration
-@inject AppStateStore AppState
+@inject OverridesStore Overrides
 @inject IJSRuntime JS
 
-<h1>Job</h1>
+<PageTitle>Job</PageTitle>
 
-@if (_jobError is not null)
+@if (_isJobLoading)
+{
+    <p aria-live="polite">Loading job…</p>
+}
+else if (_jobError is not null)
 {
     <ErrorBanner Error="_jobError" OnRetry="LoadAllAsync" />
-}
-else if (_isJobLoading)
-{
-    <p aria-live="polite">Loading…</p>
 }
 else if (_job is null)
 {
@@ -35,16 +34,23 @@ else
     <section class="job-card" aria-label="Job details">
         <div class="row">
             <div class="label">Query</div>
-            <div class="value">@_job.Query</div>
+            <div class="value">
+                <strong>@_job.Query</strong>
+            </div>
         </div>
 
         <div class="row">
             <div class="label">Status</div>
             <div class="value">
-                <span class="pill" aria-label="Job status">@CurrentStatusChip</span>
+                <span class="pill">@CurrentStatusChip</span>
                 @if (!string.IsNullOrWhiteSpace(CurrentStage))
                 {
-                    <span class="stage" aria-label="Current stage">@CurrentStage</span>
+                    <span class="stage">@CurrentStage</span>
+                }
+
+                @if (_streamError is not null && !IsTerminal)
+                {
+                    <span class="pill warn" title="Live stream disconnected. Will retry.">Live: error</span>
                 }
             </div>
         </div>
@@ -54,41 +60,28 @@ else
             <div class="value">@FormatTime(_job.CreatedAt)</div>
         </div>
 
-        <div class="toolbar" role="toolbar" aria-label="Job tools">
-            <button type="button"
-                    class="toolbtn"
-                    @onclick="ToggleEvidence"
-                    aria-haspopup="dialog"
-                    aria-expanded="@_evidenceOpen">
+        <div class="toolbar" role="toolbar" aria-label="Job actions">
+            <button class="toolbtn" type="button" @onclick="ToggleEvidence" aria-haspopup="dialog">
                 Evidence
             </button>
 
-            <button type="button"
-                    class="toolbtn"
-                    @onclick="() => _historyOpen = true"
-                    aria-haspopup="dialog"
-                    aria-expanded="@_historyOpen">
+            <button class="secondarybtn" type="button" @onclick="() => _historyOpen = true" aria-haspopup="dialog">
                 History
             </button>
 
             @if (CanNewSynthesis)
             {
-                <button type="button"
-                        class="toolbtn"
-                        @onclick="OpenCreateDialog"
-                        aria-haspopup="dialog"
-                        aria-expanded="@_createDialogOpen">
+                <button class="secondarybtn" type="button" @onclick="OpenCreateDialog" aria-haspopup="dialog">
                     New synthesis
                 </button>
             }
 
             @if (IsRunning)
             {
-                <button type="button"
-                        class="dangerbtn"
-                        @onclick="CancelAsync"
+                <button class="dangerbtn"
+                        type="button"
                         disabled="@_cancelInFlight"
-                        aria-disabled="@_cancelInFlight">
+                        @onclick="CancelAsync">
                     @(_cancelInFlight ? "Canceling…" : "Cancel job")
                 </button>
             }
@@ -96,118 +89,45 @@ else
 
         @if (_cancelError is not null)
         {
-            <ErrorBanner Error="_cancelError" />
+            <ErrorBanner Error="_cancelError" OnRetry="CancelAsync" />
         }
     </section>
 
-    <section class="progress" aria-label="Progress">
-        <div class="progress-head">
-            <h2 class="h2">Progress</h2>
-
-            <div class="progress-actions">
-                <label class="check">
-                    <input type="checkbox"
-                           @bind="_followTail"
-                           aria-label="Follow tail (auto-scroll to newest events)" />
-                    <span>Follow tail</span>
-                </label>
-
-                @if (_events.Count > 0)
-                {
-                    <button type="button"
-                            class="secondarybtn"
-                            @onclick="CopyLastAsync"
-                            aria-label="Copy last stage and message">
-                        Copy last
-                    </button>
-                }
-            </div>
-        </div>
-
-        @if (_terminalStatus is not null)
-        {
-            <div class="terminal" role="status" aria-live="polite">
-                <strong>@_terminalStatus</strong>
-                @if (_doneSynthesisId is not null)
-                {
-                    <span class="muted">Synthesis: @_doneSynthesisId</span>
-                }
-            </div>
-        }
-
-        @if (_eventsError is not null)
-        {
-            <ErrorBanner Error="_eventsError" OnRetry="ReloadEventsAsync" />
-        }
-
-        @if (_streamError is not null && IsRunning)
-        {
-            <ErrorBanner Error="_streamError" />
-        }
-
-        @if (_isEventsLoading)
-        {
-            <p aria-live="polite">Loading events…</p>
-        }
-        else if (_events.Count == 0)
-        {
-            <p>No events yet.</p>
-        }
-        else
-        {
-            <ol class="timeline" role="list" @ref="_timelineRef" aria-label="Event timeline">
-                @foreach (var ev in _events)
-                {
-                    <li class="timeline-item" tabindex="0"
-                        aria-label="@($"{FormatTime(ev.Timestamp)} {ev.Stage} {ev.Message}")">
-                        <div class="t-head">
-                            <span class="t-time">@FormatTime(ev.Timestamp)</span>
-                            <span class="t-stage">@ev.Stage</span>
-                        </div>
-                        <div class="t-msg">@ev.Message</div>
-                    </li>
-                }
-            </ol>
-        }
-    </section>
-
+    <!-- MAIN CENTER: REPORT -->
     <section class="report" aria-label="Report">
         <div class="report-head">
             <h2 class="h2">Report</h2>
 
-            @if (_selectedSynthesisId is not null)
-            {
-                <div class="report-meta">
-                    <span>Viewing:</span>
-                    <span class="mono">@ShortId(_selectedSynthesisId.Value)</span>
-
-                    <button type="button" class="secondarybtn" @onclick="BackToLatestAsync">
+            <div class="report-meta" aria-live="polite">
+                @if (_selectedSynthesisId is not null)
+                {
+                    <span class="mono">Viewing: @ShortId(_selectedSynthesisId.Value)</span>
+                    <span class="dot">•</span>
+                    <button class="secondarybtn" type="button" @onclick="BackToLatestAsync">
                         Back to latest
                     </button>
-                </div>
-            }
-            else if (_reportUpdatedAt is not null)
-            {
-                <div class="toast" role="status" aria-live="polite">
-                    Report updated
-                    <span class="muted">@_reportUpdatedAt.Value.ToLocalTime().ToString("HH:mm:ss")</span>
-                </div>
-            }
-            else if (_latestSynthesis is not null)
-            {
-                <div class="report-meta" aria-label="Synthesis metadata">
-                    <span>Latest synthesis</span>
-                    <span class="dot">•</span>
-                    <span>ID: @_latestSynthesis.Id</span>
+                }
+                else if (_latestSynthesis is not null)
+                {
+                    <span class="mono">@ShortId(_latestSynthesis.Id)</span>
                     <span class="dot">•</span>
                     <span>Created: @FormatTime(_latestSynthesis.CreatedAt)</span>
-                </div>
-            }
+                }
+
+                @if (_reportUpdatedAt is not null)
+                {
+                    <span class="dot">•</span>
+                    <span class="toast">Report updated</span>
+                }
+            </div>
         </div>
 
         @if (_iterBusy)
         {
-            <p aria-live="polite"><strong>Generating new synthesis…</strong></p>
+            <div class="loader" aria-live="polite">
+                <span class="spinner" aria-hidden="true"></span>
+                <strong>Generating new synthesis…</strong>
+            </div>
         }
 
         @if (_iterError is not null && _lastCreateInput is not null)
@@ -223,7 +143,10 @@ else
         {
             @if (_selectedLoading)
             {
-                <p aria-live="polite">Loading synthesis…</p>
+                <div class="loader" aria-live="polite">
+                    <span class="spinner" aria-hidden="true"></span>
+                    <span>Loading synthesis…</span>
+                </div>
             }
             else if (!string.IsNullOrWhiteSpace(_synthesisMarkdown))
             {
@@ -241,7 +164,10 @@ else
         }
         else if (_synthesisLoading && !_iterBusy)
         {
-            <p aria-live="polite">Loading report…</p>
+            <div class="loader" aria-live="polite">
+                <span class="spinner" aria-hidden="true"></span>
+                <span>Loading report…</span>
+            </div>
         }
         else if (_synthesisError is not null && !_iterBusy)
         {
@@ -258,17 +184,86 @@ else
         }
     </section>
 
+    <!-- PROGRESS MOVED TO BOTTOM (COLLAPSIBLE) -->
+    <section class="progress dock" aria-label="Progress">
+        <div class="progress-head">
+            <h2 class="h2">Progress</h2>
+
+            <div class="progress-actions">
+                @if (_events.Count > 0)
+                {
+                    <button class="secondarybtn" type="button" @onclick="CopyLastAsync">
+                        Copy last
+                    </button>
+                }
+
+                <button class="secondarybtn"
+                        type="button"
+                        @onclick="ToggleProgressExpanded"
+                        aria-expanded="@_progressExpanded">
+                    @(_progressExpanded ? "Collapse" : "Expand")
+                </button>
+            </div>
+        </div>
+
+        @if (_eventsError is not null)
+        {
+            <ErrorBanner Error="_eventsError" OnRetry="ReloadEventsAsync" />
+        }
+        else if (_isEventsLoading)
+        {
+            <p aria-live="polite">Loading events…</p>
+        }
+        else if (_events.Count == 0)
+        {
+            <p class="muted">No events yet.</p>
+        }
+        else if (!_progressExpanded)
+        {
+            var last = _events[^1];
+            <div class="last-event" tabindex="0">
+                <div class="t-head">
+                    <span class="t-time">@FormatTime(last.Timestamp)</span>
+                    <span class="t-stage">@last.Stage</span>
+                </div>
+                <div class="t-msg">@last.Message</div>
+            </div>
+        }
+        else
+        {
+            <div class="progress-controls">
+                <label class="check">
+                    <input type="checkbox" @bind="_followTail" />
+                    Follow tail
+                </label>
+            </div>
+
+            <ul class="timeline" @ref="_timelineRef" aria-label="Job event timeline">
+                @foreach (var ev in _events)
+                {
+                    <li class="timeline-item" tabindex="0">
+                        <div class="t-head">
+                            <span class="t-time">@FormatTime(ev.Timestamp)</span>
+                            <span class="t-stage">@ev.Stage</span>
+                        </div>
+                        <div class="t-msg">@ev.Message</div>
+                    </li>
+                }
+            </ul>
+        }
+    </section>
+
     <EvidenceDrawer JobId="JobId"
                     @bind-IsOpen="_evidenceOpen"
                     InitialTab="@_evidenceTab"
                     HighlightLearningId="_highlightLearningId" />
 
     <SynthesisHistoryDrawer JobId="JobId"
-                           IsOpen="_historyOpen"
-                           IsOpenChanged="v => _historyOpen = v"
-                           CurrentSynthesisId="CurrentSynthesisIdForDrawer"
-                           OpenSynthesis="OpenSynthesisAsync"
-                           UseAsBase="UseAsBaseAsync" />
+                            IsOpen="_historyOpen"
+                            IsOpenChanged="v => _historyOpen = v"
+                            CurrentSynthesisId="CurrentSynthesisIdForDrawer"
+                            OpenSynthesis="OpenSynthesisAsync"
+                            UseAsBase="UseAsBaseAsync" />
 
     <CreateSynthesisDialog IsOpen="_createDialogOpen"
                            IsOpenChanged="v => _createDialogOpen = v"
@@ -276,8 +271,8 @@ else
                            OverridesSummary="@BuildOverridesSummary()"
                            Busy="_iterBusy"
                            Error="_iterError"
-                           PrefillInstructions="_prefillInstructions"
-                           PrefillOutline="_prefillOutline"
+                           PrefillInstructions="@_prefillInstructions"
+                           PrefillOutline="@_prefillOutline"
                            BaseSynthesisId="_baseSynthesisId"
                            OnCreateAndRun="CreateAndRunSynthesisAsync" />
 }
@@ -285,20 +280,16 @@ else
 @code {
     [Parameter] public Guid JobId { get; set; }
 
-    // Job
     private bool _isJobLoading = true;
     private ApiError? _jobError;
     private GetResearchJobResponse? _job;
 
-    // Evidence drawer
     private bool _evidenceOpen;
     private string _evidenceTab = "sources";
     private Guid? _highlightLearningId;
 
-    // History drawer
     private bool _historyOpen;
 
-    // Events
     private bool _isEventsLoading;
     private ApiError? _eventsError;
     private ApiError? _streamError;
@@ -310,14 +301,13 @@ else
 
     private ElementReference _timelineRef;
     private bool _followTail = true;
+    private bool _progressExpanded;
 
     private CancellationTokenSource? _streamCts;
 
-    // Cancel
     private bool _cancelInFlight;
     private ApiError? _cancelError;
 
-    // Synthesis rendering state (current markdown + dto)
     private bool _synthesisLoading;
     private ApiError? _synthesisError;
     private bool _synthesisEmpty;
@@ -325,20 +315,17 @@ else
     private string _synthesisMarkdown = string.Empty;
     private bool _synthesisLoadedOnce;
 
-    // Selected synthesis mode
     private Guid? _selectedSynthesisId;
     private bool _selectedLoading;
     private ApiError? _selectedSynthesisError;
     private Guid? _retryOpenId;
 
-    // Iteration UI
     private bool _createDialogOpen;
     private bool _iterBusy;
     private ApiError? _iterError;
     private CreateSynthesisInput? _lastCreateInput;
     private DateTimeOffset? _reportUpdatedAt;
 
-    // Create dialog prefill
     private string? _prefillInstructions;
     private string? _prefillOutline;
     private Guid? _baseSynthesisId;
@@ -394,6 +381,7 @@ else
         _reportUpdatedAt = null;
 
         _isJobLoading = true;
+
         try
         {
             _job = await Api.JobsGET2Async(JobId);
@@ -403,7 +391,6 @@ else
 
             await ReloadEventsAsync();
 
-            // Stop any previous stream + cancel its CTS
             await StopStreamAsync();
 
             if (!IsTerminal)
@@ -448,9 +435,7 @@ else
         }
 
         foreach (var dto in res.Data!)
-        {
             _events.Add(new PersistedJobEvent(dto.Id, dto.Timestamp, dto.Stage, dto.Message));
-        }
 
         _events.Sort(static (a, b) => a.Id.CompareTo(b.Id));
         _isEventsLoading = false;
@@ -463,7 +448,7 @@ else
                 _terminalStatus = lastStage;
         }
 
-        if (_followTail && _events.Count > 0)
+        if (_followTail && _progressExpanded && _events.Count > 0)
         {
             _ = InvokeAsync(async () =>
             {
@@ -486,11 +471,13 @@ else
         {
             _streamError = null;
 
-            // NOTE:
-            // JobEventsClient is responsible for deduping event ids in the stream.
-            // If the server replays stored events, ensure JobEventsClient seeds/handles that.
-            _events.Add(item.Event);
-            _events.Sort(static (a, b) => a.Id.CompareTo(b.Id));
+            // Extra guard to avoid UI duplicates even if the stream replays.
+            // (JobEventsClient should already dedupe.)
+            if (_events.Count == 0 || _events[^1].Id < item.Event.Id || !_events.Any(e => e.Id == item.Event.Id))
+            {
+                _events.Add(item.Event);
+                _events.Sort(static (a, b) => a.Id.CompareTo(b.Id));
+            }
 
             await InvokeAsync(async () =>
             {
@@ -499,10 +486,13 @@ else
 
                 try
                 {
-                    if (_followTail)
-                        await JS.InvokeVoidAsync("researchEngine.jobEvents.scrollToBottom", _timelineRef);
-                    else
-                        await JS.InvokeVoidAsync("researchEngine.jobEvents.scrollIfNearBottom", _timelineRef);
+                    if (_progressExpanded)
+                    {
+                        if (_followTail)
+                            await JS.InvokeVoidAsync("researchEngine.jobEvents.scrollToBottom", _timelineRef);
+                        else
+                            await JS.InvokeVoidAsync("researchEngine.jobEvents.scrollIfNearBottom", _timelineRef);
+                    }
                 }
                 catch { }
             });
@@ -521,7 +511,6 @@ else
 
                 if (string.Equals(_terminalStatus, "Completed", StringComparison.OrdinalIgnoreCase))
                 {
-                    // only auto-load latest if user is not viewing a selected synthesis
                     if (_selectedSynthesisId is null)
                         await LoadLatestSynthesisAsync();
                 }
@@ -533,27 +522,11 @@ else
 
     private async Task StopStreamAsync()
     {
-        try
-        {
-            _streamCts?.Cancel();
-        }
-        catch { /* ignore */ }
+        try { _streamCts?.Cancel(); } catch { }
+        try { _streamCts?.Dispose(); } catch { }
+        _streamCts = null;
 
-        try
-        {
-            _streamCts?.Dispose();
-        }
-        catch { /* ignore */ }
-        finally
-        {
-            _streamCts = null;
-        }
-
-        try
-        {
-            await EventsClient.StopAsync();
-        }
-        catch { /* ignore */ }
+        try { await EventsClient.StopAsync(); } catch { }
     }
 
     private async Task LoadLatestSynthesisAsync()
@@ -573,8 +546,7 @@ else
             return;
         }
 
-        var latest = res.Data;
-        _latestSynthesis = latest;
+        _latestSynthesis = res.Data;
 
         if (_latestSynthesis is null)
         {
@@ -607,8 +579,7 @@ else
                 return;
             }
 
-            var dto = res.Data!;
-            _synthesisMarkdown = ComposeMarkdown(dto);
+            _synthesisMarkdown = ComposeMarkdown(res.Data!);
         }
         finally
         {
@@ -637,8 +608,8 @@ else
 
     private async Task UseAsBaseAsync(SynthesisDto s)
     {
-        _prefillInstructions = s.Instructions;
-        _prefillOutline = s.Outline;
+        _prefillInstructions = string.IsNullOrWhiteSpace(s.Instructions) ? null : s.Instructions;
+        _prefillOutline = string.IsNullOrWhiteSpace(s.Outline) ? null : s.Outline;
         _baseSynthesisId = s.Id;
 
         _iterError = null;
@@ -678,6 +649,9 @@ else
                 return;
             }
 
+            // Refresh events so the run progress shows immediately
+            await ReloadEventsAsync();
+
             var terminal = res.Data!;
             if (!string.Equals(terminal.Status, "Completed", StringComparison.OrdinalIgnoreCase))
             {
@@ -686,6 +660,7 @@ else
                 return;
             }
 
+            // Prefer direct fetch by id if available
             var synth = await Api.SynthesesGET2Async(terminal.SynthesisId);
             _latestSynthesis = synth;
 
@@ -696,12 +671,10 @@ else
 
             _reportUpdatedAt = DateTimeOffset.Now;
 
-            // after creating, go back to latest view
             _selectedSynthesisId = null;
             _selectedSynthesisError = null;
             _retryOpenId = null;
 
-            // clear base prefill
             _prefillInstructions = null;
             _prefillOutline = null;
             _baseSynthesisId = null;
@@ -741,11 +714,6 @@ else
             return;
         }
 
-        var hintId = _events.Count == 0 ? 0 : _events[^1].Id;
-        var localEv = new PersistedJobEvent(hintId + 1, DateTimeOffset.Now, "Cancel", "Cancel requested.");
-        _events.Add(localEv);
-        _events.Sort(static (a, b) => a.Id.CompareTo(b.Id));
-
         _cancelInFlight = false;
     }
 
@@ -774,13 +742,27 @@ else
 
     private void OpenCreateDialog()
     {
-        // default: use latest as parent
         _prefillInstructions = null;
         _prefillOutline = null;
         _baseSynthesisId = null;
 
         _iterError = null;
         _createDialogOpen = true;
+    }
+
+    private void ToggleProgressExpanded()
+    {
+        _progressExpanded = !_progressExpanded;
+
+        if (_progressExpanded && _followTail && _events.Count > 0)
+        {
+            _ = InvokeAsync(async () =>
+            {
+                StateHasChanged();
+                await Task.Yield();
+                try { await JS.InvokeVoidAsync("researchEngine.jobEvents.scrollToBottom", _timelineRef); } catch { }
+            });
+        }
     }
 
     private string BuildOverridesSummary()
@@ -799,10 +781,6 @@ else
 
     private static string ShortId(Guid id) => id.ToString("N")[..8];
 
-    // Markdown composition rules:
-    // - order by Index
-    // - heading = ## Title
-    // - content = ContentMarkdown else Summary else "_No content._"
     private static string ComposeMarkdown(SynthesisDto synthesis)
     {
         var sections = (synthesis.Sections ?? Array.Empty<SynthesisSectionDto>())
@@ -858,6 +836,11 @@ else
     font-size: 0.85rem;
 }
 
+.pill.warn {
+    border-color: var(--border-strong);
+    opacity: 0.9;
+}
+
 .stage {
     display: inline-block;
     padding: 2px 8px;
@@ -888,29 +871,6 @@ else
 }
 .dangerbtn:focus-visible { outline: 2px solid var(--border-strong); outline-offset: 2px; }
 
-.progress {
-    margin-top: 14px;
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 14px;
-    background: var(--surface);
-}
-
-.progress-head {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 12px;
-    margin-bottom: 10px;
-    flex-wrap: wrap;
-}
-.h2 { font-size: 1rem; margin: 0; }
-
-.progress-actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
-
-.check { display: inline-flex; gap: 8px; align-items: center; color: var(--text); }
-.check input { width: 16px; height: 16px; }
-
 .secondarybtn {
     border: 1px solid var(--border);
     background: var(--surface);
@@ -920,42 +880,6 @@ else
     cursor: pointer;
 }
 .secondarybtn:focus-visible { outline: 2px solid var(--border-strong); outline-offset: 2px; }
-
-.terminal {
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 10px;
-    margin: 10px 0;
-    display: flex;
-    gap: 10px;
-    align-items: baseline;
-    flex-wrap: wrap;
-}
-.muted { color: var(--muted); }
-
-.timeline {
-    margin: 0;
-    padding: 0;
-    list-style: none;
-    display: grid;
-    gap: 10px;
-    max-height: 48vh;
-    overflow: auto;
-    border-radius: 10px;
-}
-
-.timeline-item {
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 12px;
-    outline: none;
-}
-.timeline-item:focus-visible { outline: 2px solid var(--border-strong); outline-offset: 2px; }
-
-.t-head { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; margin-bottom: 6px; }
-.t-time { color: var(--muted); font-size: 0.9rem; }
-.t-stage { font-weight: 700; color: var(--text); }
-.t-msg { color: var(--text); word-break: break-word; }
 
 .report {
     margin-top: 14px;
@@ -987,10 +911,10 @@ else
     display: inline-flex;
     gap: 10px;
     align-items: baseline;
-    padding: 6px 10px;
+    padding: 4px 10px;
     border-radius: 999px;
     border: 1px solid var(--border);
-    background: var(--surface-2, var(--surface));
+    background: var(--surface-2);
     color: var(--text);
     font-size: 0.9rem;
 }
@@ -1003,4 +927,92 @@ else
 }
 
 .dot { opacity: 0.6; }
+.h2 { font-size: 1rem; margin: 0; }
+.muted { color: var(--muted); }
+
+.loader {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 0;
+}
+
+.spinner {
+    width: 14px;
+    height: 14px;
+    border: 2px solid var(--border);
+    border-top-color: var(--border-strong);
+    border-radius: 999px;
+    animation: spin 0.8s linear infinite;
+}
+
+@@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+.progress {
+    margin-top: 14px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px;
+    background: var(--surface);
+}
+
+.progress.dock {
+    margin-top: 18px;
+}
+
+.progress-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 10px;
+    flex-wrap: wrap;
+}
+
+.progress-actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+
+.progress-controls {
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: 10px;
+}
+
+.check { display: inline-flex; gap: 8px; align-items: center; color: var(--text); }
+.check input { width: 16px; height: 16px; }
+
+.timeline {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    display: grid;
+    gap: 10px;
+    max-height: 42vh;
+    overflow: auto;
+    border-radius: 10px;
+}
+
+.timeline-item {
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 12px;
+    outline: none;
+    background: var(--surface-2);
+}
+.timeline-item:focus-visible { outline: 2px solid var(--border-strong); outline-offset: 2px; }
+
+.last-event {
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 12px;
+    background: var(--surface-2);
+    outline: none;
+}
+.last-event:focus-visible { outline: 2px solid var(--border-strong); outline-offset: 2px; }
+
+.t-head { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; margin-bottom: 6px; }
+.t-time { color: var(--muted); font-size: 0.9rem; }
+.t-stage { font-weight: 700; color: var(--text); }
+.t-msg { color: var(--text); word-break: break-word; }
 </style>

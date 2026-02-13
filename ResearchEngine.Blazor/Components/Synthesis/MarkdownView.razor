@@ -37,6 +37,7 @@
     private const string PopoverElementId = "lg-popover";
 
     private bool _popoverOpen;
+    private bool _popoverPinned;
     private Guid _activeLearningId = Guid.Empty;
     private string _popoverStyle = "";
 
@@ -95,10 +96,12 @@
     [JSInvokable]
     public Task OnCitationActivate(string learningId, string reason, object rect)
     {
+        if (_popoverPinned)
+            return Task.CompletedTask;
+
         if (!Guid.TryParse(learningId, out var id))
             return Task.CompletedTask;
 
-        // Open on hover/focus (best-effort)
         _activeLearningId = id;
         _popoverOpen = true;
         _popoverStyle = ComputePopoverStyle(rect);
@@ -109,13 +112,15 @@
     [JSInvokable]
     public Task OnCitationDeactivate(string reason)
     {
-        // For hover leave: close only if user didn’t click-open.
-        // Keep simple: close on hover-leave unless focus is inside popover; global handler will close otherwise.
+        if (_popoverPinned)
+            return Task.CompletedTask;
+
         if (reason == "hover")
         {
             _popoverOpen = false;
             return InvokeAsync(StateHasChanged);
         }
+
         return Task.CompletedTask;
     }
 
@@ -125,14 +130,17 @@
         if (!Guid.TryParse(learningId, out var id))
             return Task.CompletedTask;
 
+        // Click toggles + pins
         if (_popoverOpen && _activeLearningId == id)
         {
             _popoverOpen = false;
+            _popoverPinned = false;
             return InvokeAsync(StateHasChanged);
         }
 
         _activeLearningId = id;
         _popoverOpen = true;
+        _popoverPinned = true;
         _popoverStyle = ComputePopoverStyle(rect);
 
         return InvokeAsync(StateHasChanged);
@@ -142,25 +150,26 @@
     public Task OnRequestClosePopover(string reason)
     {
         _popoverOpen = false;
+        _popoverPinned = false;
         return InvokeAsync(StateHasChanged);
     }
 
     private Task ClosePopover()
     {
         _popoverOpen = false;
+        _popoverPinned = false;
         return InvokeAsync(StateHasChanged);
     }
 
     private async Task OpenInLearningsInternal(Guid learningId)
     {
         _popoverOpen = false;
+        _popoverPinned = false;
         await OnOpenInLearnings.InvokeAsync(learningId);
     }
 
     private static string ComputePopoverStyle(object rectObj)
     {
-        // rectObj is a JS object; in Blazor WASM it arrives as JsonElement.
-        // We'll do minimal parsing via System.Text.Json.
         if (rectObj is not System.Text.Json.JsonElement el || el.ValueKind != System.Text.Json.JsonValueKind.Object)
             return "left: 12px; top: 12px;";
 
@@ -168,7 +177,6 @@
         double bottom = Get(el, "bottom");
         double vw = Get(el, "vw");
 
-        // Prefer placing popover below the token; clamp to viewport
         var x = Math.Min(Math.Max(12, left), Math.Max(12, vw - 540)); // 520 + padding
         var y = bottom + 8;
 

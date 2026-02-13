@@ -7,16 +7,16 @@ namespace ResearchEngine.Blazor.Services;
 
 /// <summary>
 /// Browser EventSource-based job events streaming:
-/// - fetches an SSE ticket via POST /jobs/{jobId}/events/stream-token (authorized)
-/// - opens EventSource(StreamUrl) (anonymous, ticket query)
+/// - POST /jobs/{jobId}/events/stream-token (authorized) -> ticket + streamUrl
+/// - EventSource(streamUrl absolute) (anonymous; ticket is querystring)
 /// - reconnects with exponential backoff until "done"
-/// - dedupes by event Id on the client side
+/// - dedupes by event Id on the client side (internal seen set)
 /// </summary>
 public sealed class JobEventsClient : IAsyncDisposable
 {
     private readonly IResearchApiClient _api;
     private readonly IJSRuntime _js;
-    private readonly HttpClient _http; 
+    private readonly HttpClient _http;
 
     private IJSObjectReference? _module;
     private string? _connId;
@@ -25,6 +25,9 @@ public sealed class JobEventsClient : IAsyncDisposable
     private readonly JsonSerializerOptions _json = new(JsonSerializerDefaults.Web);
     private readonly ConcurrentDictionary<int, byte> _seenEventIds = new();
     private volatile bool _doneReceived;
+
+    private CancellationTokenSource? _runCts;
+    private Task? _runTask;
 
     public JobEventsClient(IResearchApiClient api, IJSRuntime js, HttpClient http)
     {
@@ -44,28 +47,87 @@ public sealed class JobEventsClient : IAsyncDisposable
         public static JobStreamItem FromDone(DonePayload d) => new(JobStreamKind.Done, null, d);
     }
 
-    public async Task StartAsync(
+    /// <summary>
+    /// Preferred overload:
+    /// - JobDetail loads persisted events via GET /events and renders them
+    /// - JobEventsClient dedupes all streamed events internally (and can optionally be seeded via the other overload)
+    /// </summary>
+    public Task StartAsync(
         Guid jobId,
+        Func<JobStreamItem, Task> onItem,
+        Func<ApiError, Task> onError,
+        CancellationToken ct)
+        => StartCoreAsync(jobId, alreadySeenEventIds: null, shouldReconnect: null, onItem, onError, ct);
+
+    /// <summary>
+    /// Backward-compatible overload (seed dedupe + external reconnect guard).
+    /// If you still call this from some page/component, it will keep working.
+    /// </summary>
+    public Task StartAsync(
+        Guid jobId,
+        IEnumerable<int>? alreadySeenEventIds,
+        Func<bool>? shouldReconnect,
+        Func<JobStreamItem, Task> onItem,
+        Func<ApiError, Task> onError,
+        CancellationToken ct)
+        => StartCoreAsync(jobId, alreadySeenEventIds, shouldReconnect, onItem, onError, ct);
+
+    private async Task StartCoreAsync(
+        Guid jobId,
+        IEnumerable<int>? alreadySeenEventIds,
+        Func<bool>? shouldReconnect,
         Func<JobStreamItem, Task> onItem,
         Func<ApiError, Task> onError,
         CancellationToken ct)
     {
         await EnsureModuleAsync(ct);
 
+        // Stop any previous run
+        await StopAsync();
+
         _doneReceived = false;
         _seenEventIds.Clear();
 
-        _ = Task.Run(() => RunLoopAsync(jobId, onItem, onError, ct), ct);
+        if (alreadySeenEventIds is not null)
+        {
+            foreach (var id in alreadySeenEventIds)
+                _seenEventIds.TryAdd(id, 0);
+        }
+
+        _runCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        var runToken = _runCts.Token;
+
+        _runTask = Task.Run(() => RunLoopAsync(jobId, shouldReconnect, onItem, onError, runToken), runToken);
     }
 
     public async Task StopAsync()
     {
         _doneReceived = true;
+
+        try { _runCts?.Cancel(); } catch { }
+        _runCts?.Dispose();
+        _runCts = null;
+
         await CloseCurrentAsync();
+
+        try
+        {
+            if (_runTask is not null)
+                await _runTask;
+        }
+        catch
+        {
+            // ignore
+        }
+        finally
+        {
+            _runTask = null;
+        }
     }
 
     private async Task RunLoopAsync(
         Guid jobId,
+        Func<bool>? shouldReconnect,
         Func<JobStreamItem, Task> onItem,
         Func<ApiError, Task> onError,
         CancellationToken ct)
@@ -74,26 +136,27 @@ public sealed class JobEventsClient : IAsyncDisposable
 
         while (!ct.IsCancellationRequested && !_doneReceived)
         {
+            if (shouldReconnect is not null && !shouldReconnect())
+                break;
+
             attempt++;
 
             // 1) Get token (authorized)
-            CreateSseTokenResponse? token;
+            CreateSseTokenResponse token;
             try
             {
+                // NOTE: method name depends on NSwag. In your current file it is StreamTokenAsync.
                 token = await _api.StreamTokenAsync(jobId, ct);
             }
             catch (Exception ex)
             {
-                var err = ApiErrorMapper.Map(ex);
-                await SafeInvoke(onError, err);
-
-                var delayMs = BackoffMs(attempt, capMs: 15000);
-                await DelaySafe(delayMs, ct);
+                await SafeInvoke(onError, ApiErrorMapper.Map(ex));
+                await DelaySafe(BackoffMs(attempt, 15000), ct);
                 continue;
             }
 
-            // 2) Connect EventSource(absoluteUrl) (anonymous)
-            var tcsDisconnected = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            // 2) Connect EventSource (anonymous stream)
+            var disconnected = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
             await CloseCurrentAsync();
 
@@ -108,12 +171,17 @@ public sealed class JobEventsClient : IAsyncDisposable
                         if (!_seenEventIds.TryAdd(dto.Id, 0))
                             return; // dedupe
 
-                        var ev = new PersistedJobEvent(dto.Id, dto.Timestamp, dto.Stage ?? "", dto.Message ?? "");
+                        var ev = new PersistedJobEvent(
+                            dto.Id,
+                            dto.Timestamp,
+                            dto.Stage ?? string.Empty,
+                            dto.Message ?? string.Empty);
+
                         await SafeInvoke(onItem, JobStreamItem.FromEvent(ev));
                     }
                     catch
                     {
-                        // ignore malformed event payloads
+                        // ignore malformed payloads
                     }
                 },
                 onDoneJson: async json =>
@@ -126,59 +194,69 @@ public sealed class JobEventsClient : IAsyncDisposable
                         _doneReceived = true;
 
                         Guid? synthesisId = null;
-                        if (Guid.TryParse(dto.SynthesisId, out var parsed))
-                            synthesisId = parsed;
+                        if (!string.IsNullOrWhiteSpace(dto.SynthesisId) && Guid.TryParse(dto.SynthesisId, out var sid))
+                            synthesisId = sid;
+
+                        var jid = jobId;
+                        if (!string.IsNullOrWhiteSpace(dto.JobId) && Guid.TryParse(dto.JobId, out var parsedJid))
+                            jid = parsedJid;
 
                         var done = new DonePayload(
-                            JobId: Guid.TryParse(dto.JobId, out var jid) ? jid : jobId,
-                            Status: dto.Status ?? "",
+                            JobId: jid,
+                            Status: dto.Status ?? string.Empty,
                             SynthesisId: synthesisId);
 
                         await SafeInvoke(onItem, JobStreamItem.FromDone(done));
                     }
                     finally
                     {
-                        tcsDisconnected.TrySetResult();
+                        disconnected.TrySetResult();
                     }
                 },
                 onError: async () =>
                 {
-                    tcsDisconnected.TrySetResult();
+                    disconnected.TrySetResult();
                     await Task.CompletedTask;
                 }));
 
             try
             {
-                var url = token.StreamUrl ?? "";
+                var url = token.StreamUrl ?? string.Empty;
                 if (string.IsNullOrWhiteSpace(url))
                     throw new InvalidOperationException("StreamUrl is empty.");
 
+                // IMPORTANT: token.StreamUrl is usually "/api/research/...."
+                // Ensure we always connect to the API origin (http://localhost:8090),
+                // not the SPA origin (http://localhost:5173) and not "file:///".
                 var absoluteUrl = ToAbsoluteApiUrl(_http.BaseAddress, url);
 
                 _connId = await _module!.InvokeAsync<string>("connect", ct, absoluteUrl, _hubRef);
 
-                await Task.WhenAny(tcsDisconnected.Task, WaitCancellation(ct));
+                // after a successful connect, reset backoff
+                attempt = 0;
+
+                // Wait for disconnect or cancellation
+                await Task.WhenAny(disconnected.Task, WaitCancellation(ct));
 
                 await CloseCurrentAsync();
 
                 if (_doneReceived || ct.IsCancellationRequested)
                     break;
 
-                var backoffMs = BackoffMs(attempt, capMs: 15000);
-                await DelaySafe(backoffMs, ct);
+                if (shouldReconnect is not null && !shouldReconnect())
+                    break;
+
+                await DelaySafe(BackoffMs(1, 15000), ct); // short pause after disconnect
             }
             catch (Exception ex)
             {
                 await CloseCurrentAsync();
 
-                if (ct.IsCancellationRequested || _doneReceived)
+                if (_doneReceived || ct.IsCancellationRequested)
                     break;
 
-                var err = ApiErrorMapper.Map(ex);
-                await SafeInvoke(onError, err);
-
-                var backoffMs = BackoffMs(attempt, capMs: 15000);
-                await DelaySafe(backoffMs, ct);
+                await SafeInvoke(onError, ApiErrorMapper.Map(ex));
+                await DelaySafe(BackoffMs(attempt, 15000), ct);
             }
         }
     }
@@ -188,11 +266,10 @@ public sealed class JobEventsClient : IAsyncDisposable
         if (apiBase is null)
             throw new InvalidOperationException("HttpClient.BaseAddress is null; cannot resolve StreamUrl.");
 
-        // Important: use API origin (scheme+host+port) even if BaseAddress has a path
+        // Use API origin (scheme+host+port), ignore any base path
         var origin = new Uri(apiBase.GetLeftPart(UriPartial.Authority));
 
-        // streamUrl is "/api/....?ticket=..." (relative)
-        // DO NOT encode; EventSource must receive a normal URL with "?"
+        // streamUrl is typically "/api/research/jobs/.../events/stream?ticket=..."
         if (streamUrl.StartsWith("/", StringComparison.Ordinal))
             return new Uri(origin, streamUrl).ToString();
 
@@ -203,8 +280,8 @@ public sealed class JobEventsClient : IAsyncDisposable
     {
         try
         {
-            if (_connId is not null)
-                await _module!.InvokeVoidAsync("close", _connId);
+            if (_connId is not null && _module is not null)
+                await _module.InvokeVoidAsync("close", _connId);
         }
         catch
         {
@@ -213,7 +290,6 @@ public sealed class JobEventsClient : IAsyncDisposable
         finally
         {
             _connId = null;
-
             try { _hubRef?.Dispose(); } catch { }
             _hubRef = null;
         }
@@ -221,13 +297,14 @@ public sealed class JobEventsClient : IAsyncDisposable
 
     private async Task EnsureModuleAsync(CancellationToken ct)
     {
-        // ✅ Correct module path under wwwroot/js/
         _module ??= await _js.InvokeAsync<IJSObjectReference>("import", ct, "./js/jobEvents.js");
     }
 
     private static int BackoffMs(int attempt, int capMs)
     {
-        var ms = 250 * (int)Math.Pow(2, Math.Min(attempt - 1, 6));
+        // 250ms, 500ms, 1s, 2s, 4s, 8s, 16s... capped
+        var exp = Math.Min(Math.Max(attempt - 1, 0), 6);
+        var ms = 250 * (int)Math.Pow(2, exp);
         return Math.Min(ms, capMs);
     }
 

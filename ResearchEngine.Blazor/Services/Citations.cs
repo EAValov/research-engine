@@ -11,8 +11,9 @@ namespace ResearchEngine.Blazor.Services;
 public static class Citations
 {
     // [lrn:<guid>] (case-insensitive)
+    // Accept both hyphenated GUIDs and compact 32-hex GUIDs (N format)
     private static readonly Regex LrnRegex = new(
-        @"\[lrn:(?<id>[0-9a-fA-F]{8}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{12})\]",
+        @"\[lrn:(?<id>(?:[0-9a-fA-F]{32}|[0-9a-fA-F]{8}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{12}))\]",
         RegexOptions.Compiled | RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
 
     public static IReadOnlyList<Guid> ExtractLearningIds(string markdown)
