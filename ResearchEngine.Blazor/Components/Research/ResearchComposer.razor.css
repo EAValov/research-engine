@@ -28,14 +28,14 @@
 .box {
     background: var(--card);
     border: 1px solid var(--border);
-    border-radius: 18px;
+    border-radius: 8px;
     padding: 14px;
     box-shadow: 0 12px 40px rgba(0,0,0,0.12);
 }
 
 .query {
     width: 100%;
-    border-radius: 14px;
+    border-radius: 6px;
     border: 1px solid var(--border);
     background: var(--panel);
     color: var(--text);
@@ -59,7 +59,7 @@
 
 .settings {
     padding: 6px 10px;
-    border-radius: 999px;
+    border-radius: 6px;
     border: 1px solid var(--border);
     background: transparent;
     color: var(--text);
@@ -82,7 +82,7 @@
 
 .runbtn {
     padding: 10px 14px;
-    border-radius: 999px;
+    border-radius: 6px;
     border: 1px solid var(--border);
     background: var(--btn);
     color: var(--btnText);
@@ -110,7 +110,7 @@
 
 .input {
     width: 100%;
-    border-radius: 12px;
+    border-radius: 6px;
     border: 1px solid var(--border);
     background: var(--panel);
     color: var(--text);
@@ -120,7 +120,7 @@
 .warning {
     margin-top: 12px;
     padding: 10px 12px;
-    border-radius: 12px;
+    border-radius: 8px;
     border: 1px solid var(--border);
     background: rgba(255, 180, 0, 0.08);
     color: var(--text);
@@ -135,7 +135,7 @@
 
 .clar-item {
     border: 1px solid var(--border);
-    border-radius: 14px;
+    border-radius: 8px;
     padding: 12px;
     background: var(--panel);
 }
@@ -155,7 +155,7 @@
     border: 1px solid var(--border);
     background: transparent;
     color: var(--text);
-    border-radius: 999px;
+    border-radius: 6px;
     padding: 10px 14px;
     cursor: pointer;
 }

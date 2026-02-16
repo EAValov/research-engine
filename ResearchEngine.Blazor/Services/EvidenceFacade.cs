@@ -74,24 +74,16 @@ public sealed class EvidenceFacade
 
     public async Task<ApiResult<LearningListItemDto>> AddLearningAsync(
         Guid jobId,
-        string text,
-        string? reference = null,
-        string? evidenceText = null,
-        float? importanceScore = null,
+        AddLearningRequest request,
         CancellationToken ct = default)
     {
         try
         {
-            // NSwag: Task<AddLearningResponse> LearningsPOSTAsync(Guid jobId, AddLearningRequest body, CancellationToken ct = default)
-            var req = new AddLearningRequest
-            {
-                Text = text,
-                Reference = reference,
-                EvidenceText = evidenceText,
-                ImportanceScore = importanceScore
-            };
+            if (request is null)
+                return ApiResult<LearningListItemDto>.Fail(new ApiError(ApiErrorKind.Validation, "Add learning payload is required."));
 
-            var resp = await _api.LearningsPOSTAsync(jobId, req, ct);
+            // NSwag: Task<AddLearningResponse> LearningsPOSTAsync(Guid jobId, AddLearningRequest body, CancellationToken ct = default)
+            var resp = await _api.LearningsPOSTAsync(jobId, request, ct);
 
             // AddLearningResponse returns AddedLearningDto (no SourceReference field),
             // but the UI expects LearningListItemDto.SourceReference. Best-effort mapping:
@@ -100,7 +92,7 @@ public sealed class EvidenceFacade
             {
                 LearningId = added.LearningId,
                 SourceId = added.SourceId,
-                SourceReference = reference ?? "(manual)",
+                SourceReference = request.Reference ?? "(manual)",
                 ImportanceScore = added.ImportanceScore,
                 CreatedAt = added.CreatedAt,
                 Text = added.Text

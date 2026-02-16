@@ -11,6 +11,9 @@
 
     --shadow: 0 1px 0 rgba(0,0,0,0.05);
     --overlay: rgba(0,0,0,0.25);
+
+    --radius-panel: 8px;
+    --radius-control: 6px;
 }
 
 :root[data-theme="dark"] {
@@ -151,4 +154,12 @@ code {
 
 .form-floating > .form-control-plaintext:focus::placeholder, .form-floating > .form-control:focus::placeholder {
     text-align: start;
+}
+
+button {
+    border-radius: var(--radius-control) !important;
+}
+
+:is(.box, .jobs, .job-card, .report, .progress, .panel, .row, .drawer, .popover, .dialog, .timeline-item, .last-event, .note) {
+    border-radius: var(--radius-panel) !important;
 }

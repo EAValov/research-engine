@@ -1,5 +1,7 @@
 @using Markdig
 @using Ganss.Xss
+@using System.Globalization
+@using ResearchEngine.Blazor.Api
 @using ResearchEngine.Blazor.Services
 @inject IJSRuntime JS
 @inject LearningGroupFacade Groups
@@ -41,7 +43,7 @@
     private Guid _activeLearningId = Guid.Empty;
     private string _popoverStyle = "";
 
-    protected override void OnParametersSet()
+    protected override async Task OnParametersSetAsync()
     {
         var md = Markdown ?? string.Empty;
 
@@ -50,18 +52,16 @@
 
         _lastMarkdown = md;
 
+        var renderedMarkdown = await BuildDisplayMarkdownAsync(md);
+
         // Render markdown -> HTML (tokens included)
-        var rawHtml = Markdig.Markdown.ToHtml(md, Pipeline);
+        var rawHtml = Markdig.Markdown.ToHtml(renderedMarkdown, Pipeline);
 
         // Sanitize
         _html = Sanitizer.Sanitize(rawHtml);
 
         // Update render key
-        _cacheKey = md.Length.ToString();
-
-        // Prefetch groups (non-blocking)
-        var ids = Citations.ExtractLearningIds(md);
-        _ = PrefetchSafeAsync(ids);
+        _cacheKey = Guid.NewGuid().ToString("N");
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -90,6 +90,90 @@
     {
         if (ids.Count == 0) return;
         try { await Groups.PrefetchGroupsAsync(ids); } catch { }
+    }
+
+    private async Task<string> BuildDisplayMarkdownAsync(string markdown)
+    {
+        var orderedIds = Citations.ExtractLearningIdsInAppearanceOrder(markdown);
+        if (orderedIds.Count == 0)
+            return markdown;
+
+        await PrefetchSafeAsync(orderedIds);
+
+        var groupIndexByKey = new Dictionary<Guid, int>();
+        var citationIndexByLearningId = new Dictionary<Guid, int>();
+        var sourceByIndex = new Dictionary<int, string>();
+
+        var nextIndex = 1;
+
+        foreach (var learningId in orderedIds)
+        {
+            LearningGroupCardDto? group = null;
+            if (Groups.TryGetCached(learningId, out var cached))
+                group = cached;
+
+            var groupKey = group?.GroupId ?? learningId;
+
+            if (!groupIndexByKey.TryGetValue(groupKey, out var index))
+            {
+                index = nextIndex++;
+                groupIndexByKey[groupKey] = index;
+                sourceByIndex[index] = GetTopReference(group, learningId);
+            }
+
+            citationIndexByLearningId[learningId] = index;
+        }
+
+        var rewritten = Citations.RewriteLearningCitations(markdown, learningId =>
+        {
+            if (!citationIndexByLearningId.TryGetValue(learningId, out var index))
+                return null;
+
+            return index.ToString(CultureInfo.InvariantCulture);
+        });
+
+        if (sourceByIndex.Count == 0)
+            return rewritten;
+
+        var sources = sourceByIndex
+            .OrderBy(x => x.Key)
+            .Select(x => $"{x.Key}. {x.Value}")
+            .ToList();
+
+        return $"{rewritten}\n\n## Sources\n\n{string.Join("\n", sources)}";
+    }
+
+    private static string GetTopReference(LearningGroupCardDto? group, Guid learningId)
+    {
+        if (group?.Evidence is not null)
+        {
+            foreach (var ev in group.Evidence)
+            {
+                var reference = (ev.SourceReference ?? string.Empty).Trim();
+                if (string.IsNullOrWhiteSpace(reference))
+                    continue;
+
+                if (IsHttpUrl(reference))
+                    return reference;
+            }
+
+            var first = group.Evidence
+                .Select(x => (x.SourceReference ?? string.Empty).Trim())
+                .FirstOrDefault(x => !string.IsNullOrWhiteSpace(x));
+
+            if (!string.IsNullOrWhiteSpace(first))
+                return first;
+        }
+
+        return $"learning:{learningId:N}";
+    }
+
+    private static bool IsHttpUrl(string text)
+    {
+        if (!Uri.TryCreate(text, UriKind.Absolute, out var uri))
+            return false;
+
+        return uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps;
     }
 
     // rect: { left, top, right, bottom, width, height, vw, vh }

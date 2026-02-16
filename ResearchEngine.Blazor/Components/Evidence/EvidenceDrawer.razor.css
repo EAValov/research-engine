@@ -85,7 +85,7 @@
     border: 1px solid var(--border);
     background: var(--surface2);
     color: var(--text);
-    border-radius: 10px;
+    border-radius: 6px;
     padding: 6px 10px;
     cursor: pointer;
 }
@@ -104,7 +104,7 @@
     border: 1px solid var(--border);
     background: var(--surface2);
     color: var(--text);
-    border-radius: 10px;
+    border-radius: 6px;
     width: 36px;
     height: 36px;
     cursor: pointer;
@@ -136,7 +136,7 @@
     border: 1px solid var(--border);
     background: var(--surface2);
     color: var(--text);
-    border-radius: 999px;
+    border-radius: 6px;
     padding: 6px 10px;
     cursor: pointer;
 }

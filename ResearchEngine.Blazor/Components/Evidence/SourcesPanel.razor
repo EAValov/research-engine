@@ -39,45 +39,41 @@
                 var excluded = Overrides.IsExcludedSource(JobId, s.SourceId);
 
                 <li class="row" tabindex="0">
-                    <div class="main">
-                        <div class="title">
-                            @(string.IsNullOrWhiteSpace(s.Title) ? s.Reference : s.Title)
-                        </div>
-                        @if (!string.IsNullOrWhiteSpace(s.Title))
-                        {
-                            <div class="ref muted">@s.Reference</div>
-                        }
-                        <div class="meta muted">
-                            <button type="button"
-                                    class="link"
-                                    title="Show learnings from this source"
-                                    @onclick="() => ShowLearningsAsync(s.Reference)">
-                                @s.LearningCount learnings
-                            </button>
-                            <span class="dot">•</span>
-                            <span>@s.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</span>
-                        </div>
+                    <div class="title">
+                        @(string.IsNullOrWhiteSpace(s.Title) ? s.Reference : s.Title)
                     </div>
 
-                    <div class="toggles" aria-label="Overrides">
-                        <label class="tg">
-                            <input type="checkbox"
-                                   checked="@pinned"
-                                   @onchange="() => TogglePinned(s.SourceId)"
-                                   aria-label="Pin source" />
-                            <span>Pin</span>
-                        </label>
+                    @if (!string.IsNullOrWhiteSpace(s.Title))
+                    {
+                        <div class="ref muted">@s.Reference</div>
+                    }
 
-                        <label class="tg">
-                            <input type="checkbox"
-                                   checked="@excluded"
-                                   @onchange="() => ToggleExcluded(s.SourceId)"
-                                   aria-label="Exclude source" />
-                            <span>Exclude</span>
-                        </label>
+                    <div class="meta muted">
+                        <button type="button"
+                                class="link"
+                                title="Show learnings from this source"
+                                @onclick="() => ShowLearningsAsync(s.Reference)">
+                            @s.LearningCount learnings
+                        </button>
+                        <span class="dot">•</span>
+                        <span>@s.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</span>
                     </div>
 
-                    <div class="actions">
+                    <div class="actions" aria-label="Overrides">
+                        <button type="button"
+                                class="toggle @(pinned ? "active" : "")"
+                                @onclick="() => TogglePinned(s.SourceId)"
+                                aria-pressed="@pinned">
+                            Pin
+                        </button>
+
+                        <button type="button"
+                                class="toggle @(excluded ? "active" : "")"
+                                @onclick="() => ToggleExcluded(s.SourceId)"
+                                aria-pressed="@excluded">
+                            Exclude
+                        </button>
+
                         <button type="button" class="ghost" @onclick="() => DeleteAsync(s.SourceId)">Delete</button>
                     </div>
                 </li>
@@ -106,8 +102,6 @@
     protected override async Task OnParametersSetAsync()
     {
         var incoming = FilterText ?? "";
-        if (string.Equals(incoming, "SourcesFilter", StringComparison.OrdinalIgnoreCase))
-            incoming = "";
 
         if (_filter != incoming)
             _filter = incoming;

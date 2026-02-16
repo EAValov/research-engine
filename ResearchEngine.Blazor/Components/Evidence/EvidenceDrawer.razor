@@ -53,20 +53,21 @@
                 @if (_activeTab == "sources")
                 {
                     <SourcesPanel JobId="JobId"
-                                  IsOpen="IsOpen"
-                                  FilterText="SourcesFilter"
-                                  FilterTextChanged="SourcesFilterChanged"
+                                  IsOpen="@IsOpen"
+                                  FilterText="@_sourcesFilter"
+                                  FilterTextChanged="OnSourcesFilterChangedAsync"
                                   OnShowLearningsForSource="ShowLearningsForSourceAsync" />
                 }
                 else
                 {
                     <LearningsPanel JobId="JobId"
-                                    IsOpen="IsOpen"
-                                    HighlightLearningId="HighlightLearningId"
-                                    FilterText="LearningsFilter"
-                                    FilterTextChanged="LearningsFilterChanged"
-                                    InitialLoadedCount="LearningsLoadedCount"
-                                    LoadedCountChanged="LearningsLoadedCountChanged" />
+                                    IsOpen="@IsOpen"
+                                    HighlightLearningId="@HighlightLearningId"
+                                    RestrictToGroupId="@RestrictToLearningGroupId"
+                                    FilterText="@_learningsFilter"
+                                    FilterTextChanged="OnLearningsFilterChangedAsync"
+                                    InitialLoadedCount="@_learningsLoadedCount"
+                                    LoadedCountChanged="OnLearningsLoadedCountChangedAsync" />
                 }
             </div>
         </div>
@@ -97,8 +98,13 @@
 
     [Parameter] public int LearningsLoadedCount { get; set; } = 25;
     [Parameter] public EventCallback<int> LearningsLoadedCountChanged { get; set; }
+    [Parameter] public Guid? RestrictToLearningGroupId { get; set; }
 
     private string _activeTab = "sources";
+    private string _sourcesFilter = "";
+    private string _learningsFilter = "";
+    private int _learningsLoadedCount = 25;
+    private bool _stateInitialized;
 
     private OverridesSummary Summary => Overrides.GetSummary(JobId);
     private bool HasOverrides => Overrides.HasAny(JobId);
@@ -119,7 +125,10 @@
     protected override void OnParametersSet()
     {
         if (!IsOpen)
+        {
+            _stateInitialized = false;
             return;
+        }
 
         // Pick tab in this order:
         // 1) ActiveTab (preferred state binding)
@@ -130,6 +139,17 @@
 
         if (tab is "sources" or "learnings")
             _activeTab = tab;
+
+        if (!_stateInitialized || SourcesFilterChanged.HasDelegate)
+            _sourcesFilter = SourcesFilter ?? "";
+
+        if (!_stateInitialized || LearningsFilterChanged.HasDelegate)
+            _learningsFilter = LearningsFilter ?? "";
+
+        if (!_stateInitialized || LearningsLoadedCountChanged.HasDelegate)
+            _learningsLoadedCount = LearningsLoadedCount;
+
+        _stateInitialized = true;
     }
 
     private void OnOverridesChanged(Guid jobId)
@@ -154,9 +174,31 @@
     {
         // Switch tab and prefill learnings filter with the source reference.
         await SelectTabAsync("learnings");
+        _learningsFilter = sourceReference ?? "";
 
         if (LearningsFilterChanged.HasDelegate)
-            await LearningsFilterChanged.InvokeAsync(sourceReference ?? "");
+            await LearningsFilterChanged.InvokeAsync(_learningsFilter);
+    }
+
+    private async Task OnSourcesFilterChangedAsync(string value)
+    {
+        _sourcesFilter = value ?? "";
+        if (SourcesFilterChanged.HasDelegate)
+            await SourcesFilterChanged.InvokeAsync(_sourcesFilter);
+    }
+
+    private async Task OnLearningsFilterChangedAsync(string value)
+    {
+        _learningsFilter = value ?? "";
+        if (LearningsFilterChanged.HasDelegate)
+            await LearningsFilterChanged.InvokeAsync(_learningsFilter);
+    }
+
+    private async Task OnLearningsLoadedCountChangedAsync(int value)
+    {
+        _learningsLoadedCount = value;
+        if (LearningsLoadedCountChanged.HasDelegate)
+            await LearningsLoadedCountChanged.InvokeAsync(value);
     }
 
     private async Task ClearOverridesAsync()

@@ -1,7 +1,8 @@
 .jobs {
-    margin-top: 16px;
+    width: min(920px, calc(100vw - 32px));
+    margin: 16px auto 0;
     border: 1px solid var(--border);
-    border-radius: 12px;
+    border-radius: 8px;
     padding: 14px;
     background: var(--surface);
 }
@@ -21,7 +22,7 @@
     border: 1px solid var(--border);
     background: var(--bg);
     color: var(--text);
-    border-radius: 10px;
+    border-radius: 6px;
     padding: 6px 10px;
     cursor: pointer;
 }
@@ -43,7 +44,7 @@
     align-items: start;
     padding: 12px;
     border: 1px solid var(--border);
-    border-radius: 12px;
+    border-radius: 8px;
     background: var(--bg);
     cursor: pointer;
 }

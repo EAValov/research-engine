@@ -12,7 +12,7 @@
      tabindex="-1"
      @ref="_popoverRef">
     <div class="popover-head">
-        <div class="title">Learning group</div>
+        <div class="title">Representative</div>
         <button type="button" class="x" @onclick="Close" aria-label="Close">×</button>
     </div>
 
@@ -39,7 +39,8 @@
     {
         <div class="body">
             <div class="main">
-                <div class="canon">@_group.CanonicalText</div>
+                <div class="rep">@_group.RepresentativeLearningText</div>
+
                 <div class="meta">
                     <span>Score: @_group.CanonicalImportanceScore.ToString("0.00")</span>
                     <span class="dot">•</span>
@@ -47,26 +48,6 @@
                     <span class="dot">•</span>
                     <span>Sources: @_group.DistinctSourceCount</span>
                 </div>
-
-                <div class="subhead">Representative</div>
-                <div class="rep">@_group.RepresentativeLearningText</div>
-
-                @if (_group.Evidence is not null && _group.Evidence.Count > 0)
-                {
-                    <div class="subhead">Evidence (top)</div>
-                    <ul class="evidence" role="list">
-                        @foreach (var ev in _group.Evidence.Take(3))
-                        {
-                            <li class="ev">
-                                <div class="ev-top">
-                                    <span class="src">@ev.SourceReference</span>
-                                    <span class="score">@ev.ImportanceScore.ToString("0.00")</span>
-                                </div>
-                                <div class="ev-text">@ev.Text</div>
-                            </li>
-                        }
-                    </ul>
-                }
             </div>
 
             <div class="actions">

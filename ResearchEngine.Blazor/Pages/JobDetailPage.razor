@@ -13,6 +13,7 @@
 @inject SynthesisHistoryFacade SynthesisHistory
 @inject SynthesisIterationFacade Iteration
 @inject OverridesStore Overrides
+@inject LearningGroupFacade LearningGroups
 @inject IJSRuntime JS
 
 <PageTitle>Job</PageTitle>
@@ -190,13 +191,6 @@ else
             <h2 class="h2">Progress</h2>
 
             <div class="progress-actions">
-                @if (_events.Count > 0)
-                {
-                    <button class="secondarybtn" type="button" @onclick="CopyLastAsync">
-                        Copy last
-                    </button>
-                }
-
                 <button class="secondarybtn"
                         type="button"
                         @onclick="ToggleProgressExpanded"
@@ -256,7 +250,16 @@ else
     <EvidenceDrawer JobId="JobId"
                     @bind-IsOpen="_evidenceOpen"
                     InitialTab="@_evidenceTab"
-                    HighlightLearningId="_highlightLearningId" />
+                    ActiveTab="@_evidenceTab"
+                    ActiveTabChanged="tab => _evidenceTab = tab"
+                    HighlightLearningId="@_highlightLearningId"
+                    SourcesFilter="@_sourcesFilter"
+                    SourcesFilterChanged="value => _sourcesFilter = value"
+                    LearningsFilter="@_learningsFilter"
+                    LearningsFilterChanged="value => _learningsFilter = value"
+                    LearningsLoadedCount="@_learningsLoadedCount"
+                    LearningsLoadedCountChanged="count => _learningsLoadedCount = count"
+                    RestrictToLearningGroupId="@_restrictToLearningGroupId" />
 
     <SynthesisHistoryDrawer JobId="JobId"
                             IsOpen="_historyOpen"
@@ -287,6 +290,10 @@ else
     private bool _evidenceOpen;
     private string _evidenceTab = "sources";
     private Guid? _highlightLearningId;
+    private Guid? _restrictToLearningGroupId;
+    private string _sourcesFilter = "";
+    private string _learningsFilter = "";
+    private int _learningsLoadedCount = 25;
 
     private bool _historyOpen;
 
@@ -337,12 +344,19 @@ else
 
     private bool IsRunning => !IsTerminal;
 
+    private bool HasNonCreatedEvents
+        => _events.Any(e => !string.Equals(e.Stage, "Created", StringComparison.OrdinalIgnoreCase));
+
+    private bool IsEffectivelyRunning
+        => !IsTerminal && (HasNonCreatedEvents || string.Equals(_job?.Status?.ToString(), "Running", StringComparison.OrdinalIgnoreCase));
+
     private bool IsCompleted =>
         string.Equals(_terminalStatus, "Completed", StringComparison.OrdinalIgnoreCase) ||
         string.Equals(_job?.Status?.ToString(), "Completed", StringComparison.OrdinalIgnoreCase);
 
     private string CurrentStatusChip
-        => _terminalStatus ?? _job?.Status?.ToString() ?? "Unknown";
+        => _terminalStatus
+        ?? (IsEffectivelyRunning ? "Running" : (_job?.Status?.ToString() ?? "Unknown"));
 
     private string CurrentStage
         => _events.Count == 0 ? "" : _events[^1].Stage;
@@ -374,6 +388,12 @@ else
         _selectedLoading = false;
         _selectedSynthesisError = null;
         _retryOpenId = null;
+
+        _highlightLearningId = null;
+        _restrictToLearningGroupId = null;
+        _sourcesFilter = "";
+        _learningsFilter = "";
+        _learningsLoadedCount = 25;
 
         _iterError = null;
         _iterBusy = false;
@@ -445,7 +465,13 @@ else
         {
             var lastStage = _events[^1].Stage;
             if (IsTerminalStatus(lastStage))
+            {
                 _terminalStatus = lastStage;
+            }
+            else if (!string.Equals(lastStage, "Created", StringComparison.OrdinalIgnoreCase))
+            {
+                _terminalStatus = "Running";
+            }
         }
 
         if (_followTail && _progressExpanded && _events.Count > 0)
@@ -470,6 +496,11 @@ else
         if (item.Kind == JobStreamKind.Event && item.Event is not null)
         {
             _streamError = null;
+
+            if (IsTerminalStatus(item.Event.Stage))
+                _terminalStatus = item.Event.Stage;
+            else if (!string.Equals(item.Event.Stage, "Created", StringComparison.OrdinalIgnoreCase))
+                _terminalStatus = "Running";
 
             // Extra guard to avoid UI duplicates even if the stream replays.
             // (JobEventsClient should already dedupe.)
@@ -717,27 +748,48 @@ else
         _cancelInFlight = false;
     }
 
-    private async Task CopyLastAsync()
-    {
-        if (_events.Count == 0) return;
-        var last = _events[^1];
-        var text = $"{last.Stage}: {last.Message}";
-        try { await JS.InvokeAsync<bool>("researchEngine.jobEvents.copyText", text); } catch { }
-    }
-
-    private Task OpenLearningInDrawer(Guid learningId)
+    private async Task OpenLearningInDrawer(Guid learningId)
     {
         _evidenceTab = "learnings";
         _highlightLearningId = learningId;
+        _learningsFilter = "";
+        _restrictToLearningGroupId = null;
+
+        var groupRes = await LearningGroups.GetGroupAsync(learningId);
+        if (groupRes.IsSuccess && groupRes.Data is not null)
+        {
+            var refs = groupRes.Data.Evidence?
+                .Select(x => (x.SourceReference ?? "").Trim())
+                .Where(x => !string.IsNullOrWhiteSpace(x))
+                .ToList() ?? new List<string>();
+
+            var topUrl = refs.FirstOrDefault(IsHttpUrl);
+            if (!string.IsNullOrWhiteSpace(topUrl))
+            {
+                _learningsFilter = topUrl;
+            }
+            else if (refs.Count > 0)
+            {
+                _learningsFilter = refs[0];
+            }
+            else
+            {
+                _restrictToLearningGroupId = groupRes.Data.GroupId;
+            }
+        }
+
         _evidenceOpen = true;
-        return InvokeAsync(StateHasChanged);
+        await InvokeAsync(StateHasChanged);
     }
 
     private void ToggleEvidence()
     {
         _evidenceOpen = !_evidenceOpen;
         if (_evidenceOpen)
+        {
             _highlightLearningId = null;
+            _restrictToLearningGroupId = null;
+        }
     }
 
     private void OpenCreateDialog()
@@ -781,6 +833,14 @@ else
 
     private static string ShortId(Guid id) => id.ToString("N")[..8];
 
+    private static bool IsHttpUrl(string text)
+    {
+        if (!Uri.TryCreate(text, UriKind.Absolute, out var uri))
+            return false;
+
+        return uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps;
+    }
+
     private static string ComposeMarkdown(SynthesisDto synthesis)
     {
         var sections = (synthesis.Sections ?? Array.Empty<SynthesisSectionDto>())
@@ -818,15 +878,15 @@ else
 .job-card {
     background: var(--surface);
     border: 1px solid var(--border);
-    border-radius: 12px;
+    border-radius: 8px;
     padding: 14px;
     display: grid;
     gap: 10px;
 }
 
-.row { display: grid; grid-template-columns: 120px 1fr; gap: 10px; align-items: baseline; }
-.label { color: var(--muted); font-size: 0.95rem; }
-.value { color: var(--text); display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.job-card .row { display: grid; grid-template-columns: 120px 1fr; gap: 10px; align-items: baseline; }
+.job-card .label { color: var(--muted); font-size: 0.95rem; }
+.job-card .value { color: var(--text); display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
 
 .pill {
     display: inline-block;
@@ -849,11 +909,11 @@ else
     font-size: 0.85rem;
 }
 
-.toolbar { margin-top: 6px; display: flex; gap: 8px; flex-wrap: wrap; }
+.job-card .toolbar { margin-top: 6px; display: flex; gap: 8px; flex-wrap: wrap; }
 
 .toolbtn {
     padding: 8px 10px;
-    border-radius: 10px;
+    border-radius: 6px;
     border: 1px solid var(--border-strong);
     background: var(--border-strong);
     color: var(--bg);
@@ -863,7 +923,7 @@ else
 
 .dangerbtn {
     padding: 8px 10px;
-    border-radius: 10px;
+    border-radius: 6px;
     border: 1px solid var(--border);
     background: var(--surface);
     color: var(--text);
@@ -875,7 +935,7 @@ else
     border: 1px solid var(--border);
     background: var(--surface);
     color: var(--text);
-    border-radius: 10px;
+    border-radius: 6px;
     padding: 6px 10px;
     cursor: pointer;
 }
@@ -884,9 +944,10 @@ else
 .report {
     margin-top: 14px;
     border: 1px solid var(--border);
-    border-radius: 12px;
+    border-radius: 8px;
     padding: 14px;
     background: var(--surface);
+    overflow: hidden;
 }
 
 .report-head {
@@ -953,7 +1014,7 @@ else
 .progress {
     margin-top: 14px;
     border: 1px solid var(--border);
-    border-radius: 12px;
+    border-radius: 8px;
     padding: 14px;
     background: var(--surface);
 }
@@ -990,12 +1051,12 @@ else
     gap: 10px;
     max-height: 42vh;
     overflow: auto;
-    border-radius: 10px;
+    border-radius: 8px;
 }
 
 .timeline-item {
     border: 1px solid var(--border);
-    border-radius: 12px;
+    border-radius: 8px;
     padding: 12px;
     outline: none;
     background: var(--surface-2);
@@ -1004,7 +1065,7 @@ else
 
 .last-event {
     border: 1px solid var(--border);
-    border-radius: 12px;
+    border-radius: 8px;
     padding: 12px;
     background: var(--surface-2);
     outline: none;

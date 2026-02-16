@@ -13,7 +13,7 @@ public static class Citations
     // [lrn:<guid>] (case-insensitive)
     // Accept both hyphenated GUIDs and compact 32-hex GUIDs (N format)
     private static readonly Regex LrnRegex = new(
-        @"\[lrn:(?<id>(?:[0-9a-fA-F]{32}|[0-9a-fA-F]{8}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{12}))\]",
+        @"\[lrn:(?<id>(?:[0-9a-fA-F]{32}|[0-9a-fA-F]{8}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{12}))(?:(?:\|)(?<label>[^\]]+))?\]",
         RegexOptions.Compiled | RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
 
     public static IReadOnlyList<Guid> ExtractLearningIds(string markdown)
@@ -29,6 +29,46 @@ public static class Citations
                 set.Add(id);
         }
         return set.ToList();
+    }
+
+    public static IReadOnlyList<Guid> ExtractLearningIdsInAppearanceOrder(string markdown)
+    {
+        if (string.IsNullOrWhiteSpace(markdown))
+            return Array.Empty<Guid>();
+
+        var seen = new HashSet<Guid>();
+        var ordered = new List<Guid>();
+
+        foreach (Match m in LrnRegex.Matches(markdown))
+        {
+            var s = m.Groups["id"].Value;
+            if (!Guid.TryParse(s, out var id))
+                continue;
+
+            if (seen.Add(id))
+                ordered.Add(id);
+        }
+
+        return ordered;
+    }
+
+    public static string RewriteLearningCitations(string markdown, Func<Guid, string?> labelProvider)
+    {
+        if (string.IsNullOrWhiteSpace(markdown))
+            return markdown ?? string.Empty;
+
+        return LrnRegex.Replace(markdown, match =>
+        {
+            var s = match.Groups["id"].Value;
+            if (!Guid.TryParse(s, out var id))
+                return match.Value;
+
+            var label = labelProvider(id);
+            if (string.IsNullOrWhiteSpace(label))
+                return $"[lrn:{id:D}]";
+
+            return $"[lrn:{id:D}|{label.Trim()}]";
+        });
     }
 
     public static MarkdownPipeline CreatePipelineWithCitations()
@@ -95,7 +135,8 @@ public static class Citations
             var inline = new LearningCitationInline
             {
                 LearningId = id,
-                Literal = candidate
+                Literal = candidate,
+                DisplayLabel = m.Groups["label"].Success ? m.Groups["label"].Value.Trim() : null
             };
 
             processor.Inline = inline;
@@ -110,6 +151,7 @@ public static class Citations
     {
         public Guid LearningId { get; set; }
         public string Literal { get; set; } = "";
+        public string? DisplayLabel { get; set; }
     }
 
     private sealed class LearningCitationHtmlRenderer : HtmlObjectRenderer<LearningCitationInline>
@@ -124,8 +166,11 @@ public static class Citations
             renderer.WriteEscape(id);
             renderer.Write("\">");
 
-            // Keep citation text visible exactly as authored: [lrn:<guid>]
-            renderer.WriteEscape(obj.Literal);
+            var text = string.IsNullOrWhiteSpace(obj.DisplayLabel)
+                ? obj.Literal
+                : $"[{obj.DisplayLabel}]";
+
+            renderer.WriteEscape(text);
 
             renderer.Write("</button>");
         }
