@@ -56,6 +56,22 @@ public sealed class SynthesisIterationFacade
 
             return ApiResult<RunSynthesisTerminalResponse>.Ok(terminal);
         }
+        catch (ApiException<RunSynthesisAcceptedResponse> acceptedEx) when (acceptedEx.StatusCode == 202)
+        {
+            var accepted = acceptedEx.Result;
+
+            var pseudoTerminal = new RunSynthesisTerminalResponse
+            {
+                JobId = accepted.JobId,
+                SynthesisId = accepted.SynthesisId,
+                Status = accepted.Status,
+                CreatedAt = accepted.CreatedAt,
+                CompletedAt = null,
+                Message = "Synthesis run accepted and queued."
+            };
+
+            return ApiResult<RunSynthesisTerminalResponse>.Ok(pseudoTerminal);
+        }
         catch (Exception ex)
         {
             return ApiResult<RunSynthesisTerminalResponse>.Fail(ApiErrorMapper.Map(ex));

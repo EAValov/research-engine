@@ -41,7 +41,7 @@
 
 .body { display: grid; gap: 12px; }
 
-.meta { color: var(--muted); display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.meta { color: var(--muted); display: flex; gap: 10px; padding-top: 10px; flex-wrap: wrap; align-items: center; }
 .dot { opacity: 0.6; }
 .muted { color: var(--muted); }
 

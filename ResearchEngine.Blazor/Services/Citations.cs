@@ -71,6 +71,25 @@ public static class Citations
         });
     }
 
+    public static string RewriteLearningCitationsToLabels(string markdown, Func<Guid, string?> labelProvider)
+    {
+        if (string.IsNullOrWhiteSpace(markdown))
+            return markdown ?? string.Empty;
+
+        return LrnRegex.Replace(markdown, match =>
+        {
+            var s = match.Groups["id"].Value;
+            if (!Guid.TryParse(s, out var id))
+                return match.Value;
+
+            var label = labelProvider(id);
+            if (string.IsNullOrWhiteSpace(label))
+                return $"[lrn:{id:D}]";
+
+            return $"[{label.Trim()}]";
+        });
+    }
+
     public static MarkdownPipeline CreatePipelineWithCitations()
     {
         return new MarkdownPipelineBuilder()

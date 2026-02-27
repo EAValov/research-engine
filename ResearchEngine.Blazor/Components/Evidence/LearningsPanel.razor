@@ -118,6 +118,13 @@
 
                 <div class="actions">
                     <button type="button"
+                            class="ghost"
+                            disabled="@(!CanOpenExternalUrl(item.SourceReference))"
+                            @onclick="() => OpenExternalAsync(item.SourceReference)">
+                        Open
+                    </button>
+
+                    <button type="button"
                             class="toggle @(pinned ? "active" : "")"
                             @onclick="() => TogglePinned(item.LearningId)"
                             aria-pressed="@pinned">
@@ -372,6 +379,38 @@
     {
         Overrides.ToggleExcludedLearning(JobId, learningId);
         StateHasChanged();
+    }
+
+    private async Task OpenExternalAsync(string? rawReference)
+    {
+        var url = BuildExternalUrl(rawReference);
+        if (url is null) return;
+
+        try { await JS.InvokeVoidAsync("open", url, "_blank", "noopener,noreferrer"); } catch { }
+    }
+
+    private static bool CanOpenExternalUrl(string? rawReference)
+        => BuildExternalUrl(rawReference) is not null;
+
+    private static string? BuildExternalUrl(string? rawReference)
+    {
+        var raw = rawReference?.Trim();
+        if (string.IsNullOrWhiteSpace(raw))
+            return null;
+
+        if (Uri.TryCreate(raw, UriKind.Absolute, out var absolute) &&
+            (absolute.Scheme == Uri.UriSchemeHttp || absolute.Scheme == Uri.UriSchemeHttps))
+        {
+            return absolute.ToString();
+        }
+
+        if (Uri.TryCreate($"https://{raw}", UriKind.Absolute, out var withScheme) &&
+            (withScheme.Scheme == Uri.UriSchemeHttp || withScheme.Scheme == Uri.UriSchemeHttps))
+        {
+            return withScheme.ToString();
+        }
+
+        return null;
     }
 
     private void OpenAddDialog()

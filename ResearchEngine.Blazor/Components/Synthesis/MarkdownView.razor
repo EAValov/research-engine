@@ -84,6 +84,13 @@
                 await JS.InvokeVoidAsync("researchEngine.citations.unregisterGlobalClose");
         }
         catch { }
+
+        // Render fenced mermaid code blocks as diagrams.
+        try
+        {
+            await JS.InvokeVoidAsync("researchEngine.mermaid.render", _containerRef);
+        }
+        catch { }
     }
 
     private async Task PrefetchSafeAsync(IReadOnlyList<Guid> ids)

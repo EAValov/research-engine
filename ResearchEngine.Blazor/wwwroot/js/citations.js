@@ -132,3 +132,127 @@ window.researchEngine.citations = (function () {
 
   return { wire, registerGlobalClose, unregisterGlobalClose, scrollIntoViewById };
 })();
+
+window.researchEngine.downloadTextFile = function (fileName, content) {
+  const trimmed = typeof fileName === "string" ? fileName.trim() : "";
+  const safeName = trimmed.length > 0 ? trimmed : "synthesis.md";
+  const finalName = safeName.toLowerCase().endsWith(".md") ? safeName : `${safeName}.md`;
+  const text = typeof content === "string" ? content : "";
+
+  const blob = new Blob([text], { type: "text/markdown;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = finalName;
+  anchor.rel = "noopener noreferrer";
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+
+  URL.revokeObjectURL(url);
+};
+
+window.researchEngine.mermaid = (function () {
+  let mermaidLoadPromise = null;
+  let initialized = false;
+  let renderCounter = 0;
+
+  function ensureMermaidLoaded() {
+    if (window.mermaid) return Promise.resolve(window.mermaid);
+    if (mermaidLoadPromise) return mermaidLoadPromise;
+
+    mermaidLoadPromise = new Promise((resolve, reject) => {
+      const existing = document.querySelector("script[data-research-mermaid='1']");
+      if (existing) {
+        existing.addEventListener("load", () => resolve(window.mermaid), { once: true });
+        existing.addEventListener("error", () => reject(new Error("Failed to load mermaid script")), { once: true });
+        return;
+      }
+
+      const script = document.createElement("script");
+      script.src = "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js";
+      script.async = true;
+      script.defer = true;
+      script.setAttribute("data-research-mermaid", "1");
+      script.onload = () => resolve(window.mermaid);
+      script.onerror = () => reject(new Error("Failed to load mermaid script"));
+      document.head.appendChild(script);
+    });
+
+    return mermaidLoadPromise;
+  }
+
+  function transformFencedBlocks(container) {
+    const blocks = container.querySelectorAll("pre > code.language-mermaid, pre > code.lang-mermaid");
+    if (!blocks.length) return 0;
+
+    let converted = 0;
+    for (const code of blocks) {
+      const pre = code.parentElement;
+      if (!pre) continue;
+
+      const graph = document.createElement("div");
+      graph.className = "mermaid";
+      graph.textContent = code.textContent || "";
+      pre.replaceWith(graph);
+      converted += 1;
+    }
+    return converted;
+  }
+
+  async function render(container) {
+    if (!container) return false;
+
+    transformFencedBlocks(container);
+
+    const nodes = Array.from(container.querySelectorAll(".mermaid"));
+    if (nodes.length === 0) return false;
+
+    const mermaid = await ensureMermaidLoaded().catch(() => null);
+    if (!mermaid) return false;
+
+    if (!initialized) {
+      mermaid.initialize({
+        startOnLoad: false,
+        securityLevel: "strict",
+      });
+      initialized = true;
+    }
+
+    const targets = nodes.filter((n) => !n.dataset.researchMermaidRendered);
+    if (targets.length === 0) return true;
+
+    for (const node of targets)
+      node.dataset.researchMermaidRendered = "1";
+
+    try {
+      if (typeof mermaid.run === "function") {
+        await mermaid.run({ nodes: targets });
+        return true;
+      }
+    } catch {
+      // Fallback to legacy API below.
+    }
+
+    if (!mermaid.mermaidAPI || typeof mermaid.mermaidAPI.render !== "function")
+      return false;
+
+    for (const node of targets) {
+      const id = `re-mermaid-${++renderCounter}`;
+      const source = node.textContent || "";
+      try {
+        const output = await mermaid.mermaidAPI.render(id, source);
+        const svg = typeof output === "string" ? output : output?.svg;
+        if (svg)
+          node.innerHTML = svg;
+      } catch {
+        // Leave raw text if rendering fails.
+      }
+    }
+
+    return true;
+  }
+
+  return { render };
+})();

@@ -87,3 +87,8 @@
     overflow: auto;
 }
 .md pre code { background: transparent; border: none; padding: 0; }
+
+.md .mermaid {
+    overflow-x: auto;
+    max-width: 100%;
+}

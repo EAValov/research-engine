@@ -75,6 +75,13 @@ else
                 <button class="secondarybtn" type="button" @onclick="OpenCreateDialog" aria-haspopup="dialog">
                     New synthesis
                 </button>
+
+                <button class="secondarybtn"
+                        type="button"
+                        @onclick="ExportSynthesisAsync"
+                        disabled="@string.IsNullOrWhiteSpace(_synthesisMarkdown)">
+                    Export
+                </button>
             }
 
             @if (IsRunning)
@@ -311,6 +318,9 @@ else
     private bool _progressExpanded;
 
     private CancellationTokenSource? _streamCts;
+    private CancellationTokenSource? _synthesisWatchCts;
+    private Task? _synthesisWatchTask;
+    private Guid? _watchingSynthesisId;
 
     private bool _cancelInFlight;
     private ApiError? _cancelError;
@@ -373,6 +383,8 @@ else
 
     private async Task LoadAllAsync()
     {
+        await StopSynthesisWatchAsync();
+
         _jobError = null;
         _eventsError = null;
         _streamError = null;
@@ -540,6 +552,13 @@ else
             {
                 await StopStreamAsync();
 
+                if (_watchingSynthesisId is null
+                    || _doneSynthesisId is null
+                    || _watchingSynthesisId == _doneSynthesisId)
+                {
+                    await StopSynthesisWatchAsync();
+                }
+
                 if (string.Equals(_terminalStatus, "Completed", StringComparison.OrdinalIgnoreCase))
                 {
                     if (_selectedSynthesisId is null)
@@ -563,7 +582,6 @@ else
     private async Task LoadLatestSynthesisAsync()
     {
         if (!IsCompleted) return;
-        if (_synthesisLoading) return;
 
         _synthesisLoading = true;
         _synthesisError = null;
@@ -581,17 +599,31 @@ else
 
         if (_latestSynthesis is null)
         {
+            await StopSynthesisWatchAsync();
             _synthesisEmpty = true;
             _synthesisMarkdown = string.Empty;
+            _synthesisLoading = false;
         }
         else
         {
-            _synthesisMarkdown = ComposeMarkdown(_latestSynthesis);
-            _synthesisEmpty = string.IsNullOrWhiteSpace(_synthesisMarkdown);
+            var status = _latestSynthesis.Status?.Trim() ?? string.Empty;
+
+            if (IsSynthesisActiveStatus(status))
+            {
+                _synthesisMarkdown = ComposeMarkdown(_latestSynthesis);
+                _synthesisEmpty = string.IsNullOrWhiteSpace(_synthesisMarkdown);
+                _synthesisLoading = true;
+                await StartSynthesisWatchAsync(_latestSynthesis.Id);
+            }
+            else
+            {
+                await StopSynthesisWatchAsync();
+                ApplyLatestSynthesis(_latestSynthesis, markUpdated: false);
+                _synthesisLoading = false;
+            }
         }
 
         _synthesisLoadedOnce = true;
-        _synthesisLoading = false;
     }
 
     private async Task OpenSynthesisAsync(Guid synthesisId)
@@ -684,7 +716,28 @@ else
             await ReloadEventsAsync();
 
             var terminal = res.Data!;
-            if (!string.Equals(terminal.Status, "Completed", StringComparison.OrdinalIgnoreCase))
+            var terminalStatus = terminal.Status?.Trim() ?? string.Empty;
+
+            if (IsSynthesisActiveStatus(terminalStatus))
+            {
+                _createDialogOpen = false;
+                _prefillInstructions = null;
+                _prefillOutline = null;
+                _baseSynthesisId = null;
+
+                _selectedSynthesisId = null;
+                _selectedSynthesisError = null;
+                _retryOpenId = null;
+
+                _synthesisLoading = true;
+                _synthesisEmpty = true;
+                _synthesisLoadedOnce = true;
+
+                await StartSynthesisWatchAsync(terminal.SynthesisId);
+                return;
+            }
+
+            if (!string.Equals(terminalStatus, "Completed", StringComparison.OrdinalIgnoreCase))
             {
                 _iterError = new ApiError(ApiErrorKind.Unexpected, $"Synthesis finished with status: {terminal.Status}. {terminal.Message}");
                 _synthesisLoading = false;
@@ -693,14 +746,8 @@ else
 
             // Prefer direct fetch by id if available
             var synth = await Api.SynthesesGET2Async(terminal.SynthesisId);
-            _latestSynthesis = synth;
-
-            _synthesisMarkdown = ComposeMarkdown(synth);
-            _synthesisLoadedOnce = true;
-            _synthesisEmpty = string.IsNullOrWhiteSpace(_synthesisMarkdown);
+            ApplyLatestSynthesis(synth, markUpdated: true);
             _synthesisLoading = false;
-
-            _reportUpdatedAt = DateTimeOffset.Now;
 
             _selectedSynthesisId = null;
             _selectedSynthesisError = null;
@@ -802,6 +849,84 @@ else
         _createDialogOpen = true;
     }
 
+    private async Task ExportSynthesisAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_synthesisMarkdown))
+            return;
+
+        var exportId = _selectedSynthesisId ?? _latestSynthesis?.Id ?? JobId;
+        var fileName = $"synthesis-{ShortId(exportId)}.md";
+        var exportMarkdown = _synthesisMarkdown;
+
+        try
+        {
+            exportMarkdown = await BuildExportMarkdownAsync(_synthesisMarkdown);
+        }
+        catch
+        {
+            // Fall back to raw markdown if citation enrichment fails.
+        }
+
+        try
+        {
+            await JS.InvokeVoidAsync("researchEngine.downloadTextFile", fileName, exportMarkdown);
+        }
+        catch
+        {
+            // Keep page responsive if browser download fails.
+        }
+    }
+
+    private async Task<string> BuildExportMarkdownAsync(string markdown)
+    {
+        var orderedIds = Citations.ExtractLearningIdsInAppearanceOrder(markdown);
+        if (orderedIds.Count == 0)
+            return markdown;
+
+        try { await LearningGroups.PrefetchGroupsAsync(orderedIds); } catch { }
+
+        var groupIndexByKey = new Dictionary<Guid, int>();
+        var citationIndexByLearningId = new Dictionary<Guid, int>();
+        var sourceByIndex = new Dictionary<int, string>();
+        var nextIndex = 1;
+
+        foreach (var learningId in orderedIds)
+        {
+            LearningGroupCardDto? group = null;
+            if (LearningGroups.TryGetCached(learningId, out var cached))
+                group = cached;
+
+            var groupKey = group?.GroupId ?? learningId;
+
+            if (!groupIndexByKey.TryGetValue(groupKey, out var index))
+            {
+                index = nextIndex++;
+                groupIndexByKey[groupKey] = index;
+                sourceByIndex[index] = GetTopReferenceForExport(group, learningId);
+            }
+
+            citationIndexByLearningId[learningId] = index;
+        }
+
+        var rewritten = Citations.RewriteLearningCitationsToLabels(markdown, learningId =>
+        {
+            if (!citationIndexByLearningId.TryGetValue(learningId, out var index))
+                return null;
+
+            return index.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        });
+
+        if (sourceByIndex.Count == 0)
+            return rewritten;
+
+        var sources = sourceByIndex
+            .OrderBy(x => x.Key)
+            .Select(x => $"{x.Key}. {x.Value}")
+            .ToList();
+
+        return $"{rewritten}\n\n## Sources\n\n{string.Join("\n", sources)}";
+    }
+
     private void ToggleProgressExpanded()
     {
         _progressExpanded = !_progressExpanded;
@@ -814,6 +939,145 @@ else
                 await Task.Yield();
                 try { await JS.InvokeVoidAsync("researchEngine.jobEvents.scrollToBottom", _timelineRef); } catch { }
             });
+        }
+    }
+
+    private static bool IsSynthesisActiveStatus(string? status)
+        => status is not null && (status.Equals("Created", StringComparison.OrdinalIgnoreCase)
+                               || status.Equals("Running", StringComparison.OrdinalIgnoreCase));
+
+    private void ApplyLatestSynthesis(SynthesisDto synth, bool markUpdated)
+    {
+        _latestSynthesis = synth;
+        _synthesisMarkdown = ComposeMarkdown(synth);
+        _synthesisLoadedOnce = true;
+        _synthesisEmpty = string.IsNullOrWhiteSpace(_synthesisMarkdown);
+
+        if (markUpdated)
+            _reportUpdatedAt = DateTimeOffset.Now;
+    }
+
+    private async Task StartSynthesisWatchAsync(Guid synthesisId)
+    {
+        if (_watchingSynthesisId == synthesisId && _synthesisWatchTask is { IsCompleted: false })
+            return;
+
+        await StopSynthesisWatchAsync();
+
+        _watchingSynthesisId = synthesisId;
+        _synthesisWatchCts = new CancellationTokenSource();
+        _synthesisWatchTask = WatchSynthesisAsync(synthesisId, _synthesisWatchCts.Token);
+    }
+
+    private async Task StopSynthesisWatchAsync()
+    {
+        var cts = _synthesisWatchCts;
+        var task = _synthesisWatchTask;
+
+        _synthesisWatchCts = null;
+        _synthesisWatchTask = null;
+        _watchingSynthesisId = null;
+
+        try { cts?.Cancel(); } catch { }
+
+        if (task is not null)
+        {
+            try { await task; } catch { }
+        }
+
+        try { cts?.Dispose(); } catch { }
+    }
+
+    private async Task WatchSynthesisAsync(Guid synthesisId, CancellationToken ct)
+    {
+        var attempts = 0;
+
+        try
+        {
+            while (!ct.IsCancellationRequested && attempts++ < 600) // ~15 min at 1.5s interval
+            {
+                SynthesisDto? synth = null;
+
+                try
+                {
+                    synth = await Api.SynthesesGET2Async(synthesisId, ct);
+                }
+                catch (ApiException ex) when (ex.StatusCode == 404)
+                {
+                    // Not visible yet. Keep polling.
+                }
+                catch (OperationCanceledException)
+                {
+                    break;
+                }
+                catch
+                {
+                    // Best-effort watcher; do not break on transient failures.
+                }
+
+                if (synth is not null)
+                {
+                    var status = synth.Status?.Trim() ?? string.Empty;
+
+                    if (string.Equals(status, "Completed", StringComparison.OrdinalIgnoreCase))
+                    {
+                        await InvokeAsync(async () =>
+                        {
+                            ApplyLatestSynthesis(synth, markUpdated: true);
+                            _synthesisLoading = false;
+                            _iterError = null;
+                            _createDialogOpen = false;
+
+                            _selectedSynthesisId = null;
+                            _selectedSynthesisError = null;
+                            _retryOpenId = null;
+
+                            await ReloadEventsAsync();
+                            StateHasChanged();
+                        });
+                        return;
+                    }
+
+                    if (string.Equals(status, "Failed", StringComparison.OrdinalIgnoreCase))
+                    {
+                        await InvokeAsync(async () =>
+                        {
+                            _synthesisLoading = false;
+                            _iterError = new ApiError(ApiErrorKind.Unexpected, "Synthesis finished with status: Failed.");
+                            await ReloadEventsAsync();
+                            StateHasChanged();
+                        });
+                        return;
+                    }
+
+                    await InvokeAsync(() =>
+                    {
+                        _latestSynthesis = synth;
+                        _synthesisLoadedOnce = true;
+                        _synthesisLoading = true;
+                        StateHasChanged();
+                    });
+                }
+
+                if (attempts % 3 == 0)
+                    await InvokeAsync(ReloadEventsAsync);
+
+                await Task.Delay(1500, ct);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // expected on cancellation
+        }
+        finally
+        {
+            if (_watchingSynthesisId == synthesisId)
+            {
+                try { _synthesisWatchCts?.Dispose(); } catch { }
+                _synthesisWatchCts = null;
+                _synthesisWatchTask = null;
+                _watchingSynthesisId = null;
+            }
         }
     }
 
@@ -839,6 +1103,31 @@ else
             return false;
 
         return uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps;
+    }
+
+    private static string GetTopReferenceForExport(LearningGroupCardDto? group, Guid learningId)
+    {
+        if (group?.Evidence is not null)
+        {
+            foreach (var ev in group.Evidence)
+            {
+                var reference = (ev.SourceReference ?? string.Empty).Trim();
+                if (string.IsNullOrWhiteSpace(reference))
+                    continue;
+
+                if (IsHttpUrl(reference))
+                    return reference;
+            }
+
+            var first = group.Evidence
+                .Select(x => (x.SourceReference ?? string.Empty).Trim())
+                .FirstOrDefault(x => !string.IsNullOrWhiteSpace(x));
+
+            if (!string.IsNullOrWhiteSpace(first))
+                return first;
+        }
+
+        return $"learning:{learningId:N}";
     }
 
     private static string ComposeMarkdown(SynthesisDto synthesis)
@@ -870,6 +1159,7 @@ else
 
     public async ValueTask DisposeAsync()
     {
+        await StopSynthesisWatchAsync();
         await StopStreamAsync();
     }
 }
