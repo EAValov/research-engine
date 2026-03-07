@@ -25,863 +25,6 @@ paths:
       responses:
         '200':
           description: OK
-  /api/research/jobs:
-    get:
-      tags:
-        - Research Jobs API
-      responses:
-        '200':
-          description: OK
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ListResearchJobsResponse'
-        '401':
-          description: Unauthorized
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '403':
-          description: Forbidden
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-    post:
-      tags:
-        - Research Jobs API
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/CreateResearchJobRequest'
-        required: true
-      responses:
-        '201':
-          description: Created
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/CreateResearchJobResponse'
-        '400':
-          description: Bad Request
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '401':
-          description: Unauthorized
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '403':
-          description: Forbidden
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-  '/api/research/jobs/{jobId}':
-    get:
-      tags:
-        - Research Jobs API
-      parameters:
-        - name: jobId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-      responses:
-        '200':
-          description: OK
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/GetResearchJobResponse'
-        '404':
-          description: Not Found
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '401':
-          description: Unauthorized
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '403':
-          description: Forbidden
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-    delete:
-      tags:
-        - Research Jobs API
-      parameters:
-        - name: jobId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-      requestBody:
-        content:
-          application/json:
-            schema:
-              oneOf:
-                - type: 'null'
-                - $ref: '#/components/schemas/DeleteJobRequest'
-      responses:
-        '204':
-          description: No Content
-        '404':
-          description: Not Found
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '401':
-          description: Unauthorized
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '403':
-          description: Forbidden
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-  '/api/research/jobs/{jobId}/cancel':
-    post:
-      tags:
-        - Research Jobs API
-      parameters:
-        - name: jobId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-      requestBody:
-        content:
-          application/json:
-            schema:
-              oneOf:
-                - type: 'null'
-                - $ref: '#/components/schemas/CancelJobRequest'
-      responses:
-        '202':
-          description: Accepted
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/CancelJobResponse'
-        '404':
-          description: Not Found
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '401':
-          description: Unauthorized
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '403':
-          description: Forbidden
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-  '/api/research/jobs/{jobId}/sources':
-    get:
-      tags:
-        - Research Jobs API
-      parameters:
-        - name: jobId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-      responses:
-        '200':
-          description: OK
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ListSourcesResponse'
-        '404':
-          description: Not Found
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '401':
-          description: Unauthorized
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '403':
-          description: Forbidden
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-  '/api/research/jobs/{jobId}/events':
-    get:
-      tags:
-        - Research Jobs API
-      parameters:
-        - name: jobId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-      responses:
-        '200':
-          description: OK
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/ResearchEventDto'
-        '404':
-          description: Not Found
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '401':
-          description: Unauthorized
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '403':
-          description: Forbidden
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-  '/api/research/jobs/{jobId}/events/stream-token':
-    post:
-      tags:
-        - Research Jobs API
-      parameters:
-        - name: jobId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-      responses:
-        '200':
-          description: OK
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/CreateSseTokenResponse'
-        '404':
-          description: Not Found
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '401':
-          description: Unauthorized
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '403':
-          description: Forbidden
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-  '/api/research/jobs/{jobId}/events/stream':
-    get:
-      tags:
-        - Research Jobs API
-      parameters:
-        - name: jobId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-      responses:
-        '200':
-          description: OK
-        '401':
-          description: Unauthorized
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '404':
-          description: Not Found
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-  '/api/research/jobs/{jobId}/learnings':
-    get:
-      tags:
-        - Research Jobs API
-      parameters:
-        - name: jobId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-        - name: Skip
-          in: query
-          schema:
-            maximum: 2147483647
-            minimum: 0
-            pattern: '^-?(?:0|[1-9]\d*)$'
-            type:
-              - integer
-              - string
-            format: int32
-        - name: Take
-          in: query
-          schema:
-            maximum: 500
-            minimum: 1
-            pattern: '^-?(?:0|[1-9]\d*)$'
-            type:
-              - integer
-              - string
-            format: int32
-      responses:
-        '200':
-          description: OK
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ListLearningsResponse'
-        '404':
-          description: Not Found
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '401':
-          description: Unauthorized
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '403':
-          description: Forbidden
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-    post:
-      tags:
-        - Research Jobs API
-      parameters:
-        - name: jobId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/AddLearningRequest'
-        required: true
-      responses:
-        '200':
-          description: OK
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/AddLearningResponse'
-        '400':
-          description: Bad Request
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '404':
-          description: Not Found
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '401':
-          description: Unauthorized
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '403':
-          description: Forbidden
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-  '/api/research/jobs/{jobId}/learnings/{learningId}':
-    delete:
-      tags:
-        - Research Jobs API
-      parameters:
-        - name: jobId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-        - name: learningId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-      responses:
-        '204':
-          description: No Content
-        '404':
-          description: Not Found
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '401':
-          description: Unauthorized
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '403':
-          description: Forbidden
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-  '/api/research/learnings/{learningId}/group':
-    get:
-      tags:
-        - Research Jobs API
-      parameters:
-        - name: learningId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-      responses:
-        '200':
-          description: OK
-        '404':
-          description: Not Found
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '401':
-          description: Unauthorized
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '403':
-          description: Forbidden
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-  /api/research/learnings/groups/resolve:
-    post:
-      tags:
-        - Research Jobs API
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/BatchResolveLearningGroupsRequest'
-        required: true
-      responses:
-        '200':
-          description: OK
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/BatchResolveLearningGroupsResponse'
-        '400':
-          description: Bad Request
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '401':
-          description: Unauthorized
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '403':
-          description: Forbidden
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-  '/api/research/jobs/{jobId}/syntheses':
-    get:
-      tags:
-        - Research Jobs API
-      parameters:
-        - name: jobId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-        - name: skip
-          in: query
-          schema:
-            pattern: '^-?(?:0|[1-9]\d*)$'
-            type:
-              - integer
-              - string
-            format: int32
-        - name: take
-          in: query
-          schema:
-            pattern: '^-?(?:0|[1-9]\d*)$'
-            type:
-              - integer
-              - string
-            format: int32
-      responses:
-        '200':
-          description: OK
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ListSynthesesResponse'
-        '404':
-          description: Not Found
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '401':
-          description: Unauthorized
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '403':
-          description: Forbidden
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-    post:
-      tags:
-        - Research Jobs API
-      parameters:
-        - name: jobId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/StartSynthesisRequest'
-        required: true
-      responses:
-        '201':
-          description: Created
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/CreateSynthesisResponse'
-        '404':
-          description: Not Found
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '400':
-          description: Bad Request
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '401':
-          description: Unauthorized
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '403':
-          description: Forbidden
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-  '/api/research/jobs/{jobId}/syntheses/latest':
-    get:
-      tags:
-        - Research Jobs API
-      parameters:
-        - name: jobId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-      responses:
-        '200':
-          description: OK
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/LatestSynthesisResponse'
-        '404':
-          description: Not Found
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '401':
-          description: Unauthorized
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '403':
-          description: Forbidden
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-  '/api/research/syntheses/{synthesisId}':
-    get:
-      tags:
-        - Research Jobs API
-      parameters:
-        - name: synthesisId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-      responses:
-        '200':
-          description: OK
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/SynthesisDto'
-        '404':
-          description: Not Found
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '401':
-          description: Unauthorized
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '403':
-          description: Forbidden
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-  '/api/research/syntheses/{synthesisId}/run':
-    post:
-      tags:
-        - Research Jobs API
-      parameters:
-        - name: synthesisId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-      responses:
-        '200':
-          description: OK
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/RunSynthesisTerminalResponse'
-        '202':
-          description: Accepted
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/RunSynthesisAcceptedResponse'
-        '404':
-          description: Not Found
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '401':
-          description: Unauthorized
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '403':
-          description: Forbidden
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-  '/api/research/syntheses/{synthesisId}/overrides/sources':
-    put:
-      tags:
-        - Research Jobs API
-      parameters:
-        - name: synthesisId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-      requestBody:
-        content:
-          application/json:
-            schema:
-              type: array
-              items:
-                $ref: '#/components/schemas/SynthesisSourceOverrideDto'
-        required: true
-      responses:
-        '200':
-          description: OK
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/UpsertOverridesResponse'
-        '404':
-          description: Not Found
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '401':
-          description: Unauthorized
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '403':
-          description: Forbidden
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-  '/api/research/syntheses/{synthesisId}/overrides/learnings':
-    put:
-      tags:
-        - Research Jobs API
-      parameters:
-        - name: synthesisId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-      requestBody:
-        content:
-          application/json:
-            schema:
-              type: array
-              items:
-                $ref: '#/components/schemas/SynthesisLearningOverrideDto'
-        required: true
-      responses:
-        '200':
-          description: OK
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/UpsertOverridesResponse'
-        '404':
-          description: Not Found
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '401':
-          description: Unauthorized
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '403':
-          description: Forbidden
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-  '/api/research/jobs/{jobId}/sources/{sourceId}':
-    delete:
-      tags:
-        - Research Jobs API
-      parameters:
-        - name: jobId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-        - name: sourceId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-      responses:
-        '204':
-          description: No Content
-        '404':
-          description: Not Found
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '401':
-          description: Unauthorized
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '403':
-          description: Forbidden
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
   /api/jobs:
     get:
       tags:
@@ -1092,8 +235,8 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
-  '/api/jobs/{jobId}/events':
-    get:
+  '/api/jobs/{jobId}/sources/{sourceId}':
+    delete:
       tags:
         - Research API
       parameters:
@@ -1103,15 +246,15 @@ paths:
           schema:
             type: string
             format: uuid
+        - name: sourceId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
       responses:
-        '200':
-          description: OK
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/ResearchEventDto'
+        '204':
+          description: No Content
         '404':
           description: Not Found
           content:
@@ -1126,68 +269,6 @@ paths:
                 $ref: '#/components/schemas/ProblemDetails'
         '403':
           description: Forbidden
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-  '/api/jobs/{jobId}/events/stream-token':
-    post:
-      tags:
-        - Research API
-      parameters:
-        - name: jobId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-      responses:
-        '200':
-          description: OK
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/CreateSseTokenResponse'
-        '404':
-          description: Not Found
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '401':
-          description: Unauthorized
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '403':
-          description: Forbidden
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-  '/api/jobs/{jobId}/events/stream':
-    get:
-      tags:
-        - Research API
-      parameters:
-        - name: jobId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-      responses:
-        '200':
-          description: OK
-        '401':
-          description: Unauthorized
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '404':
-          description: Not Found
           content:
             application/problem+json:
               schema:
@@ -1701,8 +782,8 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
-  '/api/jobs/{jobId}/sources/{sourceId}':
-    delete:
+  '/api/jobs/{jobId}/events':
+    get:
       tags:
         - Research API
       parameters:
@@ -1712,15 +793,15 @@ paths:
           schema:
             type: string
             format: uuid
-        - name: sourceId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
       responses:
-        '204':
-          description: No Content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ResearchEventDto'
         '404':
           description: Not Found
           content:
@@ -1739,25 +820,26 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
-  /api/research/protocol/clarifications:
+  '/api/jobs/{jobId}/events/stream-token':
     post:
       tags:
-        - Research Protocol API
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/ProtocolClarificationsRequest'
-        required: true
+        - Research API
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
       responses:
         '200':
           description: OK
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ProtocolClarificationsResponse'
-        '400':
-          description: Bad Request
+                $ref: '#/components/schemas/CreateSseTokenResponse'
+        '404':
+          description: Not Found
           content:
             application/problem+json:
               schema:
@@ -1774,37 +856,28 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
-  /api/research/protocol/parameters:
-    post:
+  '/api/jobs/{jobId}/events/stream':
+    get:
       tags:
-        - Research Protocol API
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/ProtocolParametersRequest'
-        required: true
+        - Research API
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
       responses:
         '200':
           description: OK
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ProtocolParametersResponse'
-        '400':
-          description: Bad Request
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
         '401':
           description: Unauthorized
           content:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
-        '403':
-          description: Forbidden
+        '404':
+          description: Not Found
           content:
             application/problem+json:
               schema:
@@ -2933,6 +2006,5 @@ components:
           format: int32
 tags:
   - name: OpenAiModelEndpoints
-  - name: Research Jobs API
   - name: Research API
   - name: Research Protocol API

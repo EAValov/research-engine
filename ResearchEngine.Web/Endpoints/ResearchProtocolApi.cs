@@ -7,15 +7,14 @@ public static class ResearchProtocolApi
 {
     public static void MapResearchProtocolApi(this WebApplication app)
     {
-        MapRoutes(app.MapGroup("/api/research/protocol")
-            .WithTags("Research Protocol API")
-            .RequireAuthorization());
-
         MapRoutes(app.MapGroup("/api/protocol")
             .WithTags("Research Protocol API")
             .RequireAuthorization());
 
-        return;
+        MapRoutes(app.MapGroup("/api/research/protocol")
+            .WithTags("Research Protocol API")
+            .RequireAuthorization()
+            .ExcludeFromDescription());
 
         static void MapRoutes(RouteGroupBuilder api)
         {
