@@ -8,6 +8,7 @@ param(
     [string]$DocumentName = "v1",
     [string]$ServerUrl = "http://localhost:8090/",
     [int]$StartupTimeoutSeconds = 30,
+    [string]$BuildConfiguration = "Debug",
     [switch]$UseLocalDotnetCliHome
 )
 
@@ -53,7 +54,7 @@ $process = $null
 try {
     $process = Start-Process `
         -FilePath "dotnet" `
-        -ArgumentList @("run", "--project", $projectFilePath, "--no-build", "--no-restore", "--no-launch-profile") `
+        -ArgumentList @("run", "--project", $projectFilePath, "--configuration", $BuildConfiguration, "--no-build", "--no-restore", "--no-launch-profile") `
         -WorkingDirectory $projectDirPath `
         -PassThru `
         -RedirectStandardOutput $stdoutLog `
