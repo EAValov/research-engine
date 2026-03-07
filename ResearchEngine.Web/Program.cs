@@ -279,6 +279,7 @@ app.MapResearchProtocolApi();
 app.UseCors("BlazorDev");
 
 app.MapOpenApi();
+app.MapOpenApi("/openapi/{documentName}.yaml");
 app.MapScalarApiReference();
 app.UseHangfireDashboard("/hangfire");
 

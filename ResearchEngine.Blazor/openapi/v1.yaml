@@ -1,4 +1,4 @@
-openapi: 3.1.1
+openapi: '3.1.1'
 info:
   title: ResearchEngine.Web | v1
   version: 1.0.0
@@ -10,7 +10,7 @@ paths:
       tags:
         - OpenAiModelEndpoints
       responses:
-        "200":
+        '200':
           description: OK
   /v1/chat/completions:
     post:
@@ -20,34 +20,34 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/ChatRequest"
+              $ref: '#/components/schemas/ChatRequest'
         required: true
       responses:
-        "200":
+        '200':
           description: OK
-  /api/jobs:
+  /api/research/jobs:
     get:
       tags:
         - Research Jobs API
       responses:
-        "200":
+        '200':
           description: OK
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ListResearchJobsResponse"
-        "401":
+                $ref: '#/components/schemas/ListResearchJobsResponse'
+        '401':
           description: Unauthorized
           content:
             application/problem+json:
               schema:
-                $ref: "#/components/schemas/ProblemDetails"
-        "403":
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
           description: Forbidden
           content:
             application/problem+json:
               schema:
-                $ref: "#/components/schemas/ProblemDetails"
+                $ref: '#/components/schemas/ProblemDetails'
     post:
       tags:
         - Research Jobs API
@@ -55,34 +55,34 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/CreateResearchJobRequest"
+              $ref: '#/components/schemas/CreateResearchJobRequest'
         required: true
       responses:
-        "200":
-          description: OK
+        '201':
+          description: Created
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/CreateResearchJobResponse"
-        "400":
+                $ref: '#/components/schemas/CreateResearchJobResponse'
+        '400':
           description: Bad Request
           content:
             application/problem+json:
               schema:
-                $ref: "#/components/schemas/ProblemDetails"
-        "401":
+                $ref: '#/components/schemas/ProblemDetails'
+        '401':
           description: Unauthorized
           content:
             application/problem+json:
               schema:
-                $ref: "#/components/schemas/ProblemDetails"
-        "403":
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
           description: Forbidden
           content:
             application/problem+json:
               schema:
-                $ref: "#/components/schemas/ProblemDetails"
-  /api/jobs/{jobId}:
+                $ref: '#/components/schemas/ProblemDetails'
+  '/api/research/jobs/{jobId}':
     get:
       tags:
         - Research Jobs API
@@ -94,30 +94,30 @@ paths:
             type: string
             format: uuid
       responses:
-        "200":
+        '200':
           description: OK
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/GetResearchJobResponse"
-        "401":
-          description: Unauthorized
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetails"
-        "403":
-          description: Forbidden
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetails"
-        "404":
+                $ref: '#/components/schemas/GetResearchJobResponse'
+        '404':
           description: Not Found
           content:
             application/problem+json:
               schema:
-                $ref: "#/components/schemas/ProblemDetails"
+                $ref: '#/components/schemas/ProblemDetails'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
     delete:
       tags:
         - Research Jobs API
@@ -133,30 +133,30 @@ paths:
           application/json:
             schema:
               oneOf:
-                - type: "null"
-                - $ref: "#/components/schemas/DeleteJobRequest"
+                - type: 'null'
+                - $ref: '#/components/schemas/DeleteJobRequest'
       responses:
-        "204":
+        '204':
           description: No Content
-        "401":
-          description: Unauthorized
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetails"
-        "403":
-          description: Forbidden
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetails"
-        "404":
+        '404':
           description: Not Found
           content:
             application/problem+json:
               schema:
-                $ref: "#/components/schemas/ProblemDetails"
-  /api/jobs/{jobId}/cancel:
+                $ref: '#/components/schemas/ProblemDetails'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+  '/api/research/jobs/{jobId}/cancel':
     post:
       tags:
         - Research Jobs API
@@ -172,34 +172,34 @@ paths:
           application/json:
             schema:
               oneOf:
-                - type: "null"
-                - $ref: "#/components/schemas/CancelJobRequest"
+                - type: 'null'
+                - $ref: '#/components/schemas/CancelJobRequest'
       responses:
-        "202":
+        '202':
           description: Accepted
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/CancelJobResponse"
-        "401":
-          description: Unauthorized
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetails"
-        "403":
-          description: Forbidden
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetails"
-        "404":
+                $ref: '#/components/schemas/CancelJobResponse'
+        '404':
           description: Not Found
           content:
             application/problem+json:
               schema:
-                $ref: "#/components/schemas/ProblemDetails"
-  /api/jobs/{jobId}/sources:
+                $ref: '#/components/schemas/ProblemDetails'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+  '/api/research/jobs/{jobId}/sources':
     get:
       tags:
         - Research Jobs API
@@ -211,31 +211,31 @@ paths:
             type: string
             format: uuid
       responses:
-        "200":
+        '200':
           description: OK
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ListSourcesResponse"
-        "401":
-          description: Unauthorized
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetails"
-        "403":
-          description: Forbidden
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetails"
-        "404":
+                $ref: '#/components/schemas/ListSourcesResponse'
+        '404':
           description: Not Found
           content:
             application/problem+json:
               schema:
-                $ref: "#/components/schemas/ProblemDetails"
-  /api/jobs/{jobId}/events:
+                $ref: '#/components/schemas/ProblemDetails'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+  '/api/research/jobs/{jobId}/events':
     get:
       tags:
         - Research Jobs API
@@ -247,33 +247,69 @@ paths:
             type: string
             format: uuid
       responses:
-        "200":
+        '200':
           description: OK
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: "#/components/schemas/ResearchEventDto"
-        "401":
-          description: Unauthorized
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetails"
-        "403":
-          description: Forbidden
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetails"
-        "404":
+                  $ref: '#/components/schemas/ResearchEventDto'
+        '404':
           description: Not Found
           content:
             application/problem+json:
               schema:
-                $ref: "#/components/schemas/ProblemDetails"
-  /api/jobs/{jobId}/events/stream:
+                $ref: '#/components/schemas/ProblemDetails'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+  '/api/research/jobs/{jobId}/events/stream-token':
+    post:
+      tags:
+        - Research Jobs API
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateSseTokenResponse'
+        '404':
+          description: Not Found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+  '/api/research/jobs/{jobId}/events/stream':
     get:
       tags:
         - Research Jobs API
@@ -285,27 +321,21 @@ paths:
             type: string
             format: uuid
       responses:
-        "200":
+        '200':
           description: OK
-        "401":
+        '401':
           description: Unauthorized
           content:
             application/problem+json:
               schema:
-                $ref: "#/components/schemas/ProblemDetails"
-        "403":
-          description: Forbidden
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetails"
-        "404":
+                $ref: '#/components/schemas/ProblemDetails'
+        '404':
           description: Not Found
           content:
             application/problem+json:
               schema:
-                $ref: "#/components/schemas/ProblemDetails"
-  /api/jobs/{jobId}/learnings:
+                $ref: '#/components/schemas/ProblemDetails'
+  '/api/research/jobs/{jobId}/learnings':
     get:
       tags:
         - Research Jobs API
@@ -321,7 +351,7 @@ paths:
           schema:
             maximum: 2147483647
             minimum: 0
-            pattern: ^-?(?:0|[1-9]\d*)$
+            pattern: '^-?(?:0|[1-9]\d*)$'
             type:
               - integer
               - string
@@ -331,36 +361,36 @@ paths:
           schema:
             maximum: 500
             minimum: 1
-            pattern: ^-?(?:0|[1-9]\d*)$
+            pattern: '^-?(?:0|[1-9]\d*)$'
             type:
               - integer
               - string
             format: int32
       responses:
-        "200":
+        '200':
           description: OK
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ListLearningsResponse"
-        "401":
-          description: Unauthorized
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetails"
-        "403":
-          description: Forbidden
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetails"
-        "404":
+                $ref: '#/components/schemas/ListLearningsResponse'
+        '404':
           description: Not Found
           content:
             application/problem+json:
               schema:
-                $ref: "#/components/schemas/ProblemDetails"
+                $ref: '#/components/schemas/ProblemDetails'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
     post:
       tags:
         - Research Jobs API
@@ -375,40 +405,40 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/AddLearningRequest"
+              $ref: '#/components/schemas/AddLearningRequest'
         required: true
       responses:
-        "200":
+        '200':
           description: OK
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/AddLearningResponse"
-        "400":
+                $ref: '#/components/schemas/AddLearningResponse'
+        '400':
           description: Bad Request
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "401":
-          description: Unauthorized
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetails"
-        "403":
-          description: Forbidden
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetails"
-        "404":
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
           description: Not Found
           content:
             application/problem+json:
               schema:
-                $ref: "#/components/schemas/ProblemDetails"
-  /api/jobs/{jobId}/learnings/{learningId}:
+                $ref: '#/components/schemas/ProblemDetails'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+  '/api/research/jobs/{jobId}/learnings/{learningId}':
     delete:
       tags:
         - Research Jobs API
@@ -426,27 +456,27 @@ paths:
             type: string
             format: uuid
       responses:
-        "204":
+        '204':
           description: No Content
-        "401":
-          description: Unauthorized
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetails"
-        "403":
-          description: Forbidden
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetails"
-        "404":
+        '404':
           description: Not Found
           content:
             application/problem+json:
               schema:
-                $ref: "#/components/schemas/ProblemDetails"
-  /api/learnings/{learningId}/group:
+                $ref: '#/components/schemas/ProblemDetails'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+  '/api/research/learnings/{learningId}/group':
     get:
       tags:
         - Research Jobs API
@@ -458,27 +488,27 @@ paths:
             type: string
             format: uuid
       responses:
-        "200":
+        '200':
           description: OK
-        "401":
-          description: Unauthorized
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetails"
-        "403":
-          description: Forbidden
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetails"
-        "404":
+        '404':
           description: Not Found
           content:
             application/problem+json:
               schema:
-                $ref: "#/components/schemas/ProblemDetails"
-  /api/learnings/groups/resolve:
+                $ref: '#/components/schemas/ProblemDetails'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+  /api/research/learnings/groups/resolve:
     post:
       tags:
         - Research Jobs API
@@ -486,34 +516,34 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/BatchResolveLearningGroupsRequest"
+              $ref: '#/components/schemas/BatchResolveLearningGroupsRequest'
         required: true
       responses:
-        "200":
+        '200':
           description: OK
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/BatchResolveLearningGroupsResponse"
-        "400":
+                $ref: '#/components/schemas/BatchResolveLearningGroupsResponse'
+        '400':
           description: Bad Request
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "401":
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
           description: Unauthorized
           content:
             application/problem+json:
               schema:
-                $ref: "#/components/schemas/ProblemDetails"
-        "403":
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
           description: Forbidden
           content:
             application/problem+json:
               schema:
-                $ref: "#/components/schemas/ProblemDetails"
-  /api/jobs/{jobId}/syntheses:
+                $ref: '#/components/schemas/ProblemDetails'
+  '/api/research/jobs/{jobId}/syntheses':
     get:
       tags:
         - Research Jobs API
@@ -527,7 +557,7 @@ paths:
         - name: skip
           in: query
           schema:
-            pattern: ^-?(?:0|[1-9]\d*)$
+            pattern: '^-?(?:0|[1-9]\d*)$'
             type:
               - integer
               - string
@@ -535,36 +565,36 @@ paths:
         - name: take
           in: query
           schema:
-            pattern: ^-?(?:0|[1-9]\d*)$
+            pattern: '^-?(?:0|[1-9]\d*)$'
             type:
               - integer
               - string
             format: int32
       responses:
-        "200":
+        '200':
           description: OK
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ListSynthesesResponse"
-        "401":
-          description: Unauthorized
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetails"
-        "403":
-          description: Forbidden
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetails"
-        "404":
+                $ref: '#/components/schemas/ListSynthesesResponse'
+        '404':
           description: Not Found
           content:
             application/problem+json:
               schema:
-                $ref: "#/components/schemas/ProblemDetails"
+                $ref: '#/components/schemas/ProblemDetails'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
     post:
       tags:
         - Research Jobs API
@@ -579,40 +609,40 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/StartSynthesisRequest"
+              $ref: '#/components/schemas/StartSynthesisRequest'
         required: true
       responses:
-        "200":
-          description: OK
+        '201':
+          description: Created
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/CreateSynthesisResponse"
-        "400":
+                $ref: '#/components/schemas/CreateSynthesisResponse'
+        '404':
+          description: Not Found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '400':
           description: Bad Request
           content:
             application/problem+json:
               schema:
-                $ref: "#/components/schemas/ProblemDetails"
-        "401":
+                $ref: '#/components/schemas/ProblemDetails'
+        '401':
           description: Unauthorized
           content:
             application/problem+json:
               schema:
-                $ref: "#/components/schemas/ProblemDetails"
-        "403":
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
           description: Forbidden
           content:
             application/problem+json:
               schema:
-                $ref: "#/components/schemas/ProblemDetails"
-        "404":
-          description: Not Found
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetails"
-  /api/jobs/{jobId}/syntheses/latest:
+                $ref: '#/components/schemas/ProblemDetails'
+  '/api/research/jobs/{jobId}/syntheses/latest':
     get:
       tags:
         - Research Jobs API
@@ -624,31 +654,31 @@ paths:
             type: string
             format: uuid
       responses:
-        "200":
+        '200':
           description: OK
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/LatestSynthesisResponse"
-        "401":
-          description: Unauthorized
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetails"
-        "403":
-          description: Forbidden
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetails"
-        "404":
+                $ref: '#/components/schemas/LatestSynthesisResponse'
+        '404':
           description: Not Found
           content:
             application/problem+json:
               schema:
-                $ref: "#/components/schemas/ProblemDetails"
-  /api/syntheses/{synthesisId}:
+                $ref: '#/components/schemas/ProblemDetails'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+  '/api/research/syntheses/{synthesisId}':
     get:
       tags:
         - Research Jobs API
@@ -660,31 +690,31 @@ paths:
             type: string
             format: uuid
       responses:
-        "200":
+        '200':
           description: OK
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/SynthesisDto"
-        "401":
-          description: Unauthorized
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetails"
-        "403":
-          description: Forbidden
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetails"
-        "404":
+                $ref: '#/components/schemas/SynthesisDto'
+        '404':
           description: Not Found
           content:
             application/problem+json:
               schema:
-                $ref: "#/components/schemas/ProblemDetails"
-  /api/syntheses/{synthesisId}/run:
+                $ref: '#/components/schemas/ProblemDetails'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+  '/api/research/syntheses/{synthesisId}/run':
     post:
       tags:
         - Research Jobs API
@@ -696,37 +726,37 @@ paths:
             type: string
             format: uuid
       responses:
-        "200":
+        '200':
           description: OK
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/RunSynthesisTerminalResponse"
-        "202":
+                $ref: '#/components/schemas/RunSynthesisTerminalResponse'
+        '202':
           description: Accepted
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/RunSynthesisAcceptedResponse"
-        "401":
-          description: Unauthorized
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetails"
-        "403":
-          description: Forbidden
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetails"
-        "404":
+                $ref: '#/components/schemas/RunSynthesisAcceptedResponse'
+        '404':
           description: Not Found
           content:
             application/problem+json:
               schema:
-                $ref: "#/components/schemas/ProblemDetails"
-  /api/syntheses/{synthesisId}/overrides/sources:
+                $ref: '#/components/schemas/ProblemDetails'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+  '/api/research/syntheses/{synthesisId}/overrides/sources':
     put:
       tags:
         - Research Jobs API
@@ -743,34 +773,34 @@ paths:
             schema:
               type: array
               items:
-                $ref: "#/components/schemas/SynthesisSourceOverrideDto"
+                $ref: '#/components/schemas/SynthesisSourceOverrideDto'
         required: true
       responses:
-        "200":
+        '200':
           description: OK
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/UpsertOverridesResponse"
-        "401":
-          description: Unauthorized
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetails"
-        "403":
-          description: Forbidden
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetails"
-        "404":
+                $ref: '#/components/schemas/UpsertOverridesResponse'
+        '404':
           description: Not Found
           content:
             application/problem+json:
               schema:
-                $ref: "#/components/schemas/ProblemDetails"
-  /api/syntheses/{synthesisId}/overrides/learnings:
+                $ref: '#/components/schemas/ProblemDetails'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+  '/api/research/syntheses/{synthesisId}/overrides/learnings':
     put:
       tags:
         - Research Jobs API
@@ -787,34 +817,34 @@ paths:
             schema:
               type: array
               items:
-                $ref: "#/components/schemas/SynthesisLearningOverrideDto"
+                $ref: '#/components/schemas/SynthesisLearningOverrideDto'
         required: true
       responses:
-        "200":
+        '200':
           description: OK
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/UpsertOverridesResponse"
-        "401":
-          description: Unauthorized
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetails"
-        "403":
-          description: Forbidden
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetails"
-        "404":
+                $ref: '#/components/schemas/UpsertOverridesResponse'
+        '404':
           description: Not Found
           content:
             application/problem+json:
               schema:
-                $ref: "#/components/schemas/ProblemDetails"
-  /api/jobs/{jobId}/sources/{sourceId}:
+                $ref: '#/components/schemas/ProblemDetails'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+  '/api/research/jobs/{jobId}/sources/{sourceId}':
     delete:
       tags:
         - Research Jobs API
@@ -832,26 +862,953 @@ paths:
             type: string
             format: uuid
       responses:
-        "204":
+        '204':
           description: No Content
-        "401":
-          description: Unauthorized
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetails"
-        "403":
-          description: Forbidden
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetails"
-        "404":
+        '404':
           description: Not Found
           content:
             application/problem+json:
               schema:
-                $ref: "#/components/schemas/ProblemDetails"
+                $ref: '#/components/schemas/ProblemDetails'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+  /api/jobs:
+    get:
+      tags:
+        - Research API
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListResearchJobsResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+    post:
+      tags:
+        - Research API
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateResearchJobRequest'
+        required: true
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateResearchJobResponse'
+        '400':
+          description: Bad Request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+  '/api/jobs/{jobId}':
+    get:
+      tags:
+        - Research API
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GetResearchJobResponse'
+        '404':
+          description: Not Found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+    delete:
+      tags:
+        - Research API
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - type: 'null'
+                - $ref: '#/components/schemas/DeleteJobRequest'
+      responses:
+        '204':
+          description: No Content
+        '404':
+          description: Not Found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+  '/api/jobs/{jobId}/cancel':
+    post:
+      tags:
+        - Research API
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - type: 'null'
+                - $ref: '#/components/schemas/CancelJobRequest'
+      responses:
+        '202':
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CancelJobResponse'
+        '404':
+          description: Not Found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+  '/api/jobs/{jobId}/sources':
+    get:
+      tags:
+        - Research API
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListSourcesResponse'
+        '404':
+          description: Not Found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+  '/api/jobs/{jobId}/events':
+    get:
+      tags:
+        - Research API
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ResearchEventDto'
+        '404':
+          description: Not Found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+  '/api/jobs/{jobId}/events/stream-token':
+    post:
+      tags:
+        - Research API
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateSseTokenResponse'
+        '404':
+          description: Not Found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+  '/api/jobs/{jobId}/events/stream':
+    get:
+      tags:
+        - Research API
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '404':
+          description: Not Found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+  '/api/jobs/{jobId}/learnings':
+    get:
+      tags:
+        - Research API
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: Skip
+          in: query
+          schema:
+            maximum: 2147483647
+            minimum: 0
+            pattern: '^-?(?:0|[1-9]\d*)$'
+            type:
+              - integer
+              - string
+            format: int32
+        - name: Take
+          in: query
+          schema:
+            maximum: 500
+            minimum: 1
+            pattern: '^-?(?:0|[1-9]\d*)$'
+            type:
+              - integer
+              - string
+            format: int32
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListLearningsResponse'
+        '404':
+          description: Not Found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+    post:
+      tags:
+        - Research API
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddLearningRequest'
+        required: true
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AddLearningResponse'
+        '400':
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Not Found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+  '/api/jobs/{jobId}/learnings/{learningId}':
+    delete:
+      tags:
+        - Research API
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: learningId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: No Content
+        '404':
+          description: Not Found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+  '/api/learnings/{learningId}/group':
+    get:
+      tags:
+        - Research API
+      parameters:
+        - name: learningId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+        '404':
+          description: Not Found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+  /api/learnings/groups/resolve:
+    post:
+      tags:
+        - Research API
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BatchResolveLearningGroupsRequest'
+        required: true
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BatchResolveLearningGroupsResponse'
+        '400':
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+  '/api/jobs/{jobId}/syntheses':
+    get:
+      tags:
+        - Research API
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: skip
+          in: query
+          schema:
+            pattern: '^-?(?:0|[1-9]\d*)$'
+            type:
+              - integer
+              - string
+            format: int32
+        - name: take
+          in: query
+          schema:
+            pattern: '^-?(?:0|[1-9]\d*)$'
+            type:
+              - integer
+              - string
+            format: int32
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListSynthesesResponse'
+        '404':
+          description: Not Found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+    post:
+      tags:
+        - Research API
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StartSynthesisRequest'
+        required: true
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateSynthesisResponse'
+        '404':
+          description: Not Found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '400':
+          description: Bad Request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+  '/api/jobs/{jobId}/syntheses/latest':
+    get:
+      tags:
+        - Research API
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LatestSynthesisResponse'
+        '404':
+          description: Not Found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+  '/api/syntheses/{synthesisId}':
+    get:
+      tags:
+        - Research API
+      parameters:
+        - name: synthesisId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SynthesisDto'
+        '404':
+          description: Not Found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+  '/api/syntheses/{synthesisId}/run':
+    post:
+      tags:
+        - Research API
+      parameters:
+        - name: synthesisId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RunSynthesisTerminalResponse'
+        '202':
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RunSynthesisAcceptedResponse'
+        '404':
+          description: Not Found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+  '/api/syntheses/{synthesisId}/overrides/sources':
+    put:
+      tags:
+        - Research API
+      parameters:
+        - name: synthesisId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/SynthesisSourceOverrideDto'
+        required: true
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UpsertOverridesResponse'
+        '404':
+          description: Not Found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+  '/api/syntheses/{synthesisId}/overrides/learnings':
+    put:
+      tags:
+        - Research API
+      parameters:
+        - name: synthesisId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/SynthesisLearningOverrideDto'
+        required: true
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UpsertOverridesResponse'
+        '404':
+          description: Not Found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+  '/api/jobs/{jobId}/sources/{sourceId}':
+    delete:
+      tags:
+        - Research API
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: sourceId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: No Content
+        '404':
+          description: Not Found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+  /api/research/protocol/clarifications:
+    post:
+      tags:
+        - Research Protocol API
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProtocolClarificationsRequest'
+        required: true
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProtocolClarificationsResponse'
+        '400':
+          description: Bad Request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+  /api/research/protocol/parameters:
+    post:
+      tags:
+        - Research Protocol API
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProtocolParametersRequest'
+        required: true
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProtocolParametersResponse'
+        '400':
+          description: Bad Request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
   /api/protocol/clarifications:
     post:
       tags:
@@ -860,33 +1817,33 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/ProtocolClarificationsRequest"
+              $ref: '#/components/schemas/ProtocolClarificationsRequest'
         required: true
       responses:
-        "200":
+        '200':
           description: OK
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ProtocolClarificationsResponse"
-        "400":
+                $ref: '#/components/schemas/ProtocolClarificationsResponse'
+        '400':
           description: Bad Request
           content:
             application/problem+json:
               schema:
-                $ref: "#/components/schemas/ProblemDetails"
-        "401":
+                $ref: '#/components/schemas/ProblemDetails'
+        '401':
           description: Unauthorized
           content:
             application/problem+json:
               schema:
-                $ref: "#/components/schemas/ProblemDetails"
-        "403":
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
           description: Forbidden
           content:
             application/problem+json:
               schema:
-                $ref: "#/components/schemas/ProblemDetails"
+                $ref: '#/components/schemas/ProblemDetails'
   /api/protocol/parameters:
     post:
       tags:
@@ -895,33 +1852,33 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/ProtocolParametersRequest"
+              $ref: '#/components/schemas/ProtocolParametersRequest'
         required: true
       responses:
-        "200":
+        '200':
           description: OK
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ProtocolParametersResponse"
-        "400":
+                $ref: '#/components/schemas/ProtocolParametersResponse'
+        '400':
           description: Bad Request
           content:
             application/problem+json:
               schema:
-                $ref: "#/components/schemas/ProblemDetails"
-        "401":
+                $ref: '#/components/schemas/ProblemDetails'
+        '401':
           description: Unauthorized
           content:
             application/problem+json:
               schema:
-                $ref: "#/components/schemas/ProblemDetails"
-        "403":
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
           description: Forbidden
           content:
             application/problem+json:
               schema:
-                $ref: "#/components/schemas/ProblemDetails"
+                $ref: '#/components/schemas/ProblemDetails'
 components:
   schemas:
     AddedLearningDto:
@@ -944,7 +1901,7 @@ components:
           type: string
           format: uuid
         importanceScore:
-          pattern: ^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
           type:
             - number
             - string
@@ -966,31 +1923,31 @@ components:
         reference:
           maxLength: 4000
           type:
-            - "null"
+            - 'null'
             - string
         evidenceText:
           maxLength: 20000
           type:
-            - "null"
+            - 'null'
             - string
         importanceScore:
           maximum: 1
           minimum: 0
-          pattern: ^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
           type:
-            - "null"
+            - 'null'
             - number
             - string
           format: float
         language:
           maxLength: 20
           type:
-            - "null"
+            - 'null'
             - string
         region:
           maxLength: 500
           type:
-            - "null"
+            - 'null'
             - string
     AddLearningResponse:
       required:
@@ -1002,7 +1959,7 @@ components:
           type: string
           format: uuid
         learning:
-          $ref: "#/components/schemas/AddedLearningDto"
+          $ref: '#/components/schemas/AddedLearningDto'
     BatchResolveLearningGroupsRequest:
       required:
         - learningIds
@@ -1022,14 +1979,14 @@ components:
         items:
           type: array
           items:
-            $ref: "#/components/schemas/ResolvedLearningGroupDto"
+            $ref: '#/components/schemas/ResolvedLearningGroupDto'
     CancelJobRequest:
       type: object
       properties:
         reason:
           maxLength: 2000
           type:
-            - "null"
+            - 'null'
             - string
     CancelJobResponse:
       required:
@@ -1059,7 +2016,7 @@ components:
         messages:
           type: array
           items:
-            $ref: "#/components/schemas/ChatMessage"
+            $ref: '#/components/schemas/ChatMessage'
     ClarificationDto:
       required:
         - question
@@ -1084,31 +2041,31 @@ components:
           type: string
         clarifications:
           type:
-            - "null"
+            - 'null'
             - array
           items:
-            $ref: "#/components/schemas/ClarificationDto"
+            $ref: '#/components/schemas/ClarificationDto'
         breadth:
-          pattern: ^-?(?:0|[1-9]\d*)$
+          pattern: '^-?(?:0|[1-9]\d*)$'
           type:
-            - "null"
+            - 'null'
             - integer
             - string
           format: int32
         depth:
-          pattern: ^-?(?:0|[1-9]\d*)$
+          pattern: '^-?(?:0|[1-9]\d*)$'
           type:
-            - "null"
+            - 'null'
             - integer
             - string
           format: int32
         language:
           type:
-            - "null"
+            - 'null'
             - string
         region:
           type:
-            - "null"
+            - 'null'
             - string
     CreateResearchJobResponse:
       required:
@@ -1118,6 +2075,24 @@ components:
         jobId:
           type: string
           format: uuid
+    CreateSseTokenResponse:
+      required:
+        - jobId
+        - ticket
+        - streamUrl
+        - expiresAtUtc
+      type: object
+      properties:
+        jobId:
+          type: string
+          format: uuid
+        ticket:
+          type: string
+        streamUrl:
+          type: string
+        expiresAtUtc:
+          type: string
+          format: date-time
     CreateSynthesisResponse:
       required:
         - jobId
@@ -1136,7 +2111,7 @@ components:
         reason:
           maxLength: 2000
           type:
-            - "null"
+            - 'null'
             - string
     ErrorResponse:
       required:
@@ -1168,13 +2143,13 @@ components:
         query:
           type: string
         breadth:
-          pattern: ^-?(?:0|[1-9]\d*)$
+          pattern: '^-?(?:0|[1-9]\d*)$'
           type:
             - integer
             - string
           format: int32
         depth:
-          pattern: ^-?(?:0|[1-9]\d*)$
+          pattern: '^-?(?:0|[1-9]\d*)$'
           type:
             - integer
             - string
@@ -1185,7 +2160,7 @@ components:
           type: string
         region:
           type:
-            - "null"
+            - 'null'
             - string
         createdAt:
           type: string
@@ -1196,23 +2171,23 @@ components:
         clarifications:
           type: array
           items:
-            $ref: "#/components/schemas/ClarificationDto"
+            $ref: '#/components/schemas/ClarificationDto'
         sourcesCount:
-          pattern: ^-?(?:0|[1-9]\d*)$
+          pattern: '^-?(?:0|[1-9]\d*)$'
           type:
             - integer
             - string
           format: int32
         synthesesCount:
-          pattern: ^-?(?:0|[1-9]\d*)$
+          pattern: '^-?(?:0|[1-9]\d*)$'
           type:
             - integer
             - string
           format: int32
         latestSynthesis:
           oneOf:
-            - type: "null"
-            - $ref: "#/components/schemas/LatestSynthesisSummaryDto"
+            - type: 'null'
+            - $ref: '#/components/schemas/LatestSynthesisSummaryDto'
     GroupEvidenceItemDto:
       required:
         - learningId
@@ -1232,7 +2207,7 @@ components:
         sourceReference:
           type: string
         importanceScore:
-          pattern: ^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
           type:
             - number
             - string
@@ -1253,8 +2228,8 @@ components:
           format: uuid
         synthesis:
           oneOf:
-            - type: "null"
-            - $ref: "#/components/schemas/SynthesisDto"
+            - type: 'null'
+            - $ref: '#/components/schemas/SynthesisDto'
     LatestSynthesisSummaryDto:
       required:
         - id
@@ -1273,7 +2248,7 @@ components:
           format: date-time
         completedAt:
           type:
-            - "null"
+            - 'null'
             - string
           format: date-time
     LearningGroupCardDto:
@@ -1298,19 +2273,19 @@ components:
         canonicalText:
           type: string
         canonicalImportanceScore:
-          pattern: ^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
           type:
             - number
             - string
           format: float
         memberCount:
-          pattern: ^-?(?:0|[1-9]\d*)$
+          pattern: '^-?(?:0|[1-9]\d*)$'
           type:
             - integer
             - string
           format: int32
         distinctSourceCount:
-          pattern: ^-?(?:0|[1-9]\d*)$
+          pattern: '^-?(?:0|[1-9]\d*)$'
           type:
             - integer
             - string
@@ -1323,7 +2298,7 @@ components:
         evidence:
           type: array
           items:
-            $ref: "#/components/schemas/GroupEvidenceItemDto"
+            $ref: '#/components/schemas/GroupEvidenceItemDto'
     LearningListItemDto:
       required:
         - learningId
@@ -1343,7 +2318,7 @@ components:
         sourceReference:
           type: string
         importanceScore:
-          pattern: ^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
           type:
             - number
             - string
@@ -1367,25 +2342,25 @@ components:
           type: string
           format: uuid
         skip:
-          pattern: ^-?(?:0|[1-9]\d*)$
+          pattern: '^-?(?:0|[1-9]\d*)$'
           type:
             - integer
             - string
           format: int32
         take:
-          pattern: ^-?(?:0|[1-9]\d*)$
+          pattern: '^-?(?:0|[1-9]\d*)$'
           type:
             - integer
             - string
           format: int32
         total:
-          pattern: ^-?(?:0|[1-9]\d*)$
+          pattern: '^-?(?:0|[1-9]\d*)$'
           type:
             - integer
             - string
           format: int32
         page:
-          pattern: ^-?(?:0|[1-9]\d*)$
+          pattern: '^-?(?:0|[1-9]\d*)$'
           type:
             - integer
             - string
@@ -1393,7 +2368,7 @@ components:
         learnings:
           type: array
           items:
-            $ref: "#/components/schemas/LearningListItemDto"
+            $ref: '#/components/schemas/LearningListItemDto'
     ListResearchJobsResponse:
       required:
         - count
@@ -1401,7 +2376,7 @@ components:
       type: object
       properties:
         count:
-          pattern: ^-?(?:0|[1-9]\d*)$
+          pattern: '^-?(?:0|[1-9]\d*)$'
           type:
             - integer
             - string
@@ -1409,7 +2384,7 @@ components:
         jobs:
           type: array
           items:
-            $ref: "#/components/schemas/ResearchJobListItemDto"
+            $ref: '#/components/schemas/ResearchJobListItemDto'
     ListSourcesResponse:
       required:
         - jobId
@@ -1421,7 +2396,7 @@ components:
           type: string
           format: uuid
         count:
-          pattern: ^-?(?:0|[1-9]\d*)$
+          pattern: '^-?(?:0|[1-9]\d*)$'
           type:
             - integer
             - string
@@ -1429,7 +2404,7 @@ components:
         sources:
           type: array
           items:
-            $ref: "#/components/schemas/SourceListItemDto"
+            $ref: '#/components/schemas/SourceListItemDto'
     ListSynthesesResponse:
       required:
         - jobId
@@ -1443,19 +2418,19 @@ components:
           type: string
           format: uuid
         skip:
-          pattern: ^-?(?:0|[1-9]\d*)$
+          pattern: '^-?(?:0|[1-9]\d*)$'
           type:
             - integer
             - string
           format: int32
         take:
-          pattern: ^-?(?:0|[1-9]\d*)$
+          pattern: '^-?(?:0|[1-9]\d*)$'
           type:
             - integer
             - string
           format: int32
         count:
-          pattern: ^-?(?:0|[1-9]\d*)$
+          pattern: '^-?(?:0|[1-9]\d*)$'
           type:
             - integer
             - string
@@ -1463,32 +2438,32 @@ components:
         syntheses:
           type: array
           items:
-            $ref: "#/components/schemas/SynthesisListItemDto"
+            $ref: '#/components/schemas/SynthesisListItemDto'
     ProblemDetails:
       type: object
       properties:
         type:
           type:
-            - "null"
+            - 'null'
             - string
         title:
           type:
-            - "null"
+            - 'null'
             - string
         status:
-          pattern: ^-?(?:0|[1-9]\d*)$
+          pattern: '^-?(?:0|[1-9]\d*)$'
           type:
-            - "null"
+            - 'null'
             - integer
             - string
           format: int32
         detail:
           type:
-            - "null"
+            - 'null'
             - string
         instance:
           type:
-            - "null"
+            - 'null'
             - string
     ProtocolClarificationsRequest:
       required:
@@ -1520,13 +2495,13 @@ components:
           type: string
         clarifications:
           type:
-            - "null"
+            - 'null'
             - array
           items:
-            $ref: "#/components/schemas/ClarificationDto"
+            $ref: '#/components/schemas/ClarificationDto'
         overrides:
           type:
-            - "null"
+            - 'null'
             - object
     ProtocolParametersResponse:
       required:
@@ -1537,13 +2512,13 @@ components:
       type: object
       properties:
         breadth:
-          pattern: ^-?(?:0|[1-9]\d*)$
+          pattern: '^-?(?:0|[1-9]\d*)$'
           type:
             - integer
             - string
           format: int32
         depth:
-          pattern: ^-?(?:0|[1-9]\d*)$
+          pattern: '^-?(?:0|[1-9]\d*)$'
           type:
             - integer
             - string
@@ -1552,7 +2527,7 @@ components:
           type: string
         region:
           type:
-            - "null"
+            - 'null'
             - string
     ResearchEventDto:
       required:
@@ -1563,7 +2538,7 @@ components:
       type: object
       properties:
         id:
-          pattern: ^-?(?:0|[1-9]\d*)$
+          pattern: '^-?(?:0|[1-9]\d*)$'
           type:
             - integer
             - string
@@ -1594,13 +2569,13 @@ components:
         query:
           type: string
         breadth:
-          pattern: ^-?(?:0|[1-9]\d*)$
+          pattern: '^-?(?:0|[1-9]\d*)$'
           type:
             - integer
             - string
           format: int32
         depth:
-          pattern: ^-?(?:0|[1-9]\d*)$
+          pattern: '^-?(?:0|[1-9]\d*)$'
           type:
             - integer
             - string
@@ -1611,7 +2586,7 @@ components:
           type: string
         region:
           type:
-            - "null"
+            - 'null'
             - string
         createdAt:
           type: string
@@ -1630,8 +2605,8 @@ components:
           format: uuid
         group:
           oneOf:
-            - type: "null"
-            - $ref: "#/components/schemas/LearningGroupCardDto"
+            - type: 'null'
+            - $ref: '#/components/schemas/LearningGroupCardDto'
     RunSynthesisAcceptedResponse:
       required:
         - jobId
@@ -1677,7 +2652,7 @@ components:
           format: date-time
         completedAt:
           type:
-            - "null"
+            - 'null'
             - string
           format: date-time
         message:
@@ -1700,21 +2675,21 @@ components:
           type: string
         title:
           type:
-            - "null"
+            - 'null'
             - string
         language:
           type:
-            - "null"
+            - 'null'
             - string
         region:
           type:
-            - "null"
+            - 'null'
             - string
         createdAt:
           type: string
           format: date-time
         learningCount:
-          pattern: ^-?(?:0|[1-9]\d*)$
+          pattern: '^-?(?:0|[1-9]\d*)$'
           type:
             - integer
             - string
@@ -1724,37 +2699,37 @@ components:
       properties:
         parentSynthesisId:
           type:
-            - "null"
+            - 'null'
             - string
           format: uuid
         useLatestAsParent:
           type:
-            - "null"
+            - 'null'
             - boolean
         outline:
           maxLength: 10000
           type:
-            - "null"
+            - 'null'
             - string
         instructions:
           maxLength: 10000
           type:
-            - "null"
+            - 'null'
             - string
         sourceOverrides:
           maxItems: 10000
           type:
-            - "null"
+            - 'null'
             - array
           items:
-            $ref: "#/components/schemas/SynthesisSourceOverrideDto"
+            $ref: '#/components/schemas/SynthesisSourceOverrideDto'
         learningOverrides:
           maxItems: 50000
           type:
-            - "null"
+            - 'null'
             - array
           items:
-            $ref: "#/components/schemas/SynthesisLearningOverrideDto"
+            $ref: '#/components/schemas/SynthesisLearningOverrideDto'
     SynthesisDto:
       required:
         - id
@@ -1767,7 +2742,6 @@ components:
         - completedAt
         - errorMessage
         - sections
-        - links
       type: object
       properties:
         id:
@@ -1778,53 +2752,35 @@ components:
           format: uuid
         parentSynthesisId:
           type:
-            - "null"
+            - 'null'
             - string
           format: uuid
         status:
           type: string
         outline:
           type:
-            - "null"
+            - 'null'
             - string
         instructions:
           type:
-            - "null"
+            - 'null'
             - string
         createdAt:
           type: string
           format: date-time
         completedAt:
           type:
-            - "null"
+            - 'null'
             - string
           format: date-time
         errorMessage:
           type:
-            - "null"
+            - 'null'
             - string
         sections:
           type: array
           items:
-            $ref: "#/components/schemas/SynthesisSectionDto"
-        links:
-          $ref: "#/components/schemas/SynthesisDtoLinks"
-    SynthesisDtoLinks:
-      required:
-        - self
-        - run
-        - overridesSources
-        - overridesLearnings
-      type: object
-      properties:
-        self:
-          type: string
-        run:
-          type: string
-        overridesSources:
-          type: string
-        overridesLearnings:
-          type: string
+            $ref: '#/components/schemas/SynthesisSectionDto'
     SynthesisLearningOverrideDto:
       required:
         - learningId
@@ -1837,19 +2793,19 @@ components:
           type: string
           format: uuid
         scoreOverride:
-          pattern: ^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
           type:
-            - "null"
+            - 'null'
             - number
             - string
           format: float
         excluded:
           type:
-            - "null"
+            - 'null'
             - boolean
         pinned:
           type:
-            - "null"
+            - 'null'
             - boolean
     SynthesisListItemDto:
       required:
@@ -1861,7 +2817,6 @@ components:
         - completedAt
         - errorMessage
         - sectionCount
-        - links
       type: object
       properties:
         synthesisId:
@@ -1872,7 +2827,7 @@ components:
           format: uuid
         parentSynthesisId:
           type:
-            - "null"
+            - 'null'
             - string
           format: uuid
         status:
@@ -1882,31 +2837,19 @@ components:
           format: date-time
         completedAt:
           type:
-            - "null"
+            - 'null'
             - string
           format: date-time
         errorMessage:
           type:
-            - "null"
+            - 'null'
             - string
         sectionCount:
-          pattern: ^-?(?:0|[1-9]\d*)$
+          pattern: '^-?(?:0|[1-9]\d*)$'
           type:
             - integer
             - string
           format: int32
-        links:
-          $ref: "#/components/schemas/SynthesisListItemLinksDto"
-    SynthesisListItemLinksDto:
-      required:
-        - self
-        - run
-      type: object
-      properties:
-        self:
-          type: string
-        run:
-          type: string
     SynthesisSectionDto:
       required:
         - id
@@ -1931,7 +2874,7 @@ components:
           type: string
           format: uuid
         index:
-          pattern: ^-?(?:0|[1-9]\d*)$
+          pattern: '^-?(?:0|[1-9]\d*)$'
           type:
             - integer
             - string
@@ -1940,17 +2883,17 @@ components:
           type: string
         description:
           type:
-            - "null"
+            - 'null'
             - string
         isConclusion:
           type: boolean
         summary:
           type:
-            - "null"
+            - 'null'
             - string
         contentMarkdown:
           type:
-            - "null"
+            - 'null'
             - string
         createdAt:
           type: string
@@ -1967,11 +2910,11 @@ components:
           format: uuid
         excluded:
           type:
-            - "null"
+            - 'null'
             - boolean
         pinned:
           type:
-            - "null"
+            - 'null'
             - boolean
     UpsertOverridesResponse:
       required:
@@ -1983,7 +2926,7 @@ components:
           type: string
           format: uuid
         updated:
-          pattern: ^-?(?:0|[1-9]\d*)$
+          pattern: '^-?(?:0|[1-9]\d*)$'
           type:
             - integer
             - string
@@ -1991,4 +2934,5 @@ components:
 tags:
   - name: OpenAiModelEndpoints
   - name: Research Jobs API
+  - name: Research API
   - name: Research Protocol API

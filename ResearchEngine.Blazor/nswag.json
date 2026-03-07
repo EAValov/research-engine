@@ -1,9 +1,9 @@
 {
   "runtime": "Net100",
-  "defaultVariables": null,
+  "defaultVariables": "OpenApiSpecFile=openapi/v1.yaml",
   "documentGenerator": {
     "fromDocument": {
-      "url": "openapi/v3.yaml"
+      "url": "$(OpenApiSpecFile)"
     }
   },
   "codeGenerators": {

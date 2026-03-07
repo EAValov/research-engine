@@ -5,6 +5,11 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <OverrideHtmlAssetPlaceholders>true</OverrideHtmlAssetPlaceholders>
+    <GenerateApiClientOnBuild>true</GenerateApiClientOnBuild>
+    <NswagCommand>nswag</NswagCommand>
+    <NswagConfigFile>nswag.json</NswagConfigFile>
+    <OpenApiSpecFile>openapi\v1.yaml</OpenApiSpecFile>
+    <GeneratedApiClientFile>Api\ResearchApiClient.g.cs</GeneratedApiClientFile>
   </PropertyGroup>
 
   <ItemGroup>
@@ -14,5 +19,14 @@
     <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.DevServer" Version="10.0.2" PrivateAssets="all" />
     <PackageReference Include="Microsoft.Extensions.Http.Polly" Version="10.0.2" />
   </ItemGroup>
+
+  <Target Name="GenerateResearchApiClient"
+          BeforeTargets="CoreCompile"
+          Condition="'$(GenerateApiClientOnBuild)' == 'true' and '$(DesignTimeBuild)' != 'true'"
+          Inputs="$(MSBuildProjectDirectory)\$(NswagConfigFile);$(MSBuildProjectDirectory)\$(OpenApiSpecFile)"
+          Outputs="$(MSBuildProjectDirectory)\$(GeneratedApiClientFile)">
+    <Exec Command="$(NswagCommand) run &quot;$(NswagConfigFile)&quot; /variables:OpenApiSpecFile=$(OpenApiSpecFile)"
+          WorkingDirectory="$(MSBuildProjectDirectory)" />
+  </Target>
 
 </Project>
