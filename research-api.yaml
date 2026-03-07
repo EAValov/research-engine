@@ -10,9 +10,41 @@ spec:
     - name: research-api
       image: localhost/research-api:chat
       workingDir: /app
+      envFrom:
+        - secretRef:
+            name: research-api-secrets
+            optional: false
       env:
+        - name: API_SERVER_PORT
+          value: "8080"
+        - name: API_SERVER_HOST_PORT
+          value: "8090"
+        - name: BLAZOR_PORT
+          value: "8081"
+        - name: BLAZOR_HOST_PORT
+          value: "5173"
         - name: ASPNETCORE_URLS
           value: "http://0.0.0.0:8080"
+        - name: ConnectionStrings__Redis
+          value: "redis:6379"
+        - name: FirecrawlOptions__BaseUrl
+          value: "http://firecrawl:3002"
+        - name: FirecrawlOptions__HttpClientTimeoutSeconds
+          value: "600"
+        - name: ChatConfig__Endpoint
+          value: "http://vllm:8000/v1"
+        - name: ChatConfig__ModelId
+          value: "nvidia/Qwen3-30B-A3B-NVFP4"
+        - name: EmbeddingConfig__Endpoint
+          value: "http://vllm-embeddings:8001/v1"
+        - name: EmbeddingConfig__ModelId
+          value: "Qwen/Qwen3-Embedding-0.6B"
+        - name: EmbeddingConfig__Dimension
+          value: "1024"
+        - name: RedisEventBusOptions__ConnectionString
+          value: "redis:6379"
+        - name: BearerAuthenticationOptions__Enabled
+          value: "true"
       ports:
         - containerPort: 8080
           hostPort: 8090
@@ -21,16 +53,49 @@ spec:
           mountPath: /app/logs
           readOnly: false
       livenessProbe:
-      httpGet:
-        path: /health/live
-        port: 8080
-      initialDelaySeconds: 10
-      periodSeconds: 10
+        httpGet:
+          path: /health/live
+          port: 8080
+        initialDelaySeconds: 10
+        periodSeconds: 10
       readinessProbe:
         httpGet:
           path: /health/ready
           port: 8080
         initialDelaySeconds: 5
+        periodSeconds: 10
+
+    - name: research-blazor
+      image: localhost/research-blazor:latest
+      envFrom:
+        - secretRef:
+            name: research-api-secrets
+            optional: false
+      env:
+        - name: BLAZOR_PORT
+          value: "8081"
+        - name: BLAZOR_HOST_PORT
+          value: "5173"
+        - name: API_SERVER_PORT
+          value: "8080"
+        - name: API_SERVER_HOST_PORT
+          value: "8090"
+        - name: API_BASE_URL
+          value: "http://localhost:8090"
+      ports:
+        - containerPort: 8081
+          hostPort: 5173
+      livenessProbe:
+        httpGet:
+          path: /index.html
+          port: 8081
+        initialDelaySeconds: 5
+        periodSeconds: 10
+      readinessProbe:
+        httpGet:
+          path: /index.html
+          port: 8081
+        initialDelaySeconds: 3
         periodSeconds: 10
 
   volumes:

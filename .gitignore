@@ -428,3 +428,6 @@ FodyWeavers.xsd
 *.msix
 *.msm
 *.msp
+
+# Local secret manifests (keep values out of git)
+research-api.secrets.local.yaml

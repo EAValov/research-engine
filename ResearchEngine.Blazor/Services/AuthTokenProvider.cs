@@ -1,11 +1,11 @@
 using System.Net.Http.Headers;
+using Microsoft.Extensions.Configuration;
 
 namespace ResearchEngine.Blazor.Services;
 
-public sealed class AuthTokenProvider
+public sealed class AuthTokenProvider(IConfiguration configuration)
 {
-    // TODO: replace with real auth later
-    public string? Token { get; set; } = "9h32F2fNuwMQL0OUujpUoIF6l8S/lGPOM1ylNhH+MKQ=";
+    public string? Token { get; set; } = configuration["ApiAuth:BearerToken"];
 }
 
 public sealed class AuthHeaderHandler(AuthTokenProvider tokenProvider) : DelegatingHandler

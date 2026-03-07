@@ -1,0 +1,11 @@
+{
+    admin off
+    auto_https off
+}
+
+:{$BLAZOR_PORT:8081} {
+    root * /srv
+    encode zstd gzip
+    try_files {path} /index.html
+    file_server
+}
