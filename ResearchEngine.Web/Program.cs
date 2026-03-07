@@ -198,6 +198,13 @@ builder.Services.AddScoped<IReportSynthesisService, ReportSynthesisService>();
 builder.Services.AddSingleton<IJobSseTicketService, JobSseTicketService>();
 
 builder.Services.AddScoped<IResearchJobStore, PostgresResearchJobStore>();
+builder.Services.AddScoped<IResearchJobRepository>(sp => sp.GetRequiredService<IResearchJobStore>());
+builder.Services.AddScoped<IResearchEventRepository>(sp => sp.GetRequiredService<IResearchJobStore>());
+builder.Services.AddScoped<IResearchSourceRepository>(sp => sp.GetRequiredService<IResearchJobStore>());
+builder.Services.AddScoped<IResearchLearningRepository>(sp => sp.GetRequiredService<IResearchJobStore>());
+builder.Services.AddScoped<IResearchLearningGroupRepository>(sp => sp.GetRequiredService<IResearchJobStore>());
+builder.Services.AddScoped<IResearchSynthesisRepository>(sp => sp.GetRequiredService<IResearchJobStore>());
+builder.Services.AddScoped<IResearchSynthesisOverridesRepository>(sp => sp.GetRequiredService<IResearchJobStore>());
 
 // ---------- Health checks ----------
 builder.Services.AddHealthChecks()

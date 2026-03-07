@@ -347,8 +347,8 @@ namespace ResearchEngine.Blazor.Api
 
                     var urlBuilder_ = new System.Text.StringBuilder();
                 
-                    // Operation Path: "api/research/jobs"
-                    urlBuilder_.Append("api/research/jobs");
+                    // Operation Path: "api/jobs"
+                    urlBuilder_.Append("api/jobs");
 
                     PrepareRequest(client_, request_, urlBuilder_);
 
@@ -445,8 +445,8 @@ namespace ResearchEngine.Blazor.Api
 
                     var urlBuilder_ = new System.Text.StringBuilder();
                 
-                    // Operation Path: "api/research/jobs"
-                    urlBuilder_.Append("api/research/jobs");
+                    // Operation Path: "api/jobs"
+                    urlBuilder_.Append("api/jobs");
 
                     PrepareRequest(client_, request_, urlBuilder_);
 
@@ -549,8 +549,8 @@ namespace ResearchEngine.Blazor.Api
 
                     var urlBuilder_ = new System.Text.StringBuilder();
                 
-                    // Operation Path: "api/research/jobs/{jobId}"
-                    urlBuilder_.Append("api/research/jobs/");
+                    // Operation Path: "api/jobs/{jobId}"
+                    urlBuilder_.Append("api/jobs/");
                     urlBuilder_.Append(System.Uri.EscapeDataString(ConvertToString(jobId, System.Globalization.CultureInfo.InvariantCulture)));
 
                     PrepareRequest(client_, request_, urlBuilder_);
@@ -657,8 +657,8 @@ namespace ResearchEngine.Blazor.Api
 
                     var urlBuilder_ = new System.Text.StringBuilder();
                 
-                    // Operation Path: "api/research/jobs/{jobId}"
-                    urlBuilder_.Append("api/research/jobs/");
+                    // Operation Path: "api/jobs/{jobId}"
+                    urlBuilder_.Append("api/jobs/");
                     urlBuilder_.Append(System.Uri.EscapeDataString(ConvertToString(jobId, System.Globalization.CultureInfo.InvariantCulture)));
 
                     PrepareRequest(client_, request_, urlBuilder_);
@@ -761,8 +761,8 @@ namespace ResearchEngine.Blazor.Api
 
                     var urlBuilder_ = new System.Text.StringBuilder();
                 
-                    // Operation Path: "api/research/jobs/{jobId}/cancel"
-                    urlBuilder_.Append("api/research/jobs/");
+                    // Operation Path: "api/jobs/{jobId}/cancel"
+                    urlBuilder_.Append("api/jobs/");
                     urlBuilder_.Append(System.Uri.EscapeDataString(ConvertToString(jobId, System.Globalization.CultureInfo.InvariantCulture)));
                     urlBuilder_.Append("/cancel");
 
@@ -867,8 +867,8 @@ namespace ResearchEngine.Blazor.Api
 
                     var urlBuilder_ = new System.Text.StringBuilder();
                 
-                    // Operation Path: "api/research/jobs/{jobId}/sources"
-                    urlBuilder_.Append("api/research/jobs/");
+                    // Operation Path: "api/jobs/{jobId}/sources"
+                    urlBuilder_.Append("api/jobs/");
                     urlBuilder_.Append(System.Uri.EscapeDataString(ConvertToString(jobId, System.Globalization.CultureInfo.InvariantCulture)));
                     urlBuilder_.Append("/sources");
 
@@ -973,8 +973,8 @@ namespace ResearchEngine.Blazor.Api
 
                     var urlBuilder_ = new System.Text.StringBuilder();
                 
-                    // Operation Path: "api/research/jobs/{jobId}/events"
-                    urlBuilder_.Append("api/research/jobs/");
+                    // Operation Path: "api/jobs/{jobId}/events"
+                    urlBuilder_.Append("api/jobs/");
                     urlBuilder_.Append(System.Uri.EscapeDataString(ConvertToString(jobId, System.Globalization.CultureInfo.InvariantCulture)));
                     urlBuilder_.Append("/events");
 
@@ -1080,8 +1080,8 @@ namespace ResearchEngine.Blazor.Api
 
                     var urlBuilder_ = new System.Text.StringBuilder();
                 
-                    // Operation Path: "api/research/jobs/{jobId}/events/stream-token"
-                    urlBuilder_.Append("api/research/jobs/");
+                    // Operation Path: "api/jobs/{jobId}/events/stream-token"
+                    urlBuilder_.Append("api/jobs/");
                     urlBuilder_.Append(System.Uri.EscapeDataString(ConvertToString(jobId, System.Globalization.CultureInfo.InvariantCulture)));
                     urlBuilder_.Append("/events/stream-token");
 
@@ -1185,8 +1185,8 @@ namespace ResearchEngine.Blazor.Api
 
                     var urlBuilder_ = new System.Text.StringBuilder();
                 
-                    // Operation Path: "api/research/jobs/{jobId}/events/stream"
-                    urlBuilder_.Append("api/research/jobs/");
+                    // Operation Path: "api/jobs/{jobId}/events/stream"
+                    urlBuilder_.Append("api/jobs/");
                     urlBuilder_.Append(System.Uri.EscapeDataString(ConvertToString(jobId, System.Globalization.CultureInfo.InvariantCulture)));
                     urlBuilder_.Append("/events/stream");
 
@@ -1276,8 +1276,8 @@ namespace ResearchEngine.Blazor.Api
 
                     var urlBuilder_ = new System.Text.StringBuilder();
                 
-                    // Operation Path: "api/research/jobs/{jobId}/learnings"
-                    urlBuilder_.Append("api/research/jobs/");
+                    // Operation Path: "api/jobs/{jobId}/learnings"
+                    urlBuilder_.Append("api/jobs/");
                     urlBuilder_.Append(System.Uri.EscapeDataString(ConvertToString(jobId, System.Globalization.CultureInfo.InvariantCulture)));
                     urlBuilder_.Append("/learnings");
                     urlBuilder_.Append('?');
@@ -1399,8 +1399,8 @@ namespace ResearchEngine.Blazor.Api
 
                     var urlBuilder_ = new System.Text.StringBuilder();
                 
-                    // Operation Path: "api/research/jobs/{jobId}/learnings"
-                    urlBuilder_.Append("api/research/jobs/");
+                    // Operation Path: "api/jobs/{jobId}/learnings"
+                    urlBuilder_.Append("api/jobs/");
                     urlBuilder_.Append(System.Uri.EscapeDataString(ConvertToString(jobId, System.Globalization.CultureInfo.InvariantCulture)));
                     urlBuilder_.Append("/learnings");
 
@@ -1517,8 +1517,8 @@ namespace ResearchEngine.Blazor.Api
 
                     var urlBuilder_ = new System.Text.StringBuilder();
                 
-                    // Operation Path: "api/research/jobs/{jobId}/learnings/{learningId}"
-                    urlBuilder_.Append("api/research/jobs/");
+                    // Operation Path: "api/jobs/{jobId}/learnings/{learningId}"
+                    urlBuilder_.Append("api/jobs/");
                     urlBuilder_.Append(System.Uri.EscapeDataString(ConvertToString(jobId, System.Globalization.CultureInfo.InvariantCulture)));
                     urlBuilder_.Append("/learnings/");
                     urlBuilder_.Append(System.Uri.EscapeDataString(ConvertToString(learningId, System.Globalization.CultureInfo.InvariantCulture)));
@@ -1618,8 +1618,8 @@ namespace ResearchEngine.Blazor.Api
 
                     var urlBuilder_ = new System.Text.StringBuilder();
                 
-                    // Operation Path: "api/research/learnings/{learningId}/group"
-                    urlBuilder_.Append("api/research/learnings/");
+                    // Operation Path: "api/learnings/{learningId}/group"
+                    urlBuilder_.Append("api/learnings/");
                     urlBuilder_.Append(System.Uri.EscapeDataString(ConvertToString(learningId, System.Globalization.CultureInfo.InvariantCulture)));
                     urlBuilder_.Append("/group");
 
@@ -1723,8 +1723,8 @@ namespace ResearchEngine.Blazor.Api
 
                     var urlBuilder_ = new System.Text.StringBuilder();
                 
-                    // Operation Path: "api/research/learnings/groups/resolve"
-                    urlBuilder_.Append("api/research/learnings/groups/resolve");
+                    // Operation Path: "api/learnings/groups/resolve"
+                    urlBuilder_.Append("api/learnings/groups/resolve");
 
                     PrepareRequest(client_, request_, urlBuilder_);
 
@@ -1827,8 +1827,8 @@ namespace ResearchEngine.Blazor.Api
 
                     var urlBuilder_ = new System.Text.StringBuilder();
                 
-                    // Operation Path: "api/research/jobs/{jobId}/syntheses"
-                    urlBuilder_.Append("api/research/jobs/");
+                    // Operation Path: "api/jobs/{jobId}/syntheses"
+                    urlBuilder_.Append("api/jobs/");
                     urlBuilder_.Append(System.Uri.EscapeDataString(ConvertToString(jobId, System.Globalization.CultureInfo.InvariantCulture)));
                     urlBuilder_.Append("/syntheses");
                     urlBuilder_.Append('?');
@@ -1950,8 +1950,8 @@ namespace ResearchEngine.Blazor.Api
 
                     var urlBuilder_ = new System.Text.StringBuilder();
                 
-                    // Operation Path: "api/research/jobs/{jobId}/syntheses"
-                    urlBuilder_.Append("api/research/jobs/");
+                    // Operation Path: "api/jobs/{jobId}/syntheses"
+                    urlBuilder_.Append("api/jobs/");
                     urlBuilder_.Append(System.Uri.EscapeDataString(ConvertToString(jobId, System.Globalization.CultureInfo.InvariantCulture)));
                     urlBuilder_.Append("/syntheses");
 
@@ -2066,8 +2066,8 @@ namespace ResearchEngine.Blazor.Api
 
                     var urlBuilder_ = new System.Text.StringBuilder();
                 
-                    // Operation Path: "api/research/jobs/{jobId}/syntheses/latest"
-                    urlBuilder_.Append("api/research/jobs/");
+                    // Operation Path: "api/jobs/{jobId}/syntheses/latest"
+                    urlBuilder_.Append("api/jobs/");
                     urlBuilder_.Append(System.Uri.EscapeDataString(ConvertToString(jobId, System.Globalization.CultureInfo.InvariantCulture)));
                     urlBuilder_.Append("/syntheses/latest");
 
@@ -2172,8 +2172,8 @@ namespace ResearchEngine.Blazor.Api
 
                     var urlBuilder_ = new System.Text.StringBuilder();
                 
-                    // Operation Path: "api/research/syntheses/{synthesisId}"
-                    urlBuilder_.Append("api/research/syntheses/");
+                    // Operation Path: "api/syntheses/{synthesisId}"
+                    urlBuilder_.Append("api/syntheses/");
                     urlBuilder_.Append(System.Uri.EscapeDataString(ConvertToString(synthesisId, System.Globalization.CultureInfo.InvariantCulture)));
 
                     PrepareRequest(client_, request_, urlBuilder_);
@@ -2278,8 +2278,8 @@ namespace ResearchEngine.Blazor.Api
 
                     var urlBuilder_ = new System.Text.StringBuilder();
                 
-                    // Operation Path: "api/research/syntheses/{synthesisId}/run"
-                    urlBuilder_.Append("api/research/syntheses/");
+                    // Operation Path: "api/syntheses/{synthesisId}/run"
+                    urlBuilder_.Append("api/syntheses/");
                     urlBuilder_.Append(System.Uri.EscapeDataString(ConvertToString(synthesisId, System.Globalization.CultureInfo.InvariantCulture)));
                     urlBuilder_.Append("/run");
 
@@ -2401,8 +2401,8 @@ namespace ResearchEngine.Blazor.Api
 
                     var urlBuilder_ = new System.Text.StringBuilder();
                 
-                    // Operation Path: "api/research/syntheses/{synthesisId}/overrides/sources"
-                    urlBuilder_.Append("api/research/syntheses/");
+                    // Operation Path: "api/syntheses/{synthesisId}/overrides/sources"
+                    urlBuilder_.Append("api/syntheses/");
                     urlBuilder_.Append(System.Uri.EscapeDataString(ConvertToString(synthesisId, System.Globalization.CultureInfo.InvariantCulture)));
                     urlBuilder_.Append("/overrides/sources");
 
@@ -2514,8 +2514,8 @@ namespace ResearchEngine.Blazor.Api
 
                     var urlBuilder_ = new System.Text.StringBuilder();
                 
-                    // Operation Path: "api/research/syntheses/{synthesisId}/overrides/learnings"
-                    urlBuilder_.Append("api/research/syntheses/");
+                    // Operation Path: "api/syntheses/{synthesisId}/overrides/learnings"
+                    urlBuilder_.Append("api/syntheses/");
                     urlBuilder_.Append(System.Uri.EscapeDataString(ConvertToString(synthesisId, System.Globalization.CultureInfo.InvariantCulture)));
                     urlBuilder_.Append("/overrides/learnings");
 
@@ -2622,8 +2622,8 @@ namespace ResearchEngine.Blazor.Api
 
                     var urlBuilder_ = new System.Text.StringBuilder();
                 
-                    // Operation Path: "api/research/jobs/{jobId}/sources/{sourceId}"
-                    urlBuilder_.Append("api/research/jobs/");
+                    // Operation Path: "api/jobs/{jobId}/sources/{sourceId}"
+                    urlBuilder_.Append("api/jobs/");
                     urlBuilder_.Append(System.Uri.EscapeDataString(ConvertToString(jobId, System.Globalization.CultureInfo.InvariantCulture)));
                     urlBuilder_.Append("/sources/");
                     urlBuilder_.Append(System.Uri.EscapeDataString(ConvertToString(sourceId, System.Globalization.CultureInfo.InvariantCulture)));
@@ -2728,8 +2728,8 @@ namespace ResearchEngine.Blazor.Api
 
                     var urlBuilder_ = new System.Text.StringBuilder();
                 
-                    // Operation Path: "api/research/protocol/clarifications"
-                    urlBuilder_.Append("api/research/protocol/clarifications");
+                    // Operation Path: "api/protocol/clarifications"
+                    urlBuilder_.Append("api/protocol/clarifications");
 
                     PrepareRequest(client_, request_, urlBuilder_);
 
@@ -2836,8 +2836,8 @@ namespace ResearchEngine.Blazor.Api
 
                     var urlBuilder_ = new System.Text.StringBuilder();
                 
-                    // Operation Path: "api/research/protocol/parameters"
-                    urlBuilder_.Append("api/research/protocol/parameters");
+                    // Operation Path: "api/protocol/parameters"
+                    urlBuilder_.Append("api/protocol/parameters");
 
                     PrepareRequest(client_, request_, urlBuilder_);
 

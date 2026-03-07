@@ -25,7 +25,7 @@ paths:
       responses:
         "200":
           description: OK
-  /api/research/jobs:
+  /api/jobs:
     get:
       tags:
         - Research Jobs API
@@ -82,7 +82,7 @@ paths:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ProblemDetails"
-  /api/research/jobs/{jobId}:
+  /api/jobs/{jobId}:
     get:
       tags:
         - Research Jobs API
@@ -156,7 +156,7 @@ paths:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ProblemDetails"
-  /api/research/jobs/{jobId}/cancel:
+  /api/jobs/{jobId}/cancel:
     post:
       tags:
         - Research Jobs API
@@ -199,7 +199,7 @@ paths:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ProblemDetails"
-  /api/research/jobs/{jobId}/sources:
+  /api/jobs/{jobId}/sources:
     get:
       tags:
         - Research Jobs API
@@ -235,7 +235,7 @@ paths:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ProblemDetails"
-  /api/research/jobs/{jobId}/events:
+  /api/jobs/{jobId}/events:
     get:
       tags:
         - Research Jobs API
@@ -273,7 +273,7 @@ paths:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ProblemDetails"
-  /api/research/jobs/{jobId}/events/stream-token:
+  /api/jobs/{jobId}/events/stream-token:
     post:
       tags:
         - Research Jobs API
@@ -309,7 +309,7 @@ paths:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ProblemDetails"
-  /api/research/jobs/{jobId}/events/stream:
+  /api/jobs/{jobId}/events/stream:
     get:
       tags:
         - Research Jobs API
@@ -335,7 +335,7 @@ paths:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ProblemDetails"
-  /api/research/jobs/{jobId}/learnings:
+  /api/jobs/{jobId}/learnings:
     get:
       tags:
         - Research Jobs API
@@ -438,7 +438,7 @@ paths:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ProblemDetails"
-  /api/research/jobs/{jobId}/learnings/{learningId}:
+  /api/jobs/{jobId}/learnings/{learningId}:
     delete:
       tags:
         - Research Jobs API
@@ -476,7 +476,7 @@ paths:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ProblemDetails"
-  /api/research/learnings/{learningId}/group:
+  /api/learnings/{learningId}/group:
     get:
       tags:
         - Research Jobs API
@@ -508,7 +508,7 @@ paths:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ProblemDetails"
-  /api/research/learnings/groups/resolve:
+  /api/learnings/groups/resolve:
     post:
       tags:
         - Research Jobs API
@@ -543,7 +543,7 @@ paths:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ProblemDetails"
-  /api/research/jobs/{jobId}/syntheses:
+  /api/jobs/{jobId}/syntheses:
     get:
       tags:
         - Research Jobs API
@@ -642,7 +642,7 @@ paths:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ProblemDetails"
-  /api/research/jobs/{jobId}/syntheses/latest:
+  /api/jobs/{jobId}/syntheses/latest:
     get:
       tags:
         - Research Jobs API
@@ -678,7 +678,7 @@ paths:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ProblemDetails"
-  /api/research/syntheses/{synthesisId}:
+  /api/syntheses/{synthesisId}:
     get:
       tags:
         - Research Jobs API
@@ -714,7 +714,7 @@ paths:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ProblemDetails"
-  /api/research/syntheses/{synthesisId}/run:
+  /api/syntheses/{synthesisId}/run:
     post:
       tags:
         - Research Jobs API
@@ -756,7 +756,7 @@ paths:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ProblemDetails"
-  /api/research/syntheses/{synthesisId}/overrides/sources:
+  /api/syntheses/{synthesisId}/overrides/sources:
     put:
       tags:
         - Research Jobs API
@@ -800,7 +800,7 @@ paths:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ProblemDetails"
-  /api/research/syntheses/{synthesisId}/overrides/learnings:
+  /api/syntheses/{synthesisId}/overrides/learnings:
     put:
       tags:
         - Research Jobs API
@@ -844,7 +844,7 @@ paths:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ProblemDetails"
-  /api/research/jobs/{jobId}/sources/{sourceId}:
+  /api/jobs/{jobId}/sources/{sourceId}:
     delete:
       tags:
         - Research Jobs API
@@ -882,7 +882,7 @@ paths:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ProblemDetails"
-  /api/research/protocol/clarifications:
+  /api/protocol/clarifications:
     post:
       tags:
         - Research Protocol API
@@ -917,7 +917,7 @@ paths:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ProblemDetails"
-  /api/research/protocol/parameters:
+  /api/protocol/parameters:
     post:
       tags:
         - Research Protocol API

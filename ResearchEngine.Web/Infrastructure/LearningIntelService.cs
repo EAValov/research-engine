@@ -14,7 +14,10 @@ public sealed class LearningIntelService(
     IChatModel chatModel,
     ITokenizer tokenizer,
     IEmbeddingModel embeddingModel,
-    IResearchJobStore jobStore,
+    IResearchSourceRepository sourceRepository,
+    IResearchLearningRepository learningRepository,
+    IResearchLearningGroupRepository learningGroupRepository,
+    IResearchSynthesisOverridesRepository synthesisOverridesRepository,
     IOptions<LearningSimilarityOptions> similarityOptions,
     ILogger<LearningIntelService> logger)
     : ILearningIntelService
@@ -168,7 +171,7 @@ public sealed class LearningIntelService(
         await AssignGroupsAsync(jobId, allLearnings, ct);
 
         // 3) Persist
-        await jobStore.AddLearningsAsync(jobId, sourceId, query, allLearnings, ct);
+        await learningRepository.AddLearningsAsync(jobId, sourceId, query, allLearnings, ct);
 
         // 4) Update group stats (best-effort)
         await RecomputeGroupStatsBestEffortAsync(allLearnings, ct);
@@ -207,7 +210,7 @@ public sealed class LearningIntelService(
         Source src;
         if (string.IsNullOrWhiteSpace(reference))
         {
-            src = await jobStore.GetOrCreateUserSourceAsync(jobId, ct);
+            src = await sourceRepository.GetOrCreateUserSourceAsync(jobId, ct);
         }
         else
         {
@@ -215,7 +218,7 @@ public sealed class LearningIntelService(
             const string placeholderContent =
                 "Placeholder content for user-provided reference. A crawl job may populate this later.";
 
-            src = await jobStore.UpsertSourceAsync(
+            src = await sourceRepository.UpsertSourceAsync(
                 jobId: jobId,
                 reference: reference.Trim(),
                 content: placeholderContent,
@@ -260,7 +263,7 @@ public sealed class LearningIntelService(
         await AssignGroupsAsync(jobId, new List<Learning> { learning }, ct);
 
         // Persist (use stable "user" query placeholder)
-        await jobStore.AddLearningsAsync(jobId, src.Id, query: "user", learnings: new[] { learning }, ct);
+        await learningRepository.AddLearningsAsync(jobId, src.Id, query: "user", learnings: new[] { learning }, ct);
 
         // Update group stats (best-effort)
         await RecomputeGroupStatsBestEffortAsync(new[] { learning }, ct);
@@ -340,7 +343,7 @@ public sealed class LearningIntelService(
                 throw new InvalidOperationException("Learning embedding must be generated before grouping.");
 
             // Find nearest groups (with distance)
-            var hits = await jobStore.VectorSearchLearningGroupsWithDistanceAsync(
+            var hits = await learningGroupRepository.VectorSearchLearningGroupsWithDistanceAsync(
                 queryVector: l.Embedding.Vector,
                 jobId: jobId,
                 topK: GroupSearchTopK,
@@ -361,7 +364,7 @@ public sealed class LearningIntelService(
                     var emb = await embeddingModel.GenerateEmbeddingAsync(l.Text, ct);
                     if (emb?.Vector is not null)
                     {
-                        await jobStore.UpdateLearningGroupCanonicalAsync(
+                        await learningGroupRepository.UpdateLearningGroupCanonicalAsync(
                             groupId: best.Group.Id,
                             canonicalText: l.Text,
                             canonicalImportanceScore: l.ImportanceScore,
@@ -377,7 +380,7 @@ public sealed class LearningIntelService(
                 if (emb?.Vector is null)
                     throw new InvalidOperationException("Failed to generate embedding for learning group.");
 
-                var g = await jobStore.CreateLearningGroupAsync(
+                var g = await learningGroupRepository.CreateLearningGroupAsync(
                     jobId: jobId,
                     canonicalText: l.Text,
                     canonicalImportanceScore: l.ImportanceScore,
@@ -400,7 +403,7 @@ public sealed class LearningIntelService(
                 .ToList();
 
             foreach (var gid in groupIds)
-                await jobStore.RecomputeLearningGroupStatsAsync(gid, ct);
+                await learningGroupRepository.RecomputeLearningGroupStatsAsync(gid, ct);
         }
         catch (Exception ex)
         {
@@ -429,7 +432,7 @@ public sealed class LearningIntelService(
         var localMinImportance = _options.MinImportance;
 
         // Load overrides once
-        var snapshot = await jobStore.GetSynthesisOverridesAsync(synthesisId, ct);
+        var snapshot = await synthesisOverridesRepository.GetSynthesisOverridesAsync(synthesisId, ct);
         var jobId = snapshot.JobId;
 
         bool IsSourceExcluded(Guid sourceId) =>
@@ -455,18 +458,18 @@ public sealed class LearningIntelService(
         // Job-scoped only (global removed)
         var localRaw = new List<Learning>();
 
-        localRaw.AddRange(await jobStore.VectorSearchLearningsAsync(
+        localRaw.AddRange(await learningRepository.VectorSearchLearningsAsync(
             queryVector, jobId, language, region, localMinImportance, maxK, ct));
 
         if (localRaw.Count < maxK && !string.IsNullOrWhiteSpace(region))
         {
-            localRaw.AddRange(await jobStore.VectorSearchLearningsAsync(
+            localRaw.AddRange(await learningRepository.VectorSearchLearningsAsync(
                 queryVector, jobId, language, region: null, localMinImportance, maxK - localRaw.Count, ct));
         }
 
         if (localRaw.Count < maxK && !string.IsNullOrWhiteSpace(language))
         {
-            localRaw.AddRange(await jobStore.VectorSearchLearningsAsync(
+            localRaw.AddRange(await learningRepository.VectorSearchLearningsAsync(
                 queryVector, jobId, language: null, region: null, localMinImportance, maxK - localRaw.Count, ct));
         }
 

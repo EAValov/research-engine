@@ -11,7 +11,10 @@ public sealed class ResearchOrchestrator(
     IOptions<ResearchOrchestratorConfig> options,
     ISearchClient searchClient,
     ICrawlClient crawlClient,
-    IResearchJobStore jobStore,
+    IResearchJobRepository jobRepository,
+    IResearchEventRepository eventRepository,
+    IResearchSourceRepository sourceRepository,
+    IResearchLearningRepository learningRepository,
     IQueryPlanningService queryPlanningService,
     ILearningIntelService learningIntelService,
     IReportSynthesisService reportSynthesisService,
@@ -36,7 +39,7 @@ public sealed class ResearchOrchestrator(
         string? region,
         CancellationToken ct = default)
     {
-        var job = await jobStore.CreateJobAsync(
+        var job = await jobRepository.CreateJobAsync(
             query: query,
             clarifications: clarifications,
             breadth: breadth,
@@ -50,7 +53,7 @@ public sealed class ResearchOrchestrator(
                 o.RunJobBackgroundAsync(job.Id)),
             new EnqueuedState("jobs"));
 
-        await jobStore.SetJobHangfireIdAsync(job.Id, hfId, ct);
+        await jobRepository.SetJobHangfireIdAsync(job.Id, hfId, ct);
 
         return job.Id;
     }
@@ -65,16 +68,16 @@ public sealed class ResearchOrchestrator(
     /// </summary>
     private async Task RunJobAsync(Guid jobId, CancellationToken ct = default)
     {
-        if (await jobStore.IsJobDeletedAsync(jobId, CancellationToken.None))
+        if (await jobRepository.IsJobDeletedAsync(jobId, CancellationToken.None))
             return;
 
-        var job = await jobStore.GetJobAsync(jobId, ct)
+        var job = await jobRepository.GetJobAsync(jobId, ct)
             ?? throw new ArgumentException("Job not found", nameof(jobId));
 
         job.Status = ResearchJobStatus.Running;
-        await jobStore.UpdateJobAsync(job, ct);
+        await jobRepository.UpdateJobAsync(job, ct);
 
-        var progress = new ResearchProgressTracker(jobId, jobStore, minEmitIntervalMs: 250);
+        var progress = new ResearchProgressTracker(jobId, eventRepository, minEmitIntervalMs: 250);
 
         try
         {
@@ -139,7 +142,7 @@ public sealed class ResearchOrchestrator(
 
             // Job becomes completed when synthesis completes
             job.Status = ResearchJobStatus.Completed;
-            await jobStore.UpdateJobAsync(job, ct);
+            await jobRepository.UpdateJobAsync(job, ct);
 
             // metrics + done
             progress.MarkAllCompleted();
@@ -148,9 +151,9 @@ public sealed class ResearchOrchestrator(
         catch (OperationCanceledException oce)
         {
             job.Status = ResearchJobStatus.Canceled;
-            await jobStore.UpdateJobAsync(job, CancellationToken.None);
+            await jobRepository.UpdateJobAsync(job, CancellationToken.None);
 
-            await jobStore.AppendEventAsync(
+            await eventRepository.AppendEventAsync(
                 jobId,
                 new ResearchEvent(DateTimeOffset.UtcNow, ResearchEventStage.Canceled,
                     $"Research canceled: {oce.Message}"),
@@ -161,9 +164,9 @@ public sealed class ResearchOrchestrator(
         catch (Exception ex)
         {
             job.Status = ResearchJobStatus.Failed;
-            await jobStore.UpdateJobAsync(job, ct);
+            await jobRepository.UpdateJobAsync(job, ct);
 
-            await jobStore.AppendEventAsync(
+            await eventRepository.AppendEventAsync(
                 jobId,
                 new ResearchEvent(DateTimeOffset.UtcNow, ResearchEventStage.Failed, $"Research failed: {ex.Message}"),
                 ct);
@@ -252,7 +255,7 @@ public sealed class ResearchOrchestrator(
 
     private async Task ThrowIfCanceledAsync(Guid jobId, CancellationToken ct)
     {
-        if (await jobStore.IsJobCancelRequestedAsync(jobId, ct))
+        if (await jobRepository.IsJobCancelRequestedAsync(jobId, ct))
             throw new OperationCanceledException($"Job {jobId} canceled.");
     }
 
@@ -275,7 +278,7 @@ public sealed class ResearchOrchestrator(
         }
 
         // 2) Upsert Source
-        var source = await jobStore.UpsertSourceAsync(
+        var source = await sourceRepository.UpsertSourceAsync(
             jobId: job.Id,
             reference: url,
             kind: SourceKind.Web,
@@ -286,7 +289,7 @@ public sealed class ResearchOrchestrator(
             ct: ct);
 
         // 3) Reuse cached learnings for (source, queryHash)
-        var cached = await jobStore.GetLearningsForSourceAndQueryAsync(source.Id, serpQuery, ct);
+        var cached = await learningRepository.GetLearningsForSourceAndQueryAsync(source.Id, serpQuery, ct);
         if (cached.Count > 0)
         {
             logger.LogInformation("Reusing {Count} cached learnings for URL {Url} (SourceId={SourceId}).", cached.Count, url, source.Id);

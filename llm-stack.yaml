@@ -63,7 +63,7 @@ spec:
           value: /data
 
     - name: vllm
-      image: vllm/vllm-openai:v0.16.0
+      image: vllm/vllm-openai:v0.17.0
       ports:
         - containerPort: 8000
           hostPort: 8000
@@ -85,8 +85,6 @@ spec:
         - "8000"
         - "--quantization"
         - "modelopt"
-        - "kv_cache_dtype"
-        - "auto"
         - "--gpu-memory-utilization"
         - "0.9"
         - "--max-model-len"

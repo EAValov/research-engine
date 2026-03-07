@@ -7,23 +7,32 @@ public static class ResearchProtocolApi
 {
     public static void MapResearchProtocolApi(this WebApplication app)
     {
-        var api = app.MapGroup("/api/research/protocol")
+        MapRoutes(app.MapGroup("/api/research/protocol")
             .WithTags("Research Protocol API")
-            .RequireAuthorization();
+            .RequireAuthorization());
 
-        api.MapPost("/clarifications", GenerateClarificationsAsync)
-            .Accepts<ProtocolClarificationsRequest>("application/json")
-            .Produces<ProtocolClarificationsResponse>(StatusCodes.Status200OK)
-            .ProducesProblem(StatusCodes.Status400BadRequest)
-            .ProducesProblem(StatusCodes.Status401Unauthorized)
-            .ProducesProblem(StatusCodes.Status403Forbidden);
+        MapRoutes(app.MapGroup("/api/protocol")
+            .WithTags("Research Protocol API")
+            .RequireAuthorization());
 
-        api.MapPost("/parameters", SelectParametersAsync)
-            .Accepts<ProtocolParametersRequest>("application/json")
-            .Produces<ProtocolParametersResponse>(StatusCodes.Status200OK)
-            .ProducesProblem(StatusCodes.Status400BadRequest)
-            .ProducesProblem(StatusCodes.Status401Unauthorized)
-            .ProducesProblem(StatusCodes.Status403Forbidden);
+        return;
+
+        static void MapRoutes(RouteGroupBuilder api)
+        {
+            api.MapPost("/clarifications", GenerateClarificationsAsync)
+                .Accepts<ProtocolClarificationsRequest>("application/json")
+                .Produces<ProtocolClarificationsResponse>(StatusCodes.Status200OK)
+                .ProducesProblem(StatusCodes.Status400BadRequest)
+                .ProducesProblem(StatusCodes.Status401Unauthorized)
+                .ProducesProblem(StatusCodes.Status403Forbidden);
+
+            api.MapPost("/parameters", SelectParametersAsync)
+                .Accepts<ProtocolParametersRequest>("application/json")
+                .Produces<ProtocolParametersResponse>(StatusCodes.Status200OK)
+                .ProducesProblem(StatusCodes.Status400BadRequest)
+                .ProducesProblem(StatusCodes.Status401Unauthorized)
+                .ProducesProblem(StatusCodes.Status403Forbidden);
+        }
     }
 
     /// <summary>

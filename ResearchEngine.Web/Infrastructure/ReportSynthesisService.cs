@@ -14,7 +14,9 @@ public sealed class ReportSynthesisService(
     IChatModel chatModel,
     ITokenizer tokenizer,
     ILearningIntelService learningIntelService,
-    IResearchJobStore jobStore,
+    IResearchJobRepository jobRepository,
+    IResearchSynthesisRepository synthesisRepository,
+    IResearchEventRepository eventRepository,
     IBackgroundJobClient backgroundJobs,
     ILogger<ReportSynthesisService> logger
 ) : IReportSynthesisService
@@ -26,7 +28,7 @@ public sealed class ReportSynthesisService(
         string? instructions,
         CancellationToken ct)
     {
-        var synthesis = await jobStore.CreateSynthesisAsync(
+        var synthesis = await synthesisRepository.CreateSynthesisAsync(
             jobId: jobId,
             parentSynthesisId: parentSynthesisId,
             outline: outline,
@@ -51,28 +53,28 @@ public sealed class ReportSynthesisService(
         
     public async Task RunSynthesisAsync(Guid synthesisId, ResearchProgressTracker? progress, CancellationToken ct)
     {
-        var synthesis = await jobStore.GetSynthesisAsync(synthesisId, ct)
+        var synthesis = await synthesisRepository.GetSynthesisAsync(synthesisId, ct)
             ?? throw new InvalidOperationException($"Synthesis {synthesisId} not found.");
 
         // Idempotency / retry safety
         if (synthesis.Status is SynthesisStatus.Completed or SynthesisStatus.Failed)
             return;
 
-        progress ??= new ResearchProgressTracker(synthesis.JobId, jobStore, minEmitIntervalMs: 250);
+        progress ??= new ResearchProgressTracker(synthesis.JobId, eventRepository, minEmitIntervalMs: 250);
         progress.ResetSynthesisMetrics();
 
         var synTag = $"syn:{synthesis.Id.ToString("N")[..8]}";
 
         try
         {
-            await jobStore.MarkSynthesisRunningAsync(synthesis.Id, ct);
+            await synthesisRepository.MarkSynthesisRunningAsync(synthesis.Id, ct);
 
             await progress.InfoSynthesisAsync(
                 ResearchEventStage.Summarizing,
                 $"[{synTag}] Starting synthesis",
                 ct);
 
-            var job = await jobStore.GetJobAsync(synthesis.JobId, ct)
+            var job = await jobRepository.GetJobAsync(synthesis.JobId, ct)
                 ?? throw new InvalidOperationException($"Job {synthesis.JobId} not found.");
 
             var clarificationsText = FormatClarifications(job.Clarifications ?? Array.Empty<Clarification>());
@@ -85,7 +87,7 @@ public sealed class ReportSynthesisService(
             IReadOnlyList<SynthesisSection> parentSections = Array.Empty<SynthesisSection>();
             if (synthesis.ParentSynthesisId is Guid parentId)
             {
-                var parent = await jobStore.GetSynthesisAsync(parentId, ct);
+                var parent = await synthesisRepository.GetSynthesisAsync(parentId, ct);
                 if (parent?.Sections is { Count: > 0 })
                     parentSections = parent.Sections.OrderBy(s => s.Index).ToList();
             }
@@ -197,7 +199,7 @@ public sealed class ReportSynthesisService(
             progress.SynthesisFinalized();
 
             // Persist sections atomically and mark completed
-            await jobStore.CompleteSynthesisAsync(synthesis.Id, sectionsToPersist, ct);
+            await synthesisRepository.CompleteSynthesisAsync(synthesis.Id, sectionsToPersist, ct);
 
             await progress.SynthesisCompletedAsync(
                 synthesis.Id,
@@ -206,9 +208,9 @@ public sealed class ReportSynthesisService(
         }
         catch (Exception ex)
         {
-            await jobStore.FailSynthesisAsync(synthesisId, ex.Message, ct);
+            await synthesisRepository.FailSynthesisAsync(synthesisId, ex.Message, ct);
 
-            await jobStore.AppendEventAsync(
+            await eventRepository.AppendEventAsync(
                 synthesis.JobId,
                 new ResearchEvent(DateTimeOffset.UtcNow, ResearchEventStage.Failed,
                     $"[{synTag}] Synthesis failed: {ex.Message}"),

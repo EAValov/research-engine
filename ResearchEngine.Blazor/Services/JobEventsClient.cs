@@ -225,7 +225,7 @@ public sealed class JobEventsClient : IAsyncDisposable
                 if (string.IsNullOrWhiteSpace(url))
                     throw new InvalidOperationException("StreamUrl is empty.");
 
-                // IMPORTANT: token.StreamUrl is usually "/api/research/...."
+                // IMPORTANT: token.StreamUrl is usually "/api/...."
                 // Ensure we always connect to the API origin (http://localhost:8090),
                 // not the SPA origin (http://localhost:5173) and not "file:///".
                 var absoluteUrl = ToAbsoluteApiUrl(_http.BaseAddress, url);
@@ -269,7 +269,7 @@ public sealed class JobEventsClient : IAsyncDisposable
         // Use API origin (scheme+host+port), ignore any base path
         var origin = new Uri(apiBase.GetLeftPart(UriPartial.Authority));
 
-        // streamUrl is typically "/api/research/jobs/.../events/stream?ticket=..."
+        // streamUrl is typically "/api/jobs/.../events/stream?ticket=..."
         if (streamUrl.StartsWith("/", StringComparison.Ordinal))
             return new Uri(origin, streamUrl).ToString();
 

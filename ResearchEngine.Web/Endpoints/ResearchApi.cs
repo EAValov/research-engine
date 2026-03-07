@@ -11,156 +11,165 @@ public static partial class ResearchApi
 {
     public static void MapResearchApi(this WebApplication app)
     {
-        var api = app.MapGroup("/api/research")
+        MapRoutes(app.MapGroup("/api/research")
             .WithTags("Research Jobs API")
-            .RequireAuthorization();
+            .RequireAuthorization());
 
-        // Jobs
-        api.MapGet("/jobs", ListJobsAsync)
-            .Produces<ListResearchJobsResponse>(StatusCodes.Status200OK)
-            .ProducesProblem(StatusCodes.Status401Unauthorized)
-            .ProducesProblem(StatusCodes.Status403Forbidden);
+        MapRoutes(app.MapGroup("/api")
+            .WithTags("Research API")
+            .RequireAuthorization());
 
-        api.MapGet("/jobs/{jobId:guid}", GetJobAsync)
-            .Produces<GetResearchJobResponse>(StatusCodes.Status200OK)
-            .ProducesProblem(StatusCodes.Status404NotFound)
-            .ProducesProblem(StatusCodes.Status401Unauthorized)
-            .ProducesProblem(StatusCodes.Status403Forbidden);
+        return;
 
-        api.MapPost("/jobs", CreateJobAsync)
-            .Accepts<CreateResearchJobRequest>("application/json")
-            .Produces<CreateResearchJobResponse>(StatusCodes.Status201Created)
-            .ProducesProblem(StatusCodes.Status400BadRequest)
-            .ProducesProblem(StatusCodes.Status401Unauthorized)
-            .ProducesProblem(StatusCodes.Status403Forbidden);
+        static void MapRoutes(RouteGroupBuilder api)
+        {
+            // Jobs
+            api.MapGet("/jobs", ListJobsAsync)
+                .Produces<ListResearchJobsResponse>(StatusCodes.Status200OK)
+                .ProducesProblem(StatusCodes.Status401Unauthorized)
+                .ProducesProblem(StatusCodes.Status403Forbidden);
 
-        api.MapPost("/jobs/{jobId:guid}/cancel", CancelJobAsync)
-            .Accepts<CancelJobRequest>("application/json")
-            .Produces<CancelJobResponse>(StatusCodes.Status202Accepted)
-            .ProducesProblem(StatusCodes.Status404NotFound)
-            .ProducesProblem(StatusCodes.Status401Unauthorized)
-            .ProducesProblem(StatusCodes.Status403Forbidden);
+            api.MapGet("/jobs/{jobId:guid}", GetJobAsync)
+                .Produces<GetResearchJobResponse>(StatusCodes.Status200OK)
+                .ProducesProblem(StatusCodes.Status404NotFound)
+                .ProducesProblem(StatusCodes.Status401Unauthorized)
+                .ProducesProblem(StatusCodes.Status403Forbidden);
 
-        api.MapDelete("/jobs/{jobId:guid}", SoftDeleteJobAsync)
-            .Accepts<DeleteJobRequest>("application/json")
-            .Produces(StatusCodes.Status204NoContent)
-            .ProducesProblem(StatusCodes.Status404NotFound)
-            .ProducesProblem(StatusCodes.Status401Unauthorized)
-            .ProducesProblem(StatusCodes.Status403Forbidden);
+            api.MapPost("/jobs", CreateJobAsync)
+                .Accepts<CreateResearchJobRequest>("application/json")
+                .Produces<CreateResearchJobResponse>(StatusCodes.Status201Created)
+                .ProducesProblem(StatusCodes.Status400BadRequest)
+                .ProducesProblem(StatusCodes.Status401Unauthorized)
+                .ProducesProblem(StatusCodes.Status403Forbidden);
 
-        api.MapGet("/jobs/{jobId:guid}/sources", ListSourcesAsync)
-            .Produces<ListSourcesResponse>(StatusCodes.Status200OK)
-            .ProducesProblem(StatusCodes.Status404NotFound)
-            .ProducesProblem(StatusCodes.Status401Unauthorized)
-            .ProducesProblem(StatusCodes.Status403Forbidden);
+            api.MapPost("/jobs/{jobId:guid}/cancel", CancelJobAsync)
+                .Accepts<CancelJobRequest>("application/json")
+                .Produces<CancelJobResponse>(StatusCodes.Status202Accepted)
+                .ProducesProblem(StatusCodes.Status404NotFound)
+                .ProducesProblem(StatusCodes.Status401Unauthorized)
+                .ProducesProblem(StatusCodes.Status403Forbidden);
 
-        api.MapGet("/jobs/{jobId:guid}/events", ListEventsAsync)
-            .Produces<IReadOnlyList<ResearchEventDto>>(StatusCodes.Status200OK)
-            .ProducesProblem(StatusCodes.Status404NotFound)
-            .ProducesProblem(StatusCodes.Status401Unauthorized)
-            .ProducesProblem(StatusCodes.Status403Forbidden);
+            api.MapDelete("/jobs/{jobId:guid}", SoftDeleteJobAsync)
+                .Accepts<DeleteJobRequest>("application/json")
+                .Produces(StatusCodes.Status204NoContent)
+                .ProducesProblem(StatusCodes.Status404NotFound)
+                .ProducesProblem(StatusCodes.Status401Unauthorized)
+                .ProducesProblem(StatusCodes.Status403Forbidden);
 
-        api.MapPost("/jobs/{jobId:guid}/events/stream-token", CreateEventsStreamTokenAsync)
-        .Produces<CreateSseTokenResponse>(StatusCodes.Status200OK)
-        .ProducesProblem(StatusCodes.Status404NotFound)
-        .ProducesProblem(StatusCodes.Status401Unauthorized)
-        .ProducesProblem(StatusCodes.Status403Forbidden);
+            api.MapGet("/jobs/{jobId:guid}/sources", ListSourcesAsync)
+                .Produces<ListSourcesResponse>(StatusCodes.Status200OK)
+                .ProducesProblem(StatusCodes.Status404NotFound)
+                .ProducesProblem(StatusCodes.Status401Unauthorized)
+                .ProducesProblem(StatusCodes.Status403Forbidden);
 
-        // Stream endpoint (anonymous but ticket-gated)
-        api.MapGet("/jobs/{jobId:guid}/events/stream", StreamEventsAsync)
-        .AllowAnonymous()
-        .Produces(StatusCodes.Status200OK, contentType: "text/event-stream")
-        .ProducesProblem(StatusCodes.Status401Unauthorized)
-        .ProducesProblem(StatusCodes.Status404NotFound);
+            api.MapGet("/jobs/{jobId:guid}/events", ListEventsAsync)
+                .Produces<IReadOnlyList<ResearchEventDto>>(StatusCodes.Status200OK)
+                .ProducesProblem(StatusCodes.Status404NotFound)
+                .ProducesProblem(StatusCodes.Status401Unauthorized)
+                .ProducesProblem(StatusCodes.Status403Forbidden);
 
-        // Learnings
-        api.MapGet("/jobs/{jobId:guid}/learnings", ListLearningsAsync)
-            .Produces<ListLearningsResponse>(StatusCodes.Status200OK)
-            .ProducesProblem(StatusCodes.Status404NotFound)
-            .ProducesProblem(StatusCodes.Status401Unauthorized)
-            .ProducesProblem(StatusCodes.Status403Forbidden);
+            api.MapPost("/jobs/{jobId:guid}/events/stream-token", CreateEventsStreamTokenAsync)
+                .Produces<CreateSseTokenResponse>(StatusCodes.Status200OK)
+                .ProducesProblem(StatusCodes.Status404NotFound)
+                .ProducesProblem(StatusCodes.Status401Unauthorized)
+                .ProducesProblem(StatusCodes.Status403Forbidden);
 
-        api.MapPost("/jobs/{jobId:guid}/learnings", AddLearningAsync)
-            .Accepts<AddLearningRequest>("application/json")
-            .Produces<AddLearningResponse>(StatusCodes.Status200OK)
-            .Produces<ErrorResponse>(StatusCodes.Status400BadRequest) 
-            .ProducesProblem(StatusCodes.Status404NotFound)
-            .ProducesProblem(StatusCodes.Status401Unauthorized)
-            .ProducesProblem(StatusCodes.Status403Forbidden);
+            // Stream endpoint (anonymous but ticket-gated)
+            api.MapGet("/jobs/{jobId:guid}/events/stream", StreamEventsAsync)
+                .AllowAnonymous()
+                .Produces(StatusCodes.Status200OK, contentType: "text/event-stream")
+                .ProducesProblem(StatusCodes.Status401Unauthorized)
+                .ProducesProblem(StatusCodes.Status404NotFound);
 
-        api.MapDelete("/jobs/{jobId:guid}/learnings/{learningId:guid}", SoftDeleteLearningAsync)
-            .Produces(StatusCodes.Status204NoContent)
-            .ProducesProblem(StatusCodes.Status404NotFound)
-            .ProducesProblem(StatusCodes.Status401Unauthorized)
-            .ProducesProblem(StatusCodes.Status403Forbidden);
+            // Learnings
+            api.MapGet("/jobs/{jobId:guid}/learnings", ListLearningsAsync)
+                .Produces<ListLearningsResponse>(StatusCodes.Status200OK)
+                .ProducesProblem(StatusCodes.Status404NotFound)
+                .ProducesProblem(StatusCodes.Status401Unauthorized)
+                .ProducesProblem(StatusCodes.Status403Forbidden);
 
-        api.MapGet("/learnings/{learningId:guid}/group", GetLearningGroupByLearningIdAsync)
-            .Produces(StatusCodes.Status200OK) 
-            .ProducesProblem(StatusCodes.Status404NotFound)
-            .ProducesProblem(StatusCodes.Status401Unauthorized)
-            .ProducesProblem(StatusCodes.Status403Forbidden);
+            api.MapPost("/jobs/{jobId:guid}/learnings", AddLearningAsync)
+                .Accepts<AddLearningRequest>("application/json")
+                .Produces<AddLearningResponse>(StatusCodes.Status200OK)
+                .Produces<ErrorResponse>(StatusCodes.Status400BadRequest)
+                .ProducesProblem(StatusCodes.Status404NotFound)
+                .ProducesProblem(StatusCodes.Status401Unauthorized)
+                .ProducesProblem(StatusCodes.Status403Forbidden);
 
-        api.MapPost("/learnings/groups/resolve", ResolveLearningGroupsBatchAsync)
-            .Accepts<BatchResolveLearningGroupsRequest>("application/json")
-            .Produces<BatchResolveLearningGroupsResponse>(StatusCodes.Status200OK)
-            .Produces<ErrorResponse>(StatusCodes.Status400BadRequest)
-            .ProducesProblem(StatusCodes.Status401Unauthorized)
-            .ProducesProblem(StatusCodes.Status403Forbidden);
+            api.MapDelete("/jobs/{jobId:guid}/learnings/{learningId:guid}", SoftDeleteLearningAsync)
+                .Produces(StatusCodes.Status204NoContent)
+                .ProducesProblem(StatusCodes.Status404NotFound)
+                .ProducesProblem(StatusCodes.Status401Unauthorized)
+                .ProducesProblem(StatusCodes.Status403Forbidden);
 
-        // Syntheses
-        api.MapGet("/jobs/{jobId:guid}/syntheses", ListSynthesesAsync)
-            .Produces<ListSynthesesResponse>(StatusCodes.Status200OK)
-            .ProducesProblem(StatusCodes.Status404NotFound)
-            .ProducesProblem(StatusCodes.Status401Unauthorized)
-            .ProducesProblem(StatusCodes.Status403Forbidden);
+            api.MapGet("/learnings/{learningId:guid}/group", GetLearningGroupByLearningIdAsync)
+                .Produces(StatusCodes.Status200OK)
+                .ProducesProblem(StatusCodes.Status404NotFound)
+                .ProducesProblem(StatusCodes.Status401Unauthorized)
+                .ProducesProblem(StatusCodes.Status403Forbidden);
 
-        api.MapGet("/jobs/{jobId:guid}/syntheses/latest", GetLatestSynthesisAsync)
-            .Produces<LatestSynthesisResponse>(StatusCodes.Status200OK)
-            .ProducesProblem(StatusCodes.Status404NotFound)
-            .ProducesProblem(StatusCodes.Status401Unauthorized)
-            .ProducesProblem(StatusCodes.Status403Forbidden);
+            api.MapPost("/learnings/groups/resolve", ResolveLearningGroupsBatchAsync)
+                .Accepts<BatchResolveLearningGroupsRequest>("application/json")
+                .Produces<BatchResolveLearningGroupsResponse>(StatusCodes.Status200OK)
+                .Produces<ErrorResponse>(StatusCodes.Status400BadRequest)
+                .ProducesProblem(StatusCodes.Status401Unauthorized)
+                .ProducesProblem(StatusCodes.Status403Forbidden);
 
-        api.MapGet("/syntheses/{synthesisId:guid}", GetSynthesisAsync)
-            .Produces<SynthesisDto>(StatusCodes.Status200OK)
-            .ProducesProblem(StatusCodes.Status404NotFound)
-            .ProducesProblem(StatusCodes.Status401Unauthorized)
-            .ProducesProblem(StatusCodes.Status403Forbidden);
+            // Syntheses
+            api.MapGet("/jobs/{jobId:guid}/syntheses", ListSynthesesAsync)
+                .Produces<ListSynthesesResponse>(StatusCodes.Status200OK)
+                .ProducesProblem(StatusCodes.Status404NotFound)
+                .ProducesProblem(StatusCodes.Status401Unauthorized)
+                .ProducesProblem(StatusCodes.Status403Forbidden);
 
-        api.MapPost("/jobs/{jobId:guid}/syntheses", CreateSynthesisAsync)
-            .Accepts<StartSynthesisRequest>("application/json")
-            .Produces<CreateSynthesisResponse>(StatusCodes.Status201Created)
-            .ProducesProblem(StatusCodes.Status404NotFound)
-            .ProducesProblem(StatusCodes.Status400BadRequest)
-            .ProducesProblem(StatusCodes.Status401Unauthorized)
-            .ProducesProblem(StatusCodes.Status403Forbidden);
+            api.MapGet("/jobs/{jobId:guid}/syntheses/latest", GetLatestSynthesisAsync)
+                .Produces<LatestSynthesisResponse>(StatusCodes.Status200OK)
+                .ProducesProblem(StatusCodes.Status404NotFound)
+                .ProducesProblem(StatusCodes.Status401Unauthorized)
+                .ProducesProblem(StatusCodes.Status403Forbidden);
 
-        // This endpoint can return 200 (terminal message) OR 202 (queued)
-        api.MapPost("/syntheses/{synthesisId:guid}/run", RunSynthesisAsync)
-            .Produces<RunSynthesisTerminalResponse>(StatusCodes.Status200OK)
-            .Produces<RunSynthesisAcceptedResponse>(StatusCodes.Status202Accepted)
-            .ProducesProblem(StatusCodes.Status404NotFound)
-            .ProducesProblem(StatusCodes.Status401Unauthorized)
-            .ProducesProblem(StatusCodes.Status403Forbidden);
+            api.MapGet("/syntheses/{synthesisId:guid}", GetSynthesisAsync)
+                .Produces<SynthesisDto>(StatusCodes.Status200OK)
+                .ProducesProblem(StatusCodes.Status404NotFound)
+                .ProducesProblem(StatusCodes.Status401Unauthorized)
+                .ProducesProblem(StatusCodes.Status403Forbidden);
 
-        api.MapPut("/syntheses/{synthesisId:guid}/overrides/sources", UpsertSynthesisSourceOverridesAsync)
-            .Accepts<IReadOnlyList<SynthesisSourceOverrideDto>>("application/json")
-            .Produces<UpsertOverridesResponse>(StatusCodes.Status200OK)
-            .ProducesProblem(StatusCodes.Status404NotFound)
-            .ProducesProblem(StatusCodes.Status401Unauthorized)
-            .ProducesProblem(StatusCodes.Status403Forbidden);
+            api.MapPost("/jobs/{jobId:guid}/syntheses", CreateSynthesisAsync)
+                .Accepts<StartSynthesisRequest>("application/json")
+                .Produces<CreateSynthesisResponse>(StatusCodes.Status201Created)
+                .ProducesProblem(StatusCodes.Status404NotFound)
+                .ProducesProblem(StatusCodes.Status400BadRequest)
+                .ProducesProblem(StatusCodes.Status401Unauthorized)
+                .ProducesProblem(StatusCodes.Status403Forbidden);
 
-        api.MapPut("/syntheses/{synthesisId:guid}/overrides/learnings", UpsertSynthesisLearningOverridesAsync)
-            .Accepts<IReadOnlyList<SynthesisLearningOverrideDto>>("application/json")
-            .Produces<UpsertOverridesResponse>(StatusCodes.Status200OK)
-            .ProducesProblem(StatusCodes.Status404NotFound)
-            .ProducesProblem(StatusCodes.Status401Unauthorized)
-            .ProducesProblem(StatusCodes.Status403Forbidden);
+            // This endpoint can return 200 (terminal message) OR 202 (queued)
+            api.MapPost("/syntheses/{synthesisId:guid}/run", RunSynthesisAsync)
+                .Produces<RunSynthesisTerminalResponse>(StatusCodes.Status200OK)
+                .Produces<RunSynthesisAcceptedResponse>(StatusCodes.Status202Accepted)
+                .ProducesProblem(StatusCodes.Status404NotFound)
+                .ProducesProblem(StatusCodes.Status401Unauthorized)
+                .ProducesProblem(StatusCodes.Status403Forbidden);
 
-        api.MapDelete("/jobs/{jobId:guid}/sources/{sourceId:guid}", SoftDeleteSourceAsync)
-            .Produces(StatusCodes.Status204NoContent)
-            .ProducesProblem(StatusCodes.Status404NotFound)
-            .ProducesProblem(StatusCodes.Status401Unauthorized)
-            .ProducesProblem(StatusCodes.Status403Forbidden);
+            api.MapPut("/syntheses/{synthesisId:guid}/overrides/sources", UpsertSynthesisSourceOverridesAsync)
+                .Accepts<IReadOnlyList<SynthesisSourceOverrideDto>>("application/json")
+                .Produces<UpsertOverridesResponse>(StatusCodes.Status200OK)
+                .ProducesProblem(StatusCodes.Status404NotFound)
+                .ProducesProblem(StatusCodes.Status401Unauthorized)
+                .ProducesProblem(StatusCodes.Status403Forbidden);
+
+            api.MapPut("/syntheses/{synthesisId:guid}/overrides/learnings", UpsertSynthesisLearningOverridesAsync)
+                .Accepts<IReadOnlyList<SynthesisLearningOverrideDto>>("application/json")
+                .Produces<UpsertOverridesResponse>(StatusCodes.Status200OK)
+                .ProducesProblem(StatusCodes.Status404NotFound)
+                .ProducesProblem(StatusCodes.Status401Unauthorized)
+                .ProducesProblem(StatusCodes.Status403Forbidden);
+
+            api.MapDelete("/jobs/{jobId:guid}/sources/{sourceId:guid}", SoftDeleteSourceAsync)
+                .Produces(StatusCodes.Status204NoContent)
+                .ProducesProblem(StatusCodes.Status404NotFound)
+                .ProducesProblem(StatusCodes.Status401Unauthorized)
+                .ProducesProblem(StatusCodes.Status403Forbidden);
+        }
     }
 
     // ---------------- jobs ----------------
@@ -178,7 +187,6 @@ public static partial class ResearchApi
         [FromBody] CreateResearchJobRequest request,
         IResearchOrchestrator orchestrator,
         IResearchProtocolService protocolService,
-        IResearchJobStore jobStore,
         CancellationToken ct)
     {
         int? breadth = request.Breadth;
@@ -209,7 +217,7 @@ public static partial class ResearchApi
             region,
             ct);
 
-        return Results.Created($"/api/research/jobs/{jobId}", new CreateResearchJobResponse(jobId));
+        return Results.Created($"/api/jobs/{jobId}", new CreateResearchJobResponse(jobId));
     }
 
     /// <summary>
@@ -219,10 +227,10 @@ public static partial class ResearchApi
     /// <param name="jobStore">Job store.</param>
     /// <param name="ct">Request cancellation token.</param>
     private static async Task<IResult> ListJobsAsync(
-        IResearchJobStore jobStore,
+        IResearchJobRepository jobRepository,
         CancellationToken ct)
     {
-        var jobs = await jobStore.ListJobsAsync(ct);
+        var jobs = await jobRepository.ListJobsAsync(ct);
 
         var items = jobs.Select(j => new ResearchJobListItemDto(
             Id: j.Id,
@@ -248,10 +256,10 @@ public static partial class ResearchApi
     /// <param name="ct">Request cancellation token.</param>
     private static async Task<IResult> GetJobAsync(
         Guid jobId,
-        IResearchJobStore jobStore,
+        IResearchJobRepository jobRepository,
         CancellationToken ct)
     {
-        var job = await jobStore.GetJobAsync(jobId, ct);
+        var job = await jobRepository.GetJobAsync(jobId, ct);
         if (job is null)
             return Results.NotFound();
 
@@ -296,16 +304,17 @@ public static partial class ResearchApi
     private static async Task<IResult> CancelJobAsync(
         Guid jobId,
         [FromBody] CancelJobRequest? request,
-        IResearchJobStore jobStore,
+        IResearchJobRepository jobRepository,
+        IResearchEventRepository eventRepository,
         IBackgroundJobClient backgroundJobs,
         CancellationToken ct)
     {
-        var job = await jobStore.GetJobAsync(jobId, ct);
+        var job = await jobRepository.GetJobAsync(jobId, ct);
         if (job is null) return Results.NotFound();
 
-        await jobStore.RequestJobCancelAsync(jobId, request?.Reason, ct);
+        await jobRepository.RequestJobCancelAsync(jobId, request?.Reason, ct);
 
-        await jobStore.AppendEventAsync(
+        await eventRepository.AppendEventAsync(
             jobId,
             new ResearchEvent(
                 DateTimeOffset.UtcNow,
@@ -332,19 +341,20 @@ public static partial class ResearchApi
     private static async Task<IResult> SoftDeleteJobAsync(
         Guid jobId,
         [FromBody] DeleteJobRequest? request,
-        IResearchJobStore jobStore,
+        IResearchJobRepository jobRepository,
+        IResearchEventRepository eventRepository,
         IBackgroundJobClient backgroundJobs,
         CancellationToken ct)
     {
-        var job = await jobStore.GetJobAsync(jobId, ct);
+        var job = await jobRepository.GetJobAsync(jobId, ct);
         if (job is null) return Results.NotFound();
 
         if (!string.IsNullOrWhiteSpace(job.HangfireJobId))
             backgroundJobs.Delete(job.HangfireJobId);
 
-        await jobStore.SoftDeleteJobAsync(jobId, request?.Reason, ct);
+        await jobRepository.SoftDeleteJobAsync(jobId, request?.Reason, ct);
 
-        await jobStore.AppendEventAsync(
+        await eventRepository.AppendEventAsync(
             jobId,
             new ResearchEvent(
                 DateTimeOffset.UtcNow,
@@ -365,14 +375,15 @@ public static partial class ResearchApi
     /// <param name="ct">Request cancellation token.</param>
     private static async Task<IResult> ListSourcesAsync(
         Guid jobId,
-        IResearchJobStore jobStore,
+        IResearchJobRepository jobRepository,
+        IResearchSourceRepository sourceRepository,
         CancellationToken ct)
     {
-        var job = await jobStore.GetJobAsync(jobId, ct);
+        var job = await jobRepository.GetJobAsync(jobId, ct);
         if (job is null)
             return Results.NotFound();
 
-        var sources = await jobStore.ListSourcesAsync(jobId, ct);
+        var sources = await sourceRepository.ListSourcesAsync(jobId, ct);
 
         var items = sources.Select(s => new SourceListItemDto(
             s.SourceId,
@@ -396,14 +407,15 @@ public static partial class ResearchApi
     /// <param name="ct">Request cancellation token.</param>
     private static async Task<IResult> ListEventsAsync(
         Guid jobId,
-        IResearchJobStore jobStore,
+        IResearchJobRepository jobRepository,
+        IResearchEventRepository eventRepository,
         CancellationToken ct)
     {
-        var job = await jobStore.GetJobAsync(jobId, ct);
+        var job = await jobRepository.GetJobAsync(jobId, ct);
         if (job is null)
             return Results.NotFound();
 
-        var events = await jobStore.GetEventsAsync(jobId, ct);
+        var events = await eventRepository.GetEventsAsync(jobId, ct);
 
         return Results.Ok(events.Select(e =>
             new ResearchEventDto(e.Id, e.Timestamp, e.Stage.ToString(), e.Message)
@@ -423,14 +435,15 @@ public static partial class ResearchApi
     private static async Task<IResult> ListLearningsAsync(
         Guid jobId,
         [AsParameters] ListLearningsRequest req,
-        IResearchJobStore jobStore,
+        IResearchJobRepository jobRepository,
+        IResearchLearningRepository learningRepository,
         CancellationToken ct)
     {
-        var job = await jobStore.GetJobAsync(jobId, ct);
+        var job = await jobRepository.GetJobAsync(jobId, ct);
         if (job is null)
             return Results.NotFound();
 
-        var result = await jobStore.ListLearningsAsync(
+        var result = await learningRepository.ListLearningsAsync(
             jobId,
             req.SkipValue,
             req.TakeValue,
@@ -466,11 +479,11 @@ public static partial class ResearchApi
     private static async Task<IResult> AddLearningAsync(
         Guid jobId,
         [FromBody] AddLearningRequest request,
-        IResearchJobStore jobStore,
+        IResearchJobRepository jobRepository,
         ILearningIntelService learningIntelService,
         CancellationToken ct)
     {
-        var job = await jobStore.GetJobAsync(jobId, ct);
+        var job = await jobRepository.GetJobAsync(jobId, ct);
         if (job is null)
             return Results.NotFound();
 
@@ -498,7 +511,7 @@ public static partial class ResearchApi
             learning.Text);
 
         return Results.Created(
-            $"/api/research/learnings/{learning.Id}",
+            $"/api/learnings/{learning.Id}",
             new AddLearningResponse(jobId, dto));
     }
 
@@ -513,14 +526,15 @@ public static partial class ResearchApi
     private static async Task<IResult> SoftDeleteLearningAsync(
         Guid jobId,
         Guid learningId,
-        IResearchJobStore jobStore,
+        IResearchJobRepository jobRepository,
+        IResearchLearningRepository learningRepository,
         CancellationToken ct)
     {
-        var job = await jobStore.GetJobAsync(jobId, ct);
+        var job = await jobRepository.GetJobAsync(jobId, ct);
         if (job is null)
             return Results.NotFound();
 
-        var ok = await jobStore.SoftDeleteLearningAsync(jobId, learningId, ct);
+        var ok = await learningRepository.SoftDeleteLearningAsync(jobId, learningId, ct);
         return ok ? Results.NoContent() : Results.NotFound();
     }
 
@@ -533,10 +547,10 @@ public static partial class ResearchApi
     /// <param name="ct">Request cancellation token.</param>
     private static async Task<IResult> GetLearningGroupByLearningIdAsync(
         Guid learningId,
-        IResearchJobStore jobStore,
+        IResearchLearningRepository learningRepository,
         CancellationToken ct)
     {
-        var card = await jobStore.GetLearningGroupCardByLearningIdAsync(learningId, ct);
+        var card = await learningRepository.GetLearningGroupCardByLearningIdAsync(learningId, ct);
         return card is null ? Results.NotFound() : Results.Ok(card);
     }
 
@@ -549,13 +563,13 @@ public static partial class ResearchApi
     /// <param name="ct">Request cancellation token.</param>
     private static async Task<IResult> ResolveLearningGroupsBatchAsync(
         [FromBody] BatchResolveLearningGroupsRequest request,
-        IResearchJobStore jobStore,
+        IResearchLearningRepository learningRepository,
         CancellationToken ct)
     {
         if (request.LearningIds.Count == 0)
             return Results.BadRequest(new ErrorResponse("learningIds is required."));
 
-        var items = await jobStore.ResolveLearningGroupsBatchAsync(request.LearningIds, ct);
+        var items = await learningRepository.ResolveLearningGroupsBatchAsync(request.LearningIds, ct);
         return Results.Ok(new BatchResolveLearningGroupsResponse(items));
     }
 
@@ -573,11 +587,12 @@ public static partial class ResearchApi
     private static async Task<IResult> CreateSynthesisAsync(
         Guid jobId,
         [FromBody] StartSynthesisRequest request,
-        IResearchJobStore jobStore,
+        IResearchJobRepository jobRepository,
+        IResearchSynthesisRepository synthesisRepository,
         IReportSynthesisService synthesisService,
         CancellationToken ct)
     {
-        var job = await jobStore.GetJobAsync(jobId, ct);
+        var job = await jobRepository.GetJobAsync(jobId, ct);
         if (job is null)
             return Results.NotFound();
 
@@ -585,7 +600,7 @@ public static partial class ResearchApi
 
         if (parentId is null && request.UseLatestAsParent == true)
         {
-            var latest = await jobStore.GetLatestSynthesisAsync(jobId, ct);
+            var latest = await synthesisRepository.GetLatestSynthesisAsync(jobId, ct);
             parentId = latest?.Id;
         }
 
@@ -597,7 +612,7 @@ public static partial class ResearchApi
             ct);
 
         return Results.Created(
-            $"/api/research/syntheses/{synthesisId}",
+            $"/api/syntheses/{synthesisId}",
             new CreateSynthesisResponse(jobId, synthesisId));
     }
 
@@ -611,11 +626,11 @@ public static partial class ResearchApi
     /// <param name="ct">Request cancellation token.</param>
     private static async Task<IResult> RunSynthesisAsync(
         Guid synthesisId,
-        IResearchJobStore jobStore,
+        IResearchSynthesisRepository synthesisRepository,
         IReportSynthesisService synthesisService,
         CancellationToken ct)
     {
-        var syn = await jobStore.GetSynthesisAsync(synthesisId, ct);
+        var syn = await synthesisRepository.GetSynthesisAsync(synthesisId, ct);
         if (syn is null)
             return Results.NotFound();
 
@@ -634,7 +649,7 @@ public static partial class ResearchApi
         var hangfireJobId = synthesisService.EnqueueSynthesisRun(syn.Id);
 
         return Results.Accepted(
-            $"/api/research/syntheses/{syn.Id}",
+            $"/api/syntheses/{syn.Id}",
             new RunSynthesisAcceptedResponse(
                 syn.JobId,
                 syn.Id,
@@ -655,14 +670,15 @@ public static partial class ResearchApi
     private static async Task<IResult> ListSynthesesAsync(
         Guid jobId,
         [AsParameters] ListSynthesesRequest req,
-        IResearchJobStore jobStore,
+        IResearchJobRepository jobRepository,
+        IResearchSynthesisRepository synthesisRepository,
         CancellationToken ct)
     {
-        var job = await jobStore.GetJobAsync(jobId, ct);
+        var job = await jobRepository.GetJobAsync(jobId, ct);
         if (job is null)
             return Results.NotFound();
 
-        var items = await jobStore.ListSynthesesAsync(
+        var items = await synthesisRepository.ListSynthesesAsync(
             jobId,
             req.SkipValue,
             req.TakeValue,
@@ -697,14 +713,15 @@ public static partial class ResearchApi
     /// <param name="ct">Request cancellation token.</param>
     private static async Task<IResult> GetLatestSynthesisAsync(
         Guid jobId,
-        IResearchJobStore jobStore,
+        IResearchJobRepository jobRepository,
+        IResearchSynthesisRepository synthesisRepository,
         CancellationToken ct)
     {
-        var job = await jobStore.GetJobAsync(jobId, ct);
+        var job = await jobRepository.GetJobAsync(jobId, ct);
         if (job is null)
             return Results.NotFound();
 
-        var syn = await jobStore.GetLatestSynthesisAsync(jobId, ct);
+        var syn = await synthesisRepository.GetLatestSynthesisAsync(jobId, ct);
         if (syn is null)
             return Results.Ok(new LatestSynthesisResponse(jobId, null));
 
@@ -749,10 +766,10 @@ public static partial class ResearchApi
     /// <param name="ct">Request cancellation token.</param>
     private static async Task<IResult> GetSynthesisAsync(
         Guid synthesisId,
-        IResearchJobStore jobStore,
+        IResearchSynthesisRepository synthesisRepository,
         CancellationToken ct)
     {
-        var syn = await jobStore.GetSynthesisAsync(synthesisId, ct);
+        var syn = await synthesisRepository.GetSynthesisAsync(synthesisId, ct);
         if (syn is null)
             return Results.NotFound();
 
@@ -796,10 +813,11 @@ public static partial class ResearchApi
     private static async Task<IResult> UpsertSynthesisSourceOverridesAsync(
         Guid synthesisId,
         [FromBody] IReadOnlyList<SynthesisSourceOverrideDto> overrides,
-        IResearchJobStore jobStore,
+        IResearchSynthesisRepository synthesisRepository,
+        IResearchSynthesisOverridesRepository synthesisOverridesRepository,
         CancellationToken ct)
     {
-        var syn = await jobStore.GetSynthesisAsync(synthesisId, ct);
+        var syn = await synthesisRepository.GetSynthesisAsync(synthesisId, ct);
         if (syn is null)
             return Results.NotFound();
 
@@ -807,7 +825,7 @@ public static partial class ResearchApi
         if (list.Count == 0)
             return Results.Ok(new UpsertOverridesResponse(synthesisId, 0));
 
-        await jobStore.AddOrUpdateSynthesisSourceOverridesAsync(synthesisId, list, ct);
+        await synthesisOverridesRepository.AddOrUpdateSynthesisSourceOverridesAsync(synthesisId, list, ct);
         return Results.Ok(new UpsertOverridesResponse(synthesisId, list.Count));
     }
 
@@ -823,10 +841,11 @@ public static partial class ResearchApi
     private static async Task<IResult> UpsertSynthesisLearningOverridesAsync(
         Guid synthesisId,
         [FromBody] IReadOnlyList<SynthesisLearningOverrideDto> overrides,
-        IResearchJobStore jobStore,
+        IResearchSynthesisRepository synthesisRepository,
+        IResearchSynthesisOverridesRepository synthesisOverridesRepository,
         CancellationToken ct)
     {
-        var syn = await jobStore.GetSynthesisAsync(synthesisId, ct);
+        var syn = await synthesisRepository.GetSynthesisAsync(synthesisId, ct);
         if (syn is null)
             return Results.NotFound();
 
@@ -834,7 +853,7 @@ public static partial class ResearchApi
         if (list.Count == 0)
             return Results.Ok(new UpsertOverridesResponse(synthesisId, 0));
 
-        await jobStore.AddOrUpdateSynthesisLearningOverridesAsync(synthesisId, list, ct);
+        await synthesisOverridesRepository.AddOrUpdateSynthesisLearningOverridesAsync(synthesisId, list, ct);
         return Results.Ok(new UpsertOverridesResponse(synthesisId, list.Count));
     }
 
@@ -849,14 +868,15 @@ public static partial class ResearchApi
     private static async Task<IResult> SoftDeleteSourceAsync(
         Guid jobId,
         Guid sourceId,
-        IResearchJobStore jobStore,
+        IResearchJobRepository jobRepository,
+        IResearchSourceRepository sourceRepository,
         CancellationToken ct)
     {
-        var job = await jobStore.GetJobAsync(jobId, ct);
+        var job = await jobRepository.GetJobAsync(jobId, ct);
         if (job is null)
             return Results.NotFound();
 
-        var ok = await jobStore.SoftDeleteSourceAsync(jobId, sourceId, ct);
+        var ok = await sourceRepository.SoftDeleteSourceAsync(jobId, sourceId, ct);
         return ok ? Results.NoContent() : Results.NotFound();
     }
 
@@ -874,12 +894,12 @@ public static partial class ResearchApi
         Guid jobId,
         HttpContext httpContext,
         ClaimsPrincipal user,
-        IResearchJobStore jobStore,
+        IResearchJobRepository jobRepository,
         IJobSseTicketService tickets,
         CancellationToken ct)
     {
         // Ensure job exists (and optionally enforce ownership/authorization)
-        var job = await jobStore.GetJobAsync(jobId, ct);
+        var job = await jobRepository.GetJobAsync(jobId, ct);
         if (job is null)
             return Results.NotFound();
 
@@ -890,7 +910,10 @@ public static partial class ResearchApi
 
         var ticket = tickets.Create(jobId, user);
 
-        var streamPath = $"/api/research/jobs/{jobId}/events/stream";
+        var tokenPath = httpContext.Request.Path.Value ?? $"/api/jobs/{jobId}/events/stream-token";
+        var streamPath = tokenPath.EndsWith("/events/stream-token", StringComparison.OrdinalIgnoreCase)
+            ? tokenPath[..^("/events/stream-token".Length)] + "/events/stream"
+            : $"/api/jobs/{jobId}/events/stream";
         var streamUrl = $"{streamPath}?ticket={Uri.EscapeDataString(ticket)}";
 
         var expiresAtUtc = tickets.GetExpiryUtc(ticket);
@@ -916,7 +939,8 @@ public static partial class ResearchApi
     private static async Task StreamEventsAsync(
         HttpContext httpContext,
         Guid jobId,
-        IResearchJobStore jobStore,
+        IResearchJobRepository jobRepository,
+        IResearchEventRepository eventRepository,
         IResearchEventBus eventBus,
         IJobSseTicketService tickets,
         CancellationToken ct)
@@ -930,7 +954,7 @@ public static partial class ResearchApi
             return;
         }
 
-        var job = await jobStore.GetJobAsync(jobId, ct);
+        var job = await jobRepository.GetJobAsync(jobId, ct);
         if (job is null)
         {
             httpContext.Response.StatusCode = StatusCodes.Status404NotFound;
@@ -997,7 +1021,7 @@ public static partial class ResearchApi
             token);
 
         // Replay stored events AFTER subscribing
-        var storedEvents = await jobStore.GetEventsAsync(jobId, token);
+        var storedEvents = await eventRepository.GetEventsAsync(jobId, token);
 
         foreach (var e in storedEvents.Where(e => e.Id > lastId).OrderBy(e => e.Id))
         {

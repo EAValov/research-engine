@@ -7,7 +7,7 @@ namespace ResearchEngine.Application;
 public sealed class ResearchProgressTracker
 {
     private readonly Guid _jobId;
-    private readonly IResearchJobStore _jobStore;
+    private readonly IResearchEventRepository _eventRepository;
 
     private readonly object _lock = new();
     private readonly Stopwatch _sw = Stopwatch.StartNew();
@@ -19,10 +19,10 @@ public sealed class ResearchProgressTracker
     public ResearchMetrics Job { get; } = new();
     public SynthesisMetrics Synthesis { get; } = new();
 
-    public ResearchProgressTracker(Guid jobId, IResearchJobStore jobStore, int minEmitIntervalMs = 250)
+    public ResearchProgressTracker(Guid jobId, IResearchEventRepository eventRepository, int minEmitIntervalMs = 250)
     {
         _jobId = jobId;
-        _jobStore = jobStore;
+        _eventRepository = eventRepository;
         _minEmitIntervalMs = Math.Clamp(minEmitIntervalMs, 0, 10_000);
     }
 
@@ -78,7 +78,7 @@ public sealed class ResearchProgressTracker
         if(SynthesisId is not null)
             ev.SynthesisId = SynthesisId;
 
-        await _jobStore.AppendEventAsync(
+        await _eventRepository.AppendEventAsync(
             _jobId,
             ev,
             ct);
