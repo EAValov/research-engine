@@ -1,6 +1,6 @@
 {
   "runtime": "Net100",
-  "defaultVariables": "OpenApiSpecFile=openapi/v1.yaml",
+  "defaultVariables": "OpenApiSpecFile=v1.yaml",
   "documentGenerator": {
     "fromDocument": {
       "url": "$(OpenApiSpecFile)"
@@ -19,7 +19,7 @@
       "dateTimeType": "System.DateTimeOffset",
       "jsonLibrary": "SystemTextJson",
       "generateJsonMethods": true,
-      "output": "Api/ResearchApiClient.g.cs"
+      "output": "ResearchApiClient.g.cs"
     }
   }
 }

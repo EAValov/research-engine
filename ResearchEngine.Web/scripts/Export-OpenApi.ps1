@@ -7,7 +7,8 @@ param(
 
     [string]$DocumentName = "v1",
     [string]$ServerUrl = "http://localhost:8090/",
-    [int]$StartupTimeoutSeconds = 30
+    [int]$StartupTimeoutSeconds = 30,
+    [switch]$UseLocalDotnetCliHome
 )
 
 $ErrorActionPreference = "Stop"
@@ -25,12 +26,14 @@ if (-not [string]::IsNullOrWhiteSpace($outputDirectory) -and -not (Test-Path $ou
     New-Item -Path $outputDirectory -ItemType Directory -Force | Out-Null
 }
 
-$dotnetCliHome = Join-Path $projectDirPath ".dotnet"
-if (-not (Test-Path $dotnetCliHome)) {
-    New-Item -Path $dotnetCliHome -ItemType Directory -Force | Out-Null
-}
+if ($UseLocalDotnetCliHome) {
+    $dotnetCliHome = Join-Path $projectDirPath ".dotnet"
+    if (-not (Test-Path $dotnetCliHome)) {
+        New-Item -Path $dotnetCliHome -ItemType Directory -Force | Out-Null
+    }
 
-$env:DOTNET_CLI_HOME = $dotnetCliHome
+    $env:DOTNET_CLI_HOME = $dotnetCliHome
+}
 $env:ASPNETCORE_ENVIRONMENT = "Testing"
 $env:IpRateLimiting__Enabled = "false"
 
