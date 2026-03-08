@@ -6,6 +6,21 @@
 :{$BLAZOR_PORT:8081} {
     root * /srv
     encode zstd gzip
-    try_files {path} /index.html
-    file_server
+
+    # Runtime files must never fall back to index.html.
+    handle /_framework/* {
+        file_server
+    }
+
+    # Other static assets should also return 404 when missing.
+    @asset path *.js *.css *.wasm *.json *.ico *.png *.jpg *.jpeg *.svg *.webp *.map *.txt *.xml
+    handle @asset {
+        file_server
+    }
+
+    # SPA fallback only for route-like URLs.
+    handle {
+        try_files {path} /index.html
+        file_server
+    }
 }

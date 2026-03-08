@@ -234,10 +234,24 @@ builder.Services.AddSingleton(TimeProvider.System);
 
 builder.Services.AddCors(options =>
 {
+    var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>();
+    if (allowedOrigins is null || allowedOrigins.Length == 0)
+    {
+        allowedOrigins =
+        [
+            "http://localhost:5170",
+            "http://127.0.0.1:5170",
+            "http://localhost:5173",
+            "http://127.0.0.1:5173",
+            "https://localhost:5001",
+            "http://localhost:5000"
+        ];
+    }
+
     options.AddPolicy("BlazorDev", policy =>
     {
         policy
-            .WithOrigins("http://localhost:5173", "https://localhost:5001", "http://localhost:5000")
+            .WithOrigins(allowedOrigins)
             .AllowAnyHeader()
             .AllowAnyMethod();
     });
@@ -275,8 +289,6 @@ app.MapResearchApi();
 
 app.MapResearchModel();
 app.MapResearchProtocolApi();
-
-app.UseCors("BlazorDev");
 
 app.MapOpenApi();
 app.MapOpenApi("/openapi/{documentName}.yaml");
