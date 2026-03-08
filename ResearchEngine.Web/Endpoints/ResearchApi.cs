@@ -116,6 +116,12 @@ public static partial class ResearchApi
             .ProducesProblem(StatusCodes.Status401Unauthorized)
             .ProducesProblem(StatusCodes.Status403Forbidden);
 
+        api.MapDelete("/syntheses/{synthesisId:guid}", DeleteSynthesisAsync)
+            .Produces(StatusCodes.Status204NoContent)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status403Forbidden);
+
         api.MapPost("/jobs/{jobId:guid}/syntheses", CreateSynthesisAsync)
             .Accepts<StartSynthesisRequest>("application/json")
             .Produces<CreateSynthesisResponse>(StatusCodes.Status201Created)

@@ -273,7 +273,8 @@ else
                             IsOpenChanged="v => _historyOpen = v"
                             CurrentSynthesisId="CurrentSynthesisIdForDrawer"
                             OpenSynthesis="OpenSynthesisAsync"
-                            UseAsBase="UseAsBaseAsync" />
+                            UseAsBase="UseAsBaseAsync"
+                            DeleteSynthesis="OnSynthesisDeletedAsync" />
 
     <CreateSynthesisDialog IsOpen="_createDialogOpen"
                            IsOpenChanged="v => _createDialogOpen = v"
@@ -352,7 +353,9 @@ else
         string.Equals(_terminalStatus, "Failed", StringComparison.OrdinalIgnoreCase) ||
         string.Equals(_terminalStatus, "Canceled", StringComparison.OrdinalIgnoreCase);
 
-    private bool IsRunning => !IsTerminal;
+    private bool IsRunning =>
+        string.Equals(_job?.Status, "Pending", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(_job?.Status, "Running", StringComparison.OrdinalIgnoreCase);
 
     private bool HasNonCreatedEvents
         => _events.Any(e => !string.Equals(e.Stage, "Created", StringComparison.OrdinalIgnoreCase));
@@ -364,6 +367,10 @@ else
         string.Equals(_terminalStatus, "Completed", StringComparison.OrdinalIgnoreCase) ||
         string.Equals(_job?.Status?.ToString(), "Completed", StringComparison.OrdinalIgnoreCase);
 
+    private bool IsCanceled =>
+        string.Equals(_terminalStatus, "Canceled", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(_job?.Status?.ToString(), "Canceled", StringComparison.OrdinalIgnoreCase);
+
     private string CurrentStatusChip
         => _terminalStatus
         ?? (IsEffectivelyRunning ? "Running" : (_job?.Status?.ToString() ?? "Unknown"));
@@ -372,7 +379,7 @@ else
         => _events.Count == 0 ? "" : _events[^1].Stage;
 
     private bool CanNewSynthesis
-        => IsCompleted || (_latestSynthesis is not null) || (_synthesisLoadedOnce && !_synthesisEmpty);
+        => IsCompleted || IsCanceled || (_latestSynthesis is not null) || (_synthesisLoadedOnce && !_synthesisEmpty);
 
     private Guid? CurrentSynthesisIdForDrawer => _selectedSynthesisId ?? _latestSynthesis?.Id;
 
@@ -479,10 +486,15 @@ else
             if (IsTerminalStatus(lastStage))
             {
                 _terminalStatus = lastStage;
+                if (_job is not null)
+                    _job.Status = lastStage;
             }
-            else if (!string.Equals(lastStage, "Created", StringComparison.OrdinalIgnoreCase))
+            else if (!string.Equals(lastStage, "Created", StringComparison.OrdinalIgnoreCase)
+                     && !IsTerminalStatus(_job?.Status))
             {
                 _terminalStatus = "Running";
+                if (_job is not null)
+                    _job.Status = "Running";
             }
         }
 
@@ -510,9 +522,17 @@ else
             _streamError = null;
 
             if (IsTerminalStatus(item.Event.Stage))
+            {
                 _terminalStatus = item.Event.Stage;
+                if (_job is not null)
+                    _job.Status = item.Event.Stage;
+            }
             else if (!string.Equals(item.Event.Stage, "Created", StringComparison.OrdinalIgnoreCase))
+            {
                 _terminalStatus = "Running";
+                if (_job is not null && !IsTerminalStatus(_job.Status))
+                    _job.Status = "Running";
+            }
 
             // Extra guard to avoid UI duplicates even if the stream replays.
             // (JobEventsClient should already dedupe.)
@@ -546,6 +566,8 @@ else
         if (item.Kind == JobStreamKind.Done && item.Done is not null)
         {
             _terminalStatus = item.Done.Status;
+            if (_job is not null)
+                _job.Status = item.Done.Status;
             _doneSynthesisId = item.Done.SynthesisId;
 
             await InvokeAsync(async () =>
@@ -669,6 +691,38 @@ else
         StateHasChanged();
     }
 
+    private async Task OnSynthesisDeletedAsync(Guid synthesisId)
+    {
+        if (_watchingSynthesisId == synthesisId)
+            await StopSynthesisWatchAsync();
+
+        if (_selectedSynthesisId == synthesisId)
+        {
+            _selectedSynthesisId = null;
+            _selectedSynthesisError = null;
+            _retryOpenId = null;
+        }
+
+        if (_latestSynthesis?.Id == synthesisId)
+        {
+            _latestSynthesis = null;
+            _synthesisMarkdown = string.Empty;
+            _synthesisEmpty = true;
+
+            var latestRes = await SynthesisFacade.GetLatestSynthesisAsync(JobId);
+            if (latestRes.IsSuccess && latestRes.Data is not null)
+            {
+                ApplyLatestSynthesis(latestRes.Data, markUpdated: false);
+            }
+            else if (!latestRes.IsSuccess)
+            {
+                _synthesisError = latestRes.Error;
+            }
+        }
+
+        StateHasChanged();
+    }
+
     private async Task UseAsBaseAsync(SynthesisDto s)
     {
         _prefillInstructions = string.IsNullOrWhiteSpace(s.Instructions) ? null : s.Instructions;
@@ -784,15 +838,29 @@ else
         _cancelError = null;
         _cancelInFlight = true;
 
-        var res = await JobFacade.CancelJobAsync(JobId);
-        if (!res.IsSuccess)
+        try
         {
-            _cancelError = res.Error;
-            _cancelInFlight = false;
-            return;
-        }
+            var res = await JobFacade.CancelJobAsync(JobId);
+            if (!res.IsSuccess)
+            {
+                _cancelError = res.Error;
+                return;
+            }
 
-        _cancelInFlight = false;
+            _terminalStatus = "Canceled";
+            if (_job is not null)
+                _job.Status = "Canceled";
+
+            _synthesisLoading = false;
+            await StopSynthesisWatchAsync();
+            await StopStreamAsync();
+            await ReloadEventsAsync();
+        }
+        finally
+        {
+            _cancelInFlight = false;
+            StateHasChanged();
+        }
     }
 
     private async Task OpenLearningInDrawer(Guid learningId)

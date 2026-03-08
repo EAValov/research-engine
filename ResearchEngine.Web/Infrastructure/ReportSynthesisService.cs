@@ -60,13 +60,21 @@ public sealed class ReportSynthesisService(
         if (synthesis.Status is SynthesisStatus.Completed or SynthesisStatus.Failed)
             return;
 
+        var isManualSynthesisRun = progress is null;
         progress ??= new ResearchProgressTracker(synthesis.JobId, eventRepository, minEmitIntervalMs: 250);
+
+        // Allow a new manual synthesis run after a previous job-level cancel request.
+        // Cancellation requested during this run will still be observed by periodic checks below.
+        if (isManualSynthesisRun)
+            await jobRepository.ClearJobCancelRequestAsync(synthesis.JobId, ct);
+
         progress.ResetSynthesisMetrics();
 
         var synTag = $"syn:{synthesis.Id.ToString("N")[..8]}";
 
         try
         {
+            await ThrowIfJobCanceledAsync(synthesis.JobId, ct);
             await synthesisRepository.MarkSynthesisRunningAsync(synthesis.Id, ct);
 
             await progress.InfoSynthesisAsync(
@@ -97,6 +105,7 @@ public sealed class ReportSynthesisService(
                 $"[{synTag}][plan] Planning report sections",
                 ct);
 
+            await ThrowIfJobCanceledAsync(synthesis.JobId, ct);
             var plans = await PlanSectionsAsync(
                 job: job,
                 clarificationsText: clarificationsText,
@@ -144,6 +153,7 @@ public sealed class ReportSynthesisService(
                 $"[{synTag}][conclusion] Writing conclusion",
                 ct);
 
+            await ThrowIfJobCanceledAsync(synthesis.JobId, ct);
             var conclusionText = await GenerateConclusionAsync(
                 job: job,
                 clarificationsText: clarificationsText,
@@ -199,12 +209,30 @@ public sealed class ReportSynthesisService(
             progress.SynthesisFinalized();
 
             // Persist sections atomically and mark completed
+            await ThrowIfJobCanceledAsync(synthesis.JobId, ct);
             await synthesisRepository.CompleteSynthesisAsync(synthesis.Id, sectionsToPersist, ct);
 
             await progress.SynthesisCompletedAsync(
                 synthesis.Id,
                 $"[{synTag}] Synthesis completed",
                 ct);
+        }
+        catch (OperationCanceledException oce)
+        {
+            await synthesisRepository.FailSynthesisAsync(
+                synthesisId,
+                "Synthesis canceled by user request.",
+                CancellationToken.None);
+
+            await eventRepository.AppendEventAsync(
+                synthesis.JobId,
+                new ResearchEvent(
+                    DateTimeOffset.UtcNow,
+                    ResearchEventStage.Canceled,
+                    $"[{synTag}] Synthesis canceled: {oce.Message}"),
+                CancellationToken.None);
+
+            return;
         }
         catch (Exception ex)
         {
@@ -466,6 +494,8 @@ public sealed class ReportSynthesisService(
 
         for (int i = 0; i < ordered.Count; i++)
         {
+            await ThrowIfJobCanceledAsync(synthesis.JobId, ct);
+
             var section = ordered[i];
             progress.SynthesisSectionStarted(section.Title);
 
@@ -505,6 +535,8 @@ public sealed class ReportSynthesisService(
                 tools: [tool],
                 cancellationToken: ct);
 
+            await ThrowIfJobCanceledAsync(synthesis.JobId, ct);
+
             var text = chatModel.StripThinkBlock(response.Text).Trim();
 
             results.Add(new SectionResult { Plan = section, Text = text });
@@ -515,6 +547,7 @@ public sealed class ReportSynthesisService(
                 $"[{synTag}][section {section.Index}/{ordered.Count}] Summarizing '{section.Title}'",
                 ct);
 
+            await ThrowIfJobCanceledAsync(synthesis.JobId, ct);
             results[^1].Summary = await GenerateSectionSummaryAsync(job, results[^1], ct);
             progress.SynthesisSectionSummarized();
         }
@@ -578,6 +611,12 @@ public sealed class ReportSynthesisService(
             sb.AppendLine();
         }
         return sb.ToString().Trim();
+    }
+
+    private async Task ThrowIfJobCanceledAsync(Guid jobId, CancellationToken ct)
+    {
+        if (await jobRepository.IsJobCancelRequestedAsync(jobId, ct))
+            throw new OperationCanceledException($"Job {jobId} canceled.");
     }
 
     private sealed class SectionPlanningResponse

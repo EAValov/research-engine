@@ -110,6 +110,24 @@ public sealed partial class PostgresResearchJobStore(
         }
     }
 
+    public async Task<int> ClearJobCancelRequestAsync(Guid jobId, CancellationToken ct = default)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(ct);
+
+        var entity = await db.ResearchJobs.FirstOrDefaultAsync(j => j.Id == jobId, ct);
+        if (entity is null) return 0;
+
+        if (!entity.CancelRequested && entity.CancelRequestedAt is null && string.IsNullOrWhiteSpace(entity.CancelReason))
+            return 0;
+
+        entity.CancelRequested = false;
+        entity.CancelRequestedAt = null;
+        entity.CancelReason = null;
+        entity.UpdatedAt = DateTimeOffset.UtcNow;
+
+        return await db.SaveChangesAsync(ct);
+    }
+
     public async Task<bool> IsJobCancelRequestedAsync(Guid jobId, CancellationToken ct = default)
     {
         await using var db = await dbContextFactory.CreateDbContextAsync(ct);
@@ -378,6 +396,18 @@ public sealed partial class PostgresResearchJobStore(
         entity.CompletedAt = DateTimeOffset.UtcNow;
 
         return await db.SaveChangesAsync(ct);
+    }
+
+    public async Task<bool> DeleteSynthesisAsync(Guid synthesisId, CancellationToken ct = default)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(ct);
+
+        var entity = await db.Syntheses.FirstOrDefaultAsync(s => s.Id == synthesisId, ct);
+        if (entity is null) return false;
+
+        db.Syntheses.Remove(entity);
+        await db.SaveChangesAsync(ct);
+        return true;
     }
 
     public async Task<Synthesis?> GetSynthesisAsync(Guid synthesisId, CancellationToken ct = default)

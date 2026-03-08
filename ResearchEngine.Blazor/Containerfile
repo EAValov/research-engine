@@ -12,6 +12,8 @@ RUN dotnet publish ResearchEngine.Blazor.csproj -c Release -o /app/publish /p:Ge
 FROM caddy:2.9-alpine AS final
 WORKDIR /srv
 
+RUN apk add --no-cache curl
+
 COPY --from=build /app/publish/wwwroot/ /srv/
 COPY Caddyfile /etc/caddy/Caddyfile
 COPY entrypoint.sh /usr/local/bin/entrypoint.sh

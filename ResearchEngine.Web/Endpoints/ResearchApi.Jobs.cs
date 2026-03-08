@@ -135,7 +135,7 @@ public static partial class ResearchApi
             jobId,
             new ResearchEvent(
                 DateTimeOffset.UtcNow,
-                ResearchEventStage.Planning,
+                ResearchEventStage.Canceled,
                 $"Cancel requested{(string.IsNullOrWhiteSpace(request?.Reason) ? "" : $": {request!.Reason}")}"
             ),
             ct);

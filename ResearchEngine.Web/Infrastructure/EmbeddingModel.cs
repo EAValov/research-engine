@@ -25,12 +25,10 @@ public sealed class OpenAiEmbeddingModel : IEmbeddingModel
             Endpoint = new Uri(cfg.Endpoint)
         };
 
-        var credential = new ApiKeyCredential(cfg.ApiKey);
+        if (string.IsNullOrWhiteSpace(cfg.ApiKey))
+            throw new InvalidOperationException("Missing required configuration: EmbeddingConfig:ApiKey");
 
-        var embeddingClient = new EmbeddingClient(
-            model: cfg.ModelId,
-            credential: credential,
-            options: clientOptions);
+        var embeddingClient = new EmbeddingClient(cfg.ModelId, new ApiKeyCredential(cfg.ApiKey), clientOptions);
 
         _embeddingGenerator = embeddingClient.AsIEmbeddingGenerator();
     }

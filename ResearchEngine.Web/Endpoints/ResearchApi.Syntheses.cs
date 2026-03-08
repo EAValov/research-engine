@@ -213,6 +213,19 @@ public static partial class ResearchApi
     }
 
     /// <summary>
+    /// DELETE /api/research/syntheses/{synthesisId}
+    /// Deletes a synthesis row and its related sections/overrides.
+    /// </summary>
+    private static async Task<IResult> DeleteSynthesisAsync(
+        Guid synthesisId,
+        IResearchSynthesisRepository synthesisRepository,
+        CancellationToken ct)
+    {
+        var deleted = await synthesisRepository.DeleteSynthesisAsync(synthesisId, ct);
+        return deleted ? Results.NoContent() : Results.NotFound();
+    }
+
+    /// <summary>
     /// PUT /api/research/syntheses/{synthesisId}/overrides/sources
     /// Upserts source-level overrides for a synthesis.
     /// </summary>

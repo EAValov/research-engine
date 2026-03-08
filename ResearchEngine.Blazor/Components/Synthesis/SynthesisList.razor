@@ -2,6 +2,7 @@
 @using ResearchEngine.Blazor.Components.Common
 @using ResearchEngine.Blazor.Services
 @inject SynthesisHistoryFacade History
+@inject IJSRuntime JS
 
 <div class="list-wrap">
     @if (_error is not null)
@@ -68,6 +69,16 @@
                         <button type="button" class="ghost" @onclick="() => OnCopyId.InvokeAsync(s.SynthesisId)" aria-label="Copy synthesis id">
                             Copy
                         </button>
+
+                        @if (CanDeleteFromUi(s))
+                        {
+                            <button type="button"
+                                    class="ghost"
+                                    disabled="@(_deletingId == s.SynthesisId)"
+                                    @onclick="() => DeleteAsync(s.SynthesisId)">
+                                @(_deletingId == s.SynthesisId ? "Deleting…" : "Delete")
+                            </button>
+                        }
                     </div>
                 </li>
             }
@@ -97,6 +108,7 @@
     [Parameter] public EventCallback<Guid> OnSetCompareB { get; set; }
     [Parameter] public EventCallback<Guid> OnUseAsBase { get; set; }
     [Parameter] public EventCallback<Guid> OnCopyId { get; set; }
+    [Parameter] public EventCallback<Guid> OnDeleted { get; set; }
 
     private readonly List<SynthesisListItemDto> _items = new();
     private ApiError? _error;
@@ -107,6 +119,7 @@
 
     private int? _totalCount;
     private bool _hasMore = true;
+    private Guid? _deletingId;
 
     protected override async Task OnParametersSetAsync()
     {
@@ -157,4 +170,41 @@
 
     private static string ShortId(Guid id) => id.ToString("N")[..8];
     private static string Fmt(DateTimeOffset dto) => dto.ToLocalTime().ToString("yyyy-MM-dd HH:mm");
+
+    private static bool CanDeleteFromUi(SynthesisListItemDto s)
+        => string.Equals(s.Status?.Trim(), "Failed", StringComparison.OrdinalIgnoreCase);
+
+    private async Task DeleteAsync(Guid synthesisId)
+    {
+        if (_deletingId is not null) return;
+
+        var ok = false;
+        try { ok = await JS.InvokeAsync<bool>("confirm", $"Delete synthesis {ShortId(synthesisId)}?"); }
+        catch { }
+
+        if (!ok) return;
+
+        _deletingId = synthesisId;
+        _error = null;
+
+        try
+        {
+            var res = await History.DeleteSynthesisAsync(synthesisId);
+            if (!res.IsSuccess)
+            {
+                _error = res.Error;
+                return;
+            }
+
+            _items.RemoveAll(x => x.SynthesisId == synthesisId);
+            if (_totalCount is > 0)
+                _totalCount--;
+
+            await OnDeleted.InvokeAsync(synthesisId);
+        }
+        finally
+        {
+            _deletingId = null;
+        }
+    }
 }

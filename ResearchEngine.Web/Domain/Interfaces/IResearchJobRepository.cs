@@ -21,6 +21,8 @@ public interface IResearchJobRepository
 
     Task RequestJobCancelAsync(Guid jobId, string? reason, CancellationToken ct = default);
 
+    Task<int> ClearJobCancelRequestAsync(Guid jobId, CancellationToken ct = default);
+
     Task<bool> IsJobCancelRequestedAsync(Guid jobId, CancellationToken ct = default);
 
     Task<int> SoftDeleteJobAsync(Guid jobId, string? reason, CancellationToken ct = default);

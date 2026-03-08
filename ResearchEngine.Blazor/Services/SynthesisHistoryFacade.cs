@@ -48,4 +48,23 @@ public sealed class SynthesisHistoryFacade
             return ApiResult<SynthesisDto>.Fail(ApiErrorMapper.Map(ex));
         }
     }
+
+    public async Task<ApiResult<bool>> DeleteSynthesisAsync(
+        Guid synthesisId,
+        CancellationToken ct = default)
+    {
+        try
+        {
+            await _api.SynthesesDELETEAsync(synthesisId, ct);
+            return ApiResult<bool>.Ok(true);
+        }
+        catch (ApiException apiEx) when (apiEx.StatusCode == 404)
+        {
+            return ApiResult<bool>.Fail(new ApiError(ApiErrorKind.Http, "Synthesis not found (404)."));
+        }
+        catch (Exception ex)
+        {
+            return ApiResult<bool>.Fail(ApiErrorMapper.Map(ex));
+        }
+    }
 }

@@ -27,12 +27,10 @@ public sealed class OpenAiChatModel : IChatModel
             Endpoint = new Uri(cfg.Endpoint)
         };
 
-        var credential = new ApiKeyCredential(cfg.ApiKey);
+        if (string.IsNullOrWhiteSpace(cfg.ApiKey))
+            throw new InvalidOperationException("Missing required configuration: ChatConfig:ApiKey");
 
-        _rawChatClient = new ChatClient(
-            model: cfg.ModelId,
-            credential: credential,
-            options: clientOptions);
+        _rawChatClient = new ChatClient(cfg.ModelId, new ApiKeyCredential(cfg.ApiKey), clientOptions);
 
         _chatClient = new ChatClientBuilder(_rawChatClient.AsIChatClient())
             .UseFunctionInvocation()

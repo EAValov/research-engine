@@ -21,6 +21,8 @@ public interface IResearchSynthesisRepository
         string errorMessage,
         CancellationToken ct = default);
 
+    Task<bool> DeleteSynthesisAsync(Guid synthesisId, CancellationToken ct = default);
+
     Task<Synthesis?> GetSynthesisAsync(Guid synthesisId, CancellationToken ct = default);
 
     Task<IReadOnlyList<SynthesisListItemDto>> ListSynthesesAsync(

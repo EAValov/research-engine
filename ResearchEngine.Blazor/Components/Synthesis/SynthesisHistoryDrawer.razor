@@ -47,7 +47,8 @@
                                OnSetCompareA="SetCompareAAsync"
                                OnSetCompareB="SetCompareBAsync"
                                OnUseAsBase="OnUseAsBaseClicked"
-                               OnCopyId="CopyIdAsync" />
+                               OnCopyId="CopyIdAsync"
+                               OnDeleted="OnDeletedClicked" />
             }
             else
             {
@@ -79,6 +80,7 @@
     // actions back to JobDetailPage
     [Parameter] public EventCallback<Guid> OpenSynthesis { get; set; }
     [Parameter] public EventCallback<SynthesisDto> UseAsBase { get; set; }
+    [Parameter] public EventCallback<Guid> DeleteSynthesis { get; set; }
 
     private string _tab = "history";
 
@@ -121,6 +123,9 @@
 
         await UseAsBase.InvokeAsync(dto);
     }
+
+    private Task OnDeletedClicked(Guid synthesisId)
+        => DeleteSynthesis.InvokeAsync(synthesisId);
 
     private async Task SetCompareAAsync(Guid id)
     {

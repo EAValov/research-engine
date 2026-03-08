@@ -6,8 +6,8 @@ type: Opaque
 stringData:
   ConnectionStrings__ResearchDb: "Host=nuq-postgres;Port=5432;Database=research;Username=firecrawl;Password=firecrawl"
   ConnectionStrings__HangfireDb: "Host=nuq-postgres;Port=5432;Database=jobs;Username=firecrawl;Password=firecrawl"
-  ChatConfig__ApiKey: ""
-  EmbeddingConfig__ApiKey: ""
+  ChatConfig__ApiKey: "CHANGE_ME"
+  EmbeddingConfig__ApiKey: "CHANGE_ME"
   BearerAuthenticationOptions__BearerTokens__0: "9h32F2fNuwMQL0OUujpUoIF6l8S/lGPOM1ylNhH+MKQ="
 
 ---
