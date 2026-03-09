@@ -16,6 +16,12 @@ public static class AppStateDefaults
                 SortKey = "created",
                 PinnedJobs = new List<Guid>()
             },
+            Api = new ApiConnectionState
+            {
+                BaseUrl = "",
+                BearerToken = "",
+                AuthEnabled = true
+            },
             Jobs = new Dictionary<Guid, JobUiState>()
         };
     }

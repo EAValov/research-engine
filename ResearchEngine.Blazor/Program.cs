@@ -45,5 +45,7 @@ builder.Services.AddScoped<IResearchApiClient>(sp =>
     return new ResearchApiClient(http);
 });
 
+builder.Services.AddScoped<ApiConnectionSettings>();
+
 
 await builder.Build().RunAsync();

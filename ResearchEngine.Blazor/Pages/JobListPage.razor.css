@@ -1,5 +1,5 @@
 .jobs {
-    width: min(920px, calc(100vw - 32px));
+    width: min(1240px, 100%);
     margin: 16px auto 0;
     border: 1px solid var(--border);
     border-radius: 8px;

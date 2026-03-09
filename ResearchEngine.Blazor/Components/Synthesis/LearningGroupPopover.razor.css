@@ -47,6 +47,31 @@
 
 .rep { color: var(--text); overflow-wrap: anywhere; }
 
+.source-row {
+    margin-top: 10px;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    min-width: 0;
+}
+
+.source-label {
+    color: var(--muted);
+    font-size: 0.9rem;
+}
+
+.source-link {
+    color: var(--text);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    display: inline-block;
+    max-width: 100%;
+}
+
 .actions { display: flex; justify-content: flex-end; gap: 8px; }
 
 .primary {

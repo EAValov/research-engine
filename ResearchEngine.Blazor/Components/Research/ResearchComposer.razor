@@ -1,6 +1,5 @@
 @using ResearchEngine.Blazor.Components.Common
 @using ResearchEngine.Blazor.Services
-@using System.Text.RegularExpressions
 @inject ResearchProtocolFacade Protocol
 @inject JobCreationFacade Jobs
 @inject NavigationManager Nav
@@ -59,7 +58,6 @@
             }
             else
             {
-                <label class="sr-only" for="queryBox">Research input</label>
                 <textarea id="queryBox"
                           class="query"
                           rows="6"
@@ -95,33 +93,45 @@
                 @if (_showSettings)
                 {
                     <div class="settings-grid" role="group" aria-label="Research settings">
-                        <div class="field">
+                        <div class="field field-compact">
                             <div class="lbl">Breadth</div>
-                            <input class="input"
-                                   inputmode="numeric"
-                                   placeholder="1–8, more is wider"
-                                   value="@(_breadth?.ToString() ?? string.Empty)"
-                                   @oninput="e => SetBreadth(e.Value?.ToString())" />
+                            <select class="input"
+                                    value="@(_breadth?.ToString() ?? string.Empty)"
+                                    @onchange="e => SetBreadth(e.Value?.ToString())">
+                                <option value="">Auto</option>
+                                @foreach (var value in BreadthOptions)
+                                {
+                                    <option value="@value">@value</option>
+                                }
+                            </select>
                         </div>
 
-                        <div class="field">
+                        <div class="field field-compact">
                             <div class="lbl">Depth</div>
-                            <input class="input"
-                                   inputmode="numeric"
-                                   placeholder="1–4, more is deeper"
-                                   value="@(_depth?.ToString() ?? string.Empty)"
-                                   @oninput="e => SetDepth(e.Value?.ToString())" />
+                            <select class="input"
+                                    value="@(_depth?.ToString() ?? string.Empty)"
+                                    @onchange="e => SetDepth(e.Value?.ToString())">
+                                <option value="">Auto</option>
+                                @foreach (var value in DepthOptions)
+                                {
+                                    <option value="@value">@value</option>
+                                }
+                            </select>
                         </div>
 
-                        <div class="field">
+                        <div class="field field-compact">
                             <div class="lbl">Language</div>
-                            <input class="input"
-                                   placeholder="2-letter code (e.g., en, de, ru)"
-                                   value="@(_language ?? string.Empty)"
-                                   @oninput="e => _language = e.Value?.ToString()" />
+                            <select class="input"
+                                    value="@(_language ?? "en")"
+                                    @onchange="OnLanguageChanged">
+                                @foreach (var language in SupportedLanguages)
+                                {
+                                    <option value="@language.Code">@language.Name</option>
+                                }
+                            </select>
                         </div>
 
-                        <div class="field">
+                        <div class="field field-region">
                             <div class="lbl">Region</div>
                             <input class="input"
                                    placeholder="Russia, Bavaria (Germany)…"
@@ -169,6 +179,17 @@
 
     private readonly List<string> _questions = new();
     private readonly Dictionary<string, string> _answers = new();
+    private static readonly int[] BreadthOptions = { 1, 2, 3, 4, 5, 6, 7, 8 };
+    private static readonly int[] DepthOptions = { 1, 2, 3, 4 };
+    private static readonly (string Code, string Name)[] SupportedLanguages =
+    {
+        ("ar", "Arabic"),
+        ("zh", "Chinese"),
+        ("en", "English"),
+        ("fr", "French"),
+        ("ru", "Russian"),
+        ("es", "Spanish")
+    };
 
     private bool CanRun => !string.IsNullOrWhiteSpace(_query);
 
@@ -279,7 +300,7 @@
                 // Populate only if user hasn't typed values yet
                 _breadth ??= breadth;
                 _depth ??= depth;
-                _language ??= language;
+                _language ??= NormalizeLanguageCode(language) ?? "en";
                 _region ??= region;
             }
             else
@@ -289,7 +310,7 @@
 
             breadth = _breadth ?? breadth;
             depth = _depth ?? depth;
-            language = NormalizeLanguage(_language) ?? language;
+            language = NormalizeLanguageCode(_language) ?? NormalizeLanguageCode(language) ?? "en";
             region = NormalizeRegion(_region);
 
             // 3) Create job
@@ -342,14 +363,24 @@
         return list;
     }
 
-    private static string? NormalizeLanguage(string? raw)
+    private void OnLanguageChanged(ChangeEventArgs e)
+    {
+        _language = NormalizeLanguageCode(e.Value?.ToString()) ?? "en";
+    }
+
+    private static string? NormalizeLanguageCode(string? raw)
     {
         if (string.IsNullOrWhiteSpace(raw))
             return null;
 
         var s = raw.Trim().ToLowerInvariant();
-        // keep it permissive but avoid obvious junk
-        return Regex.IsMatch(s, "^[a-z]{2}$") ? s : s;
+        foreach (var (code, _) in SupportedLanguages)
+        {
+            if (string.Equals(code, s, StringComparison.OrdinalIgnoreCase))
+                return code;
+        }
+
+        return null;
     }
 
     private static string? NormalizeRegion(string? raw)

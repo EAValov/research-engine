@@ -44,6 +44,10 @@ else
             <div class="label">Status</div>
             <div class="value">
                 <span class="pill">@CurrentStatusChip</span>
+                @if (IsEffectivelyRunning)
+                {
+                    <span class="spinner status-spinner" aria-hidden="true"></span>
+                }
                 @if (!string.IsNullOrWhiteSpace(CurrentStage))
                 {
                     <span class="stage">@CurrentStage</span>
@@ -120,6 +124,15 @@ else
                     <span class="mono">@ShortId(_latestSynthesis.Id)</span>
                     <span class="dot">•</span>
                     <span>Created: @FormatTime(_latestSynthesis.CreatedAt)</span>
+                    @if (!string.IsNullOrWhiteSpace(_latestSynthesis.Status))
+                    {
+                        <span class="dot">•</span>
+                        <span class="pill">@_latestSynthesis.Status</span>
+                        @if (IsSynthesisActiveStatus(_latestSynthesis.Status))
+                        {
+                            <span class="spinner status-spinner" aria-hidden="true"></span>
+                        }
+                    }
                 }
 
                 @if (_reportUpdatedAt is not null)
@@ -953,7 +966,7 @@ else
 
         try { await LearningGroups.PrefetchGroupsAsync(orderedIds); } catch { }
 
-        var groupIndexByKey = new Dictionary<Guid, int>();
+        var sourceIndexByKey = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
         var citationIndexByLearningId = new Dictionary<Guid, int>();
         var sourceByIndex = new Dictionary<int, string>();
         var nextIndex = 1;
@@ -965,12 +978,14 @@ else
                 group = cached;
 
             var groupKey = group?.GroupId ?? learningId;
+            var sourceReference = GetTopReferenceForExport(group, learningId);
+            var sourceKey = BuildSourceKey(sourceReference, groupKey);
 
-            if (!groupIndexByKey.TryGetValue(groupKey, out var index))
+            if (!sourceIndexByKey.TryGetValue(sourceKey, out var index))
             {
                 index = nextIndex++;
-                groupIndexByKey[groupKey] = index;
-                sourceByIndex[index] = GetTopReferenceForExport(group, learningId);
+                sourceIndexByKey[sourceKey] = index;
+                sourceByIndex[index] = sourceReference;
             }
 
             citationIndexByLearningId[learningId] = index;
@@ -1173,6 +1188,34 @@ else
         return uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps;
     }
 
+    private static bool TryNormalizeHttpUrl(string text, out string normalized)
+    {
+        normalized = string.Empty;
+        if (!Uri.TryCreate(text, UriKind.Absolute, out var uri))
+            return false;
+
+        if (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps)
+            return false;
+
+        normalized = uri.GetComponents(UriComponents.HttpRequestUrl, UriFormat.SafeUnescaped).TrimEnd('/');
+        if (string.IsNullOrWhiteSpace(normalized))
+            normalized = uri.GetComponents(UriComponents.HttpRequestUrl, UriFormat.SafeUnescaped);
+
+        return true;
+    }
+
+    private static string BuildSourceKey(string sourceReference, Guid groupKey)
+    {
+        var trimmed = (sourceReference ?? string.Empty).Trim();
+        if (TryNormalizeHttpUrl(trimmed, out var normalizedUrl))
+            return $"url:{normalizedUrl}";
+
+        if (!string.IsNullOrWhiteSpace(trimmed))
+            return $"ref:{trimmed}";
+
+        return $"group:{groupKey:N}";
+    }
+
     private static string GetTopReferenceForExport(LearningGroupCardDto? group, Guid learningId)
     {
         if (group?.Evidence is not null)
@@ -1363,6 +1406,11 @@ else
     border-top-color: var(--border-strong);
     border-radius: 999px;
     animation: spin 0.8s linear infinite;
+}
+
+.status-spinner {
+    width: 12px;
+    height: 12px;
 }
 
 @@keyframes spin {

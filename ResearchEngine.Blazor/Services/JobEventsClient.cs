@@ -16,7 +16,7 @@ public sealed class JobEventsClient : IAsyncDisposable
 {
     private readonly IResearchApiClient _api;
     private readonly IJSRuntime _js;
-    private readonly HttpClient _http;
+    private readonly ApiConnectionSettings _apiConnection;
 
     private IJSObjectReference? _module;
     private string? _connId;
@@ -29,11 +29,11 @@ public sealed class JobEventsClient : IAsyncDisposable
     private CancellationTokenSource? _runCts;
     private Task? _runTask;
 
-    public JobEventsClient(IResearchApiClient api, IJSRuntime js, HttpClient http)
+    public JobEventsClient(IResearchApiClient api, IJSRuntime js, ApiConnectionSettings apiConnection)
     {
         _api = api;
         _js = js;
-        _http = http;
+        _apiConnection = apiConnection;
     }
 
     public sealed record PersistedJobEvent(int Id, DateTimeOffset Timestamp, string Stage, string Message);
@@ -228,7 +228,7 @@ public sealed class JobEventsClient : IAsyncDisposable
                 // IMPORTANT: token.StreamUrl is usually "/api/...."
                 // Ensure we always connect to the API origin (http://localhost:8090),
                 // not the SPA origin (http://localhost:5173) and not "file:///".
-                var absoluteUrl = ToAbsoluteApiUrl(_http.BaseAddress, url);
+                var absoluteUrl = ToAbsoluteApiUrl(_apiConnection.ApiBaseUrl, url);
 
                 _connId = await _module!.InvokeAsync<string>("connect", ct, absoluteUrl, _hubRef);
 
@@ -261,13 +261,13 @@ public sealed class JobEventsClient : IAsyncDisposable
         }
     }
 
-    private static string ToAbsoluteApiUrl(Uri? apiBase, string streamUrl)
+    private static string ToAbsoluteApiUrl(string? apiBase, string streamUrl)
     {
-        if (apiBase is null)
-            throw new InvalidOperationException("HttpClient.BaseAddress is null; cannot resolve StreamUrl.");
+        if (string.IsNullOrWhiteSpace(apiBase) || !Uri.TryCreate(apiBase, UriKind.Absolute, out var baseUri))
+            throw new InvalidOperationException("API base URL is invalid; cannot resolve StreamUrl.");
 
         // Use API origin (scheme+host+port), ignore any base path
-        var origin = new Uri(apiBase.GetLeftPart(UriPartial.Authority));
+        var origin = new Uri(baseUri.GetLeftPart(UriPartial.Authority));
 
         // streamUrl is typically "/api/jobs/.../events/stream?ticket=..."
         if (streamUrl.StartsWith("/", StringComparison.Ordinal))

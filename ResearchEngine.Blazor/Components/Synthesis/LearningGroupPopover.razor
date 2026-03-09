@@ -41,6 +41,20 @@
             <div class="main">
                 <div class="rep">@_group.RepresentativeLearningText</div>
 
+                @if (!string.IsNullOrWhiteSpace(RepresentativeSourceUrl))
+                {
+                    <div class="source-row">
+                        <span class="source-label">Source:</span>
+                        <a class="source-link"
+                           href="@RepresentativeSourceUrl"
+                           target="_blank"
+                           rel="noopener noreferrer"
+                           title="@RepresentativeSourceUrl">
+                            @GetLinkText(RepresentativeSourceUrl)
+                        </a>
+                    </div>
+                }
+
                 <div class="meta">
                     <span>Score: @_group.CanonicalImportanceScore.ToString("0.00")</span>
                     <span class="dot">•</span>
@@ -70,6 +84,7 @@
     private bool _loading;
     private ApiError? _error;
     private LearningGroupCardDto? _group;
+    private string? RepresentativeSourceUrl => GetRepresentativeSourceUrl(_group);
 
     protected override async Task OnParametersSetAsync()
     {
@@ -101,4 +116,44 @@
 
     private Task OpenInLearnings()
         => OnOpenInLearnings.InvokeAsync(LearningId);
+
+    private static string? GetRepresentativeSourceUrl(LearningGroupCardDto? group)
+    {
+        if (group?.Evidence is null)
+            return null;
+
+        foreach (var ev in group.Evidence.OrderByDescending(x => x.ImportanceScore))
+        {
+            var reference = (ev.SourceReference ?? string.Empty).Trim();
+            if (TryNormalizeHttpUrl(reference, out var normalized))
+                return normalized;
+        }
+
+        return null;
+    }
+
+    private static bool TryNormalizeHttpUrl(string text, out string normalized)
+    {
+        normalized = string.Empty;
+        if (!Uri.TryCreate(text, UriKind.Absolute, out var uri))
+            return false;
+
+        if (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps)
+            return false;
+
+        normalized = uri.GetComponents(UriComponents.HttpRequestUrl, UriFormat.SafeUnescaped);
+        return true;
+    }
+
+    private static string GetLinkText(string url)
+    {
+        const int maxLength = 56;
+        if (string.IsNullOrWhiteSpace(url) || url.Length <= maxLength)
+            return url;
+
+        if (Uri.TryCreate(url, UriKind.Absolute, out var uri) && !string.IsNullOrWhiteSpace(uri.Host))
+            return uri.Host;
+
+        return url;
+    }
 }

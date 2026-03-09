@@ -11,8 +11,17 @@ public sealed class AppState
 
     public JobListState JobList { get; set; } = new();
 
+    public ApiConnectionState Api { get; set; } = new();
+
     // per-job UI state
     public Dictionary<Guid, JobUiState> Jobs { get; set; } = new();
+}
+
+public sealed class ApiConnectionState
+{
+    public string BaseUrl { get; set; } = string.Empty;
+    public string BearerToken { get; set; } = string.Empty;
+    public bool AuthEnabled { get; set; } = true;
 }
 
 public sealed class JobListState

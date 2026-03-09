@@ -163,3 +163,12 @@ button {
 :is(.box, .jobs, .job-card, .report, .progress, .panel, .row, .drawer, .popover, .dialog, .timeline-item, .last-event, .note) {
     border-radius: var(--radius-panel) !important;
 }
+
+select {
+    color-scheme: light dark;
+}
+
+select option {
+    background: var(--surface);
+    color: var(--text);
+}

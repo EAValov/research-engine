@@ -107,7 +107,7 @@
 
         await PrefetchSafeAsync(orderedIds);
 
-        var groupIndexByKey = new Dictionary<Guid, int>();
+        var sourceIndexByKey = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
         var citationIndexByLearningId = new Dictionary<Guid, int>();
         var sourceByIndex = new Dictionary<int, string>();
 
@@ -120,12 +120,14 @@
                 group = cached;
 
             var groupKey = group?.GroupId ?? learningId;
+            var sourceReference = GetTopReference(group, learningId);
+            var sourceKey = BuildSourceKey(sourceReference, groupKey);
 
-            if (!groupIndexByKey.TryGetValue(groupKey, out var index))
+            if (!sourceIndexByKey.TryGetValue(sourceKey, out var index))
             {
                 index = nextIndex++;
-                groupIndexByKey[groupKey] = index;
-                sourceByIndex[index] = GetTopReference(group, learningId);
+                sourceIndexByKey[sourceKey] = index;
+                sourceByIndex[index] = sourceReference;
             }
 
             citationIndexByLearningId[learningId] = index;
@@ -181,6 +183,34 @@
             return false;
 
         return uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps;
+    }
+
+    private static bool TryNormalizeHttpUrl(string text, out string normalized)
+    {
+        normalized = string.Empty;
+        if (!Uri.TryCreate(text, UriKind.Absolute, out var uri))
+            return false;
+
+        if (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps)
+            return false;
+
+        normalized = uri.GetComponents(UriComponents.HttpRequestUrl, UriFormat.SafeUnescaped).TrimEnd('/');
+        if (string.IsNullOrWhiteSpace(normalized))
+            normalized = uri.GetComponents(UriComponents.HttpRequestUrl, UriFormat.SafeUnescaped);
+
+        return true;
+    }
+
+    private static string BuildSourceKey(string sourceReference, Guid groupKey)
+    {
+        var trimmed = (sourceReference ?? string.Empty).Trim();
+        if (TryNormalizeHttpUrl(trimmed, out var normalizedUrl))
+            return $"url:{normalizedUrl}";
+
+        if (!string.IsNullOrWhiteSpace(trimmed))
+            return $"ref:{trimmed}";
+
+        return $"group:{groupKey:N}";
     }
 
     // rect: { left, top, right, bottom, width, height, vw, vh }

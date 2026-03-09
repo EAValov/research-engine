@@ -1,6 +1,8 @@
-﻿@inherits LayoutComponentBase
+@inherits LayoutComponentBase
 @using ResearchEngine.Blazor.State
+@using ResearchEngine.Blazor.Services
 @inject AppStateStore AppState
+@inject ApiConnectionSettings ApiConnection
 @inject IJSRuntime JS
 
 <div class="app" data-theme="@_applied">
@@ -10,6 +12,14 @@
         </div>
 
         <div class="header-right">
+            <button type="button"
+                    class="settings-toggle"
+                    @onclick="OpenSettings"
+                    aria-label="Open API settings"
+                    title="API settings">
+                Settings
+            </button>
+
             <button type="button"
                     class="theme-toggle"
                     @onclick="ToggleThemeAsync"
@@ -24,11 +34,73 @@
     <main class="main" id="mainContent">
         @Body
     </main>
+
+    @if (_settingsOpen)
+    {
+        <div class="settings-overlay" @onclick="CloseSettings">
+            <section class="settings-dialog"
+                     role="dialog"
+                     aria-modal="true"
+                     aria-labelledby="apiSettingsTitle"
+                     @onclick:stopPropagation="true">
+                <div class="settings-head">
+                    <h2 id="apiSettingsTitle">API Settings</h2>
+                    <button type="button" class="close-btn" @onclick="CloseSettings" aria-label="Close settings">×</button>
+                </div>
+
+                <div class="settings-body">
+                    <label class="settings-field">
+                        <span>API URL</span>
+                        <input class="settings-input"
+                               value="@_draftApiBaseUrl"
+                               @oninput="e => _draftApiBaseUrl = e.Value?.ToString() ?? string.Empty"
+                               placeholder="https://api.example.com" />
+                    </label>
+
+                    <label class="settings-switch">
+                        <input type="checkbox" @bind="_draftApiAuthEnabled" />
+                        <span>API Auth</span>
+                    </label>
+
+                    <label class="settings-field">
+                        <span>Bearer token</span>
+                        <input class="settings-input"
+                               value="@_draftBearerToken"
+                               @oninput="e => _draftBearerToken = e.Value?.ToString() ?? string.Empty"
+                               disabled="@(!_draftApiAuthEnabled)"
+                               placeholder="Paste token" />
+                    </label>
+
+                    @if (!string.IsNullOrWhiteSpace(_settingsError))
+                    {
+                        <p class="settings-error">@_settingsError</p>
+                    }
+                </div>
+
+                <div class="settings-actions">
+                    <button type="button" class="secondarybtn" @onclick="CloseSettings">Cancel</button>
+                    <button type="button"
+                            class="primarybtn"
+                            @onclick="SaveSettingsAsync"
+                            disabled="@_savingSettings">
+                        @(_savingSettings ? "Saving..." : "Save")
+                    </button>
+                </div>
+            </section>
+        </div>
+    }
 </div>
 
 @code {
     // Stored preference: "light" | "dark" | (null/empty/"system") => follow system
     private string _applied = string.Empty; // actual applied (light|dark)
+
+    private bool _settingsOpen;
+    private bool _savingSettings;
+    private string _draftApiBaseUrl = string.Empty;
+    private string _draftBearerToken = string.Empty;
+    private bool _draftApiAuthEnabled = true;
+    private string? _settingsError;
 
     private string ThemeLabel => _applied == "dark" ? "Dark" : "Light";
     private string ThemeGlyph => _applied == "dark" ? "🌙" : "☀️";
@@ -41,6 +113,8 @@
     {
         if (!firstRender) return;
 
+        LoadApiDraftFromRuntime();
+
         var pref = AppState.GetTheme();
         try
         {
@@ -50,7 +124,7 @@
             }
             else
             {
-                // ✅ default: system theme (but not a user-selectable option)
+                // default: system theme (but not a user-selectable option)
                 _applied = await JS.InvokeAsync<string>("researchEngine.theme.init");
             }
         }
@@ -76,5 +150,46 @@
         {
             _applied = next;
         }
+    }
+
+    private void OpenSettings()
+    {
+        LoadApiDraftFromRuntime();
+        _settingsError = null;
+        _settingsOpen = true;
+    }
+
+    private void CloseSettings()
+    {
+        _settingsOpen = false;
+        _settingsError = null;
+    }
+
+    private void LoadApiDraftFromRuntime()
+    {
+        _draftApiBaseUrl = ApiConnection.ApiBaseUrl;
+        _draftBearerToken = ApiConnection.BearerToken;
+        _draftApiAuthEnabled = ApiConnection.AuthEnabled;
+    }
+
+    private Task SaveSettingsAsync()
+    {
+        _settingsError = null;
+        _savingSettings = true;
+
+        var success = ApiConnection.TryApply(_draftApiBaseUrl, _draftBearerToken, _draftApiAuthEnabled);
+        if (!success)
+        {
+            _settingsError = "Enter a valid absolute API URL that starts with http:// or https://.";
+            _savingSettings = false;
+            return Task.CompletedTask;
+        }
+
+        _draftApiBaseUrl = ApiConnection.ApiBaseUrl;
+        AppState.SetApiSettings(_draftApiBaseUrl, _draftBearerToken, _draftApiAuthEnabled);
+
+        _savingSettings = false;
+        _settingsOpen = false;
+        return Task.CompletedTask;
     }
 }

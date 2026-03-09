@@ -1,11 +1,12 @@
 .composer-wrap {
     display: grid;
     place-items: start center;
-    margin-top: 22px;
+    width: 100%;
+    margin-top: 12px;
 }
 
 .composer {
-    width: min(920px, calc(100vw - 32px));
+    width: min(1240px, 100%);
     display: grid;
     gap: 14px;
 }
@@ -97,11 +98,13 @@
 .settings-grid {
     margin-top: 12px;
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: 120px 120px 180px minmax(260px, 1fr);
     gap: 12px;
 }
 
 .field { display: grid; gap: 6px; }
+.field-compact { max-width: 180px; }
+.field-region { min-width: 0; }
 
 .lbl {
     font-size: 0.85rem;
@@ -112,9 +115,18 @@
     width: 100%;
     border-radius: 6px;
     border: 1px solid var(--border);
-    background: var(--panel);
+    background: var(--panel, var(--surface));
     color: var(--text);
     padding: 10px 10px;
+}
+
+select.input {
+    color-scheme: light dark;
+}
+
+select.input option {
+    background: var(--panel, var(--surface));
+    color: var(--text);
 }
 
 .warning {
@@ -161,3 +173,13 @@
 }
 
 .secondarybtn:disabled { opacity: 0.55; cursor: not-allowed; }
+
+@media (max-width: 920px) {
+    .settings-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .field-compact {
+        max-width: none;
+    }
+}

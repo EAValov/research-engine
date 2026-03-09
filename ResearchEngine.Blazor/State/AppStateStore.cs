@@ -101,6 +101,12 @@ public sealed class AppStateStore
         if (s.JobList.PinnedJobs.Count > 200)
             s.JobList.PinnedJobs = s.JobList.PinnedJobs.Take(200).ToList();
 
+        if (s.Api is null)
+            s.Api = new ApiConnectionState();
+
+        s.Api.BaseUrl = NormalizeApiBaseUrl(s.Api.BaseUrl);
+        s.Api.BearerToken ??= "";
+
         s.Jobs ??= new Dictionary<Guid, JobUiState>();
 
         foreach (var kv in s.Jobs.ToList())
@@ -143,6 +149,9 @@ public sealed class AppStateStore
          : t.Equals("light", StringComparison.OrdinalIgnoreCase) ? "light"
          : "system";
 
+    private static string NormalizeApiBaseUrl(string? url)
+        => (url ?? string.Empty).Trim();
+
     private static string NormalizeEvidenceTab(string? t)
         => t is not null && t.Equals("learnings", StringComparison.OrdinalIgnoreCase) ? "learnings" : "sources";
 
@@ -168,6 +177,17 @@ public sealed class AppStateStore
     public void SetTheme(string theme)
     {
         _state.Theme = NormalizeTheme(theme);
+        QueueSave();
+    }
+
+    // API connection settings
+    public ApiConnectionState GetApiSettings() => _state.Api;
+
+    public void SetApiSettings(string baseUrl, string bearerToken, bool authEnabled)
+    {
+        _state.Api.BaseUrl = NormalizeApiBaseUrl(baseUrl);
+        _state.Api.BearerToken = bearerToken?.Trim() ?? "";
+        _state.Api.AuthEnabled = authEnabled;
         QueueSave();
     }
 
