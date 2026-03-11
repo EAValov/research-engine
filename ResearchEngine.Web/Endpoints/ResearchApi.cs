@@ -18,6 +18,11 @@ public static partial class ResearchApi
 
     private static void MapRoutes(RouteGroupBuilder api)
     {
+        api.MapGet("/ping", () => Results.Ok(new { status = "ok" }))
+            .Produces(StatusCodes.Status200OK)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status403Forbidden);
+
         // Jobs
         api.MapGet("/jobs", ListJobsAsync)
             .Produces<ListResearchJobsResponse>(StatusCodes.Status200OK)

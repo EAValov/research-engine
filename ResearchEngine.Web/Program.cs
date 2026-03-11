@@ -13,7 +13,6 @@ using ResearchEngine.Web.OpenAI;
 using Scalar.AspNetCore;
 using Serilog;
 using AspNetCoreRateLimit;
-using Microsoft.Extensions.Caching.StackExchangeRedis;
 using StackExchange.Redis;
 using Microsoft.AspNetCore.HttpOverrides;
 
@@ -69,7 +68,7 @@ builder.Services.AddHangfire((sp, cfg) =>
     }
 });
 
-var enableHangfireServer = builder.Configuration.GetValue("Hangfire:EnableServer", true);
+var enableHangfireServer = builder.Configuration.GetValue("Hangfire:EnableServer", true); // set to false if only web api is needed
 
 if (enableHangfireServer && !builder.Environment.IsEnvironment("Testing"))
 {

@@ -19,6 +19,13 @@
     padding: 10px 14px;
 }
 
+.header-left {
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+}
+
 .brand {
     text-decoration: none;
     color: var(--text);
@@ -94,6 +101,49 @@
     display: inline-flex;
     align-items: center;
     gap: 8px;
+}
+
+.api-health {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.health-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.78rem;
+    color: var(--muted);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 4px 8px;
+    line-height: 1;
+}
+
+.health-indicator::before {
+    content: "";
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    display: inline-block;
+    background: var(--muted);
+}
+
+.health-indicator.is-healthy::before {
+    background: #1e9f5c;
+}
+
+.health-indicator.is-unhealthy::before {
+    background: #d18a1f;
+}
+
+.health-indicator.is-unreachable::before {
+    background: #cf3131;
+}
+
+.health-indicator.is-unknown::before {
+    background: var(--muted);
 }
 
 .settings-overlay {
@@ -187,6 +237,15 @@
     background: var(--surface2);
 }
 
+.settings-success {
+    margin: 0;
+    border: 1px solid #1e9f5c;
+    border-radius: 8px;
+    padding: 8px 10px;
+    color: var(--text);
+    background: rgba(30, 159, 92, 0.14);
+}
+
 .settings-actions {
     display: flex;
     justify-content: flex-end;
@@ -217,6 +276,20 @@
 .close-btn:focus-visible {
     outline: 2px solid var(--border-strong);
     outline-offset: 2px;
+}
+
+@media (max-width: 760px) {
+    .header {
+        flex-wrap: wrap;
+    }
+
+    .header-left {
+        width: 100%;
+    }
+
+    .api-health {
+        flex-wrap: wrap;
+    }
 }
 
 /* Ensure form controls inherit theme */
