@@ -251,11 +251,19 @@
         if (!Guid.TryParse(learningId, out var id))
             return Task.CompletedTask;
 
-        // Click toggles + pins
+        // If a citation is only hover-open, first click should pin it open.
         if (_popoverOpen && _activeLearningId == id)
         {
-            _popoverOpen = false;
-            _popoverPinned = false;
+            if (_popoverPinned)
+            {
+                _popoverOpen = false;
+                _popoverPinned = false;
+            }
+            else
+            {
+                _popoverPinned = true;
+                _popoverStyle = ComputePopoverStyle(rect);
+            }
             return InvokeAsync(StateHasChanged);
         }
 
