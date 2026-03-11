@@ -62,7 +62,8 @@
                 {
                     <LearningsPanel JobId="JobId"
                                     IsOpen="@IsOpen"
-                                    HighlightLearningId="@HighlightLearningId"
+                                    HighlightLearningId="@EffectiveHighlightLearningId"
+                                    FocusSourceReference="@EffectiveFocusSourceReference"
                                     RestrictToGroupId="@RestrictToLearningGroupId"
                                     FilterText="@_learningsFilter"
                                     FilterTextChanged="OnLearningsFilterChangedAsync"
@@ -88,6 +89,7 @@
     [Parameter] public EventCallback<string> ActiveTabChanged { get; set; }
 
     [Parameter] public Guid? HighlightLearningId { get; set; }
+    [Parameter] public string? FocusSourceReference { get; set; }
 
     // Persisted filters + paging restore
     [Parameter] public string SourcesFilter { get; set; } = "";
@@ -103,8 +105,19 @@
     private string _activeTab = "sources";
     private string _sourcesFilter = "";
     private string _learningsFilter = "";
+    private string? _drawerFocusSourceReference;
+    private string? _lastExternalFocusSourceReference;
+    private bool _hasLocalFocusOverride;
     private int _learningsLoadedCount = 25;
     private bool _stateInitialized;
+
+    private string? EffectiveFocusSourceReference
+        => _hasLocalFocusOverride
+            ? NormalizeNullable(_drawerFocusSourceReference)
+            : NormalizeNullable(FocusSourceReference) ?? NormalizeNullable(_drawerFocusSourceReference);
+
+    private Guid? EffectiveHighlightLearningId
+        => _hasLocalFocusOverride ? null : HighlightLearningId;
 
     private OverridesSummary Summary => Overrides.GetSummary(JobId);
     private bool HasOverrides => Overrides.HasAny(JobId);
@@ -127,8 +140,13 @@
         if (!IsOpen)
         {
             _stateInitialized = false;
+            _drawerFocusSourceReference = null;
+            _lastExternalFocusSourceReference = null;
+            _hasLocalFocusOverride = false;
             return;
         }
+
+        var externalFocusSourceReference = NormalizeNullable(FocusSourceReference);
 
         // Pick tab in this order:
         // 1) ActiveTab (preferred state binding)
@@ -145,6 +163,23 @@
 
         if (!_stateInitialized || LearningsFilterChanged.HasDelegate)
             _learningsFilter = LearningsFilter ?? "";
+
+        if (!_stateInitialized)
+        {
+            _drawerFocusSourceReference = externalFocusSourceReference;
+            _lastExternalFocusSourceReference = externalFocusSourceReference;
+            _hasLocalFocusOverride = false;
+        }
+
+        // Apply external focus changes only when the parent value actually changed.
+        // This prevents stale external focus from overriding explicit local source picks.
+        if (_stateInitialized &&
+            !string.Equals(_lastExternalFocusSourceReference, externalFocusSourceReference, StringComparison.Ordinal))
+        {
+            _drawerFocusSourceReference = externalFocusSourceReference;
+            _lastExternalFocusSourceReference = externalFocusSourceReference;
+            _hasLocalFocusOverride = false;
+        }
 
         if (!_stateInitialized || LearningsLoadedCountChanged.HasDelegate)
             _learningsLoadedCount = LearningsLoadedCount;
@@ -172,9 +207,13 @@
 
     private async Task ShowLearningsForSourceAsync(string sourceReference)
     {
-        // Switch tab and prefill learnings filter with the source reference.
+        var normalizedSourceReference = NormalizeNullable(sourceReference);
+
+        // Switch tab and open learnings focused to this source.
         await SelectTabAsync("learnings");
-        _learningsFilter = sourceReference ?? "";
+        _drawerFocusSourceReference = normalizedSourceReference;
+        _hasLocalFocusOverride = true;
+        _learningsFilter = normalizedSourceReference ?? "";
 
         if (LearningsFilterChanged.HasDelegate)
             await LearningsFilterChanged.InvokeAsync(_learningsFilter);
@@ -190,6 +229,12 @@
     private async Task OnLearningsFilterChangedAsync(string value)
     {
         _learningsFilter = value ?? "";
+        if (string.IsNullOrWhiteSpace(_learningsFilter))
+        {
+            _drawerFocusSourceReference = null;
+            _hasLocalFocusOverride = false;
+        }
+
         if (LearningsFilterChanged.HasDelegate)
             await LearningsFilterChanged.InvokeAsync(_learningsFilter);
     }
@@ -212,5 +257,11 @@
 
         Overrides.Clear(JobId);
         // Counters update via Overrides.Changed.
+    }
+
+    private static string? NormalizeNullable(string? value)
+    {
+        var v = value?.Trim();
+        return string.IsNullOrWhiteSpace(v) ? null : v;
     }
 }

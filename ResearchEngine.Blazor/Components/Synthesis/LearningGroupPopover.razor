@@ -115,7 +115,7 @@
     private Task Close() => OnClose.InvokeAsync();
 
     private Task OpenInLearnings()
-        => OnOpenInLearnings.InvokeAsync(LearningId);
+        => OnOpenInLearnings.InvokeAsync(_group?.RepresentativeLearningId ?? LearningId);
 
     private static string? GetRepresentativeSourceUrl(LearningGroupCardDto? group)
     {

@@ -649,10 +649,13 @@ public sealed partial class PostgresResearchJobStore(
         Guid jobId,
         int skip = 0,
         int take = 200,
+        string? sourceReference = null,
+        Guid? promoteLearningId = null,
         CancellationToken ct = default)
     {
         skip = Math.Max(skip, 0);
         take = Math.Clamp(take, 1, 500);
+        sourceReference = string.IsNullOrWhiteSpace(sourceReference) ? null : sourceReference.Trim();
 
         await using var db = await dbContextFactory.CreateDbContextAsync(ct);
 
@@ -660,12 +663,29 @@ public sealed partial class PostgresResearchJobStore(
             .AsNoTracking()
             .Where(l => l.JobId == jobId);
 
+        if (sourceReference is not null)
+        {
+            var sourceIds = db.Sources
+                .AsNoTracking()
+                .Where(s => s.JobId == jobId && s.Reference == sourceReference)
+                .Select(s => s.Id);
+
+            baseQuery = baseQuery.Where(l => sourceIds.Contains(l.SourceId));
+        }
+
         var total = await baseQuery.CountAsync(ct);
 
-        var items = await baseQuery
+        var orderedQuery = promoteLearningId is Guid promotedId
+            ? baseQuery
+                .OrderByDescending(l => l.Id == promotedId)
+                .ThenByDescending(l => l.ImportanceScore)
+                .ThenByDescending(l => l.CreatedAt)
+            : baseQuery
+                .OrderByDescending(l => l.ImportanceScore)
+                .ThenByDescending(l => l.CreatedAt);
+
+        var items = await orderedQuery
             .Include(l => l.Source)
-            .OrderByDescending(l => l.ImportanceScore)
-            .ThenByDescending(l => l.CreatedAt)
             .Skip(skip)
             .Take(take)
             .Select(l => new LearningListItemDto(

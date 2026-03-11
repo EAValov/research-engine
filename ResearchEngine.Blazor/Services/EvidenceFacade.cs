@@ -57,12 +57,14 @@ public sealed class EvidenceFacade
         Guid jobId,
         int skip,
         int take,
+        string? sourceReference = null,
+        Guid? promoteLearningId = null,
         CancellationToken ct = default)
     {
         try
         {
-            // NSwag: Task<ListLearningsResponse> LearningsGETAsync(Guid jobId, int? skip = null, int? take = null, CancellationToken ct = default)
-            var resp = await _api.LearningsGETAsync(jobId, skip, take, ct);
+            // NSwag: Task<ListLearningsResponse> LearningsGETAsync(Guid jobId, int? skip = null, int? take = null, string? sourceReference = null, Guid? promoteLearningId = null, CancellationToken ct = default)
+            var resp = await _api.LearningsGETAsync(jobId, skip, take, sourceReference, promoteLearningId, ct);
             var items = (resp.Learnings ?? Array.Empty<LearningListItemDto>()).ToList();
             return ApiResult<IReadOnlyList<LearningListItemDto>>.Ok(items);
         }

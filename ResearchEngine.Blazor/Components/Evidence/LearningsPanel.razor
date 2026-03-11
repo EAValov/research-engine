@@ -155,6 +155,7 @@
     [Parameter] public Guid JobId { get; set; }
     [Parameter] public bool IsOpen { get; set; }
     [Parameter] public Guid? HighlightLearningId { get; set; }
+    [Parameter] public string? FocusSourceReference { get; set; }
     [Parameter] public Guid? RestrictToGroupId { get; set; }
 
     [Parameter] public string FilterText { get; set; } = "";
@@ -164,8 +165,10 @@
     [Parameter] public EventCallback<int> LoadedCountChanged { get; set; }
 
     private readonly List<LearningListItemDto> _items = new();
+    private readonly HashSet<Guid> _loadedIds = new();
     private int _skip = 0;
     private const int Take = 25;
+    private const int FocusTake = 200;
 
     private bool _busy;
     private bool _canLoadMore = true;
@@ -183,36 +186,57 @@
 
     private bool _highlightFound;
     private bool _restoredToTarget;
+    private string _activeLoadKey = string.Empty;
 
     private readonly Dictionary<Guid, Guid?> _groupByLearningId = new();
 
     protected override async Task OnParametersSetAsync()
     {
+        if (!IsOpen)
+            return;
+
         var incoming = FilterText ?? "";
 
         if (_filter != incoming)
             _filter = incoming;
 
-        if (IsOpen && _items.Count == 0)
-            await ReloadAsync();
+        var isFocusedOpenMode = IsFocusedOpenMode();
+        var loadKey = BuildLoadKey();
+        var shouldReload = _items.Count == 0;
 
-        if (IsOpen && !_restoredToTarget)
+        if (!shouldReload && !string.Equals(_activeLoadKey, loadKey, StringComparison.Ordinal))
+        {
+            // Reload only when entering/changing focused mode.
+            // Leaving focused mode (e.g. after "Load more" clears filter) should keep current items.
+            shouldReload = isFocusedOpenMode;
+        }
+
+        if (shouldReload)
+        {
+            _activeLoadKey = loadKey;
+            await ReloadAsync();
+        }
+        else
+        {
+            _activeLoadKey = loadKey;
+        }
+
+        if (!_restoredToTarget && !IsFocusedOpenMode())
             await EnsureLoadedToTargetAsync();
 
-        if (IsOpen && RestrictToGroupId is not null)
+        if (RestrictToGroupId is not null)
             await ResolveGroupsForItemsAsync(_items.Select(x => x.LearningId));
 
-        if (IsOpen)
-            await EnsureFilterHasVisibleResultsAsync();
+        await EnsureFilterHasVisibleResultsAsync();
 
-        if (IsOpen)
-            await TryApplyHighlightAsync();
+        await TryApplyHighlightAsync();
     }
 
     private async Task ReloadAsync()
     {
         _error = null;
         _items.Clear();
+        _loadedIds.Clear();
         _skip = 0;
         _canLoadMore = true;
         _highlightFound = false;
@@ -220,6 +244,14 @@
         _groupByLearningId.Clear();
 
         await NotifyLoadedCountAsync();
+
+        if (IsFocusedOpenMode())
+        {
+            await LoadFocusedReferenceAsync();
+            _restoredToTarget = true;
+            return;
+        }
+
         await LoadMoreAsync();
     }
 
@@ -255,10 +287,19 @@
     {
         if (_busy || !_canLoadMore) return;
 
+        if (IsFocusedOpenMode() && !string.IsNullOrWhiteSpace(_filter))
+            await ResetFilterForLoadMoreAsync();
+
         _busy = true;
         _error = null;
 
-        var res = await Evidence.GetLearningsAsync(JobId, _skip, Take);
+        var promoteLearningId = IsFocusedOpenMode() ? HighlightLearningId : null;
+        var res = await Evidence.GetLearningsAsync(
+            JobId,
+            _skip,
+            Take,
+            sourceReference: null,
+            promoteLearningId: promoteLearningId);
         if (!res.IsSuccess)
         {
             _error = res.Error;
@@ -267,8 +308,9 @@
         }
 
         var page = res.Data ?? Array.Empty<LearningListItemDto>();
-        _items.AddRange(page);
+        AppendUnique(page);
         await ResolveGroupsForItemsAsync(page.Select(x => x.LearningId));
+        PromoteHighlightedToTop();
 
         _skip += page.Count;
         _canLoadMore = page.Count == Take;
@@ -282,7 +324,7 @@
     private async ValueTask NotifyLoadedCountAsync()
     {
         if (LoadedCountChanged.HasDelegate)
-            await LoadedCountChanged.InvokeAsync(_skip);
+            await LoadedCountChanged.InvokeAsync(_items.Count);
     }
 
     private async Task AddAsync()
@@ -325,17 +367,28 @@
             return;
         }
 
-        _items.Insert(0, res.Data!);
-        await ResolveGroupsForItemsAsync(new[] { res.Data!.LearningId });
+        var added = res.Data!;
+        if (_loadedIds.Add(added.LearningId))
+            _items.Insert(0, added);
+        else
+            PromoteHighlightedToTop();
+
+        await ResolveGroupsForItemsAsync(new[] { added.LearningId });
 
         ResetAddForm();
         _addDialogOpen = false;
         _addBusy = false;
 
-        // loaded count effectively increased by 1 (client-side)
-        _skip += 1;
+        PromoteHighlightedToTop();
         await NotifyLoadedCountAsync();
         await TryApplyHighlightAsync();
+    }
+
+    private async Task ResetFilterForLoadMoreAsync()
+    {
+        _filter = string.Empty;
+        if (FilterTextChanged.HasDelegate)
+            await FilterTextChanged.InvokeAsync(_filter);
     }
 
     private async Task DeleteAsync(Guid learningId)
@@ -352,20 +405,20 @@
         var removed = _items[idx];
         var hadGroup = _groupByLearningId.TryGetValue(learningId, out var removedGroupId);
         _items.RemoveAt(idx);
+        _loadedIds.Remove(learningId);
         _groupByLearningId.Remove(learningId);
 
         var res = await Evidence.DeleteLearningAsync(JobId, learningId);
         if (!res.IsSuccess)
         {
             _items.Insert(idx, removed);
+            _loadedIds.Add(removed.LearningId);
             if (hadGroup)
                 _groupByLearningId[removed.LearningId] = removedGroupId;
             _error = res.Error;
             return;
         }
 
-        // loaded count decreases by 1
-        _skip = Math.Max(0, _skip - 1);
         await NotifyLoadedCountAsync();
     }
 
@@ -439,6 +492,94 @@
     {
         var v = value?.Trim();
         return string.IsNullOrWhiteSpace(v) ? null : v;
+    }
+
+    private bool IsFocusedOpenMode()
+        => NormalizeNullable(FocusSourceReference) is not null;
+
+    private string BuildLoadKey()
+    {
+        var normalizedSourceReference = NormalizeNullable(FocusSourceReference);
+        var promoted = normalizedSourceReference is null
+            ? null
+            : HighlightLearningId?.ToString("N");
+
+        return $"{JobId:N}|{normalizedSourceReference ?? string.Empty}|{promoted ?? string.Empty}";
+    }
+
+    private async Task LoadFocusedReferenceAsync()
+    {
+        var sourceReference = NormalizeNullable(FocusSourceReference);
+        if (sourceReference is null)
+            return;
+
+        _busy = true;
+        _error = null;
+
+        try
+        {
+            var focusSkip = 0;
+            var safety = 25; // Cap worst-case network churn if reference has many pages.
+
+            while (safety-- > 0)
+            {
+                var res = await Evidence.GetLearningsAsync(
+                    JobId,
+                    focusSkip,
+                    FocusTake,
+                    sourceReference: sourceReference,
+                    promoteLearningId: HighlightLearningId);
+
+                if (!res.IsSuccess)
+                {
+                    _error = res.Error;
+                    break;
+                }
+
+                var page = res.Data ?? Array.Empty<LearningListItemDto>();
+                AppendUnique(page);
+                await ResolveGroupsForItemsAsync(page.Select(x => x.LearningId));
+
+                focusSkip += page.Count;
+                if (page.Count < FocusTake)
+                    break;
+            }
+        }
+        finally
+        {
+            _busy = false;
+        }
+
+        PromoteHighlightedToTop();
+        _skip = 0; // In focused mode, "Load more" starts global paging from the beginning.
+        _canLoadMore = true;
+
+        await NotifyLoadedCountAsync();
+        await TryApplyHighlightAsync();
+    }
+
+    private void AppendUnique(IEnumerable<LearningListItemDto> page)
+    {
+        foreach (var item in page)
+        {
+            if (_loadedIds.Add(item.LearningId))
+                _items.Add(item);
+        }
+    }
+
+    private void PromoteHighlightedToTop()
+    {
+        if (HighlightLearningId is null || _items.Count < 2)
+            return;
+
+        var highlightId = HighlightLearningId.Value;
+        var index = _items.FindIndex(x => x.LearningId == highlightId);
+        if (index <= 0)
+            return;
+
+        var highlighted = _items[index];
+        _items.RemoveAt(index);
+        _items.Insert(0, highlighted);
     }
 
     private async Task ResolveGroupsForItemsAsync(IEnumerable<Guid> learningIds)

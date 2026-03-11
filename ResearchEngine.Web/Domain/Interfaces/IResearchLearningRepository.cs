@@ -30,6 +30,8 @@ public interface IResearchLearningRepository
         Guid jobId,
         int skip = 0,
         int take = 200,
+        string? sourceReference = null,
+        Guid? promoteLearningId = null,
         CancellationToken ct = default);
 
     Task<IReadOnlyList<Learning>> VectorSearchLearningsAsync(

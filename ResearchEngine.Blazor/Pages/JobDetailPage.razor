@@ -273,10 +273,11 @@ else
                     ActiveTab="@_evidenceTab"
                     ActiveTabChanged="tab => _evidenceTab = tab"
                     HighlightLearningId="@_highlightLearningId"
+                    FocusSourceReference="@_focusLearningSourceReference"
                     SourcesFilter="@_sourcesFilter"
                     SourcesFilterChanged="value => _sourcesFilter = value"
                     LearningsFilter="@_learningsFilter"
-                    LearningsFilterChanged="value => _learningsFilter = value"
+                    LearningsFilterChanged="OnLearningsFilterChanged"
                     LearningsLoadedCount="@_learningsLoadedCount"
                     LearningsLoadedCountChanged="count => _learningsLoadedCount = count"
                     RestrictToLearningGroupId="@_restrictToLearningGroupId" />
@@ -311,6 +312,7 @@ else
     private bool _evidenceOpen;
     private string _evidenceTab = "sources";
     private Guid? _highlightLearningId;
+    private string? _focusLearningSourceReference;
     private Guid? _restrictToLearningGroupId;
     private string _sourcesFilter = "";
     private string _learningsFilter = "";
@@ -422,6 +424,7 @@ else
         _retryOpenId = null;
 
         _highlightLearningId = null;
+        _focusLearningSourceReference = null;
         _restrictToLearningGroupId = null;
         _sourcesFilter = "";
         _learningsFilter = "";
@@ -880,29 +883,25 @@ else
     {
         _evidenceTab = "learnings";
         _highlightLearningId = learningId;
+        _focusLearningSourceReference = null;
         _learningsFilter = "";
         _restrictToLearningGroupId = null;
 
         var groupRes = await LearningGroups.GetGroupAsync(learningId);
         if (groupRes.IsSuccess && groupRes.Data is not null)
         {
-            var refs = groupRes.Data.Evidence?
-                .Select(x => (x.SourceReference ?? "").Trim())
-                .Where(x => !string.IsNullOrWhiteSpace(x))
-                .ToList() ?? new List<string>();
+            var group = groupRes.Data;
 
-            var topUrl = refs.FirstOrDefault(IsHttpUrl);
-            if (!string.IsNullOrWhiteSpace(topUrl))
+            _highlightLearningId = group.RepresentativeLearningId;
+
+            if (TryGetRepresentativeSourceReference(group, out var sourceReference))
             {
-                _learningsFilter = topUrl;
-            }
-            else if (refs.Count > 0)
-            {
-                _learningsFilter = refs[0];
+                _focusLearningSourceReference = sourceReference;
+                _learningsFilter = sourceReference;
             }
             else
             {
-                _restrictToLearningGroupId = groupRes.Data.GroupId;
+                _restrictToLearningGroupId = group.GroupId;
             }
         }
 
@@ -916,8 +915,48 @@ else
         if (_evidenceOpen)
         {
             _highlightLearningId = null;
+            _focusLearningSourceReference = null;
             _restrictToLearningGroupId = null;
         }
+    }
+
+    private void OnLearningsFilterChanged(string value)
+    {
+        _learningsFilter = value ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(_learningsFilter))
+            _focusLearningSourceReference = null;
+    }
+
+    private static bool TryGetRepresentativeSourceReference(LearningGroupCardDto group, out string sourceReference)
+    {
+        sourceReference = string.Empty;
+        if (group.Evidence is null || group.Evidence.Count == 0)
+            return false;
+
+        var representativeEvidence = group.Evidence
+            .FirstOrDefault(x => x.LearningId == group.RepresentativeLearningId);
+
+        if (representativeEvidence is not null)
+        {
+            var representativeReference = (representativeEvidence.SourceReference ?? string.Empty).Trim();
+            if (!string.IsNullOrWhiteSpace(representativeReference))
+            {
+                sourceReference = representativeReference;
+                return true;
+            }
+        }
+
+        foreach (var ev in group.Evidence)
+        {
+            var reference = (ev.SourceReference ?? string.Empty).Trim();
+            if (string.IsNullOrWhiteSpace(reference))
+                continue;
+
+            sourceReference = reference;
+            return true;
+        }
+
+        return false;
     }
 
     private void OpenCreateDialog()

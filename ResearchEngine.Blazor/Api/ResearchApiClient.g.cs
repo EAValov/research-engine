@@ -78,7 +78,7 @@ namespace ResearchEngine.Blazor.Api
         /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
         /// <returns>OK</returns>
         /// <exception cref="ApiException">A server side error occurred.</exception>
-        System.Threading.Tasks.Task<ListLearningsResponse> LearningsGETAsync(System.Guid jobId, int? skip = null, int? take = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken));
+        System.Threading.Tasks.Task<ListLearningsResponse> LearningsGETAsync(System.Guid jobId, int? skip = null, int? take = null, string? sourceReference = null, System.Guid? promoteLearningId = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken));
 
         /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
         /// <returns>OK</returns>
@@ -1066,7 +1066,7 @@ namespace ResearchEngine.Blazor.Api
         /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
         /// <returns>OK</returns>
         /// <exception cref="ApiException">A server side error occurred.</exception>
-        public virtual async System.Threading.Tasks.Task<ListLearningsResponse> LearningsGETAsync(System.Guid jobId, int? skip = null, int? take = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))
+        public virtual async System.Threading.Tasks.Task<ListLearningsResponse> LearningsGETAsync(System.Guid jobId, int? skip = null, int? take = null, string? sourceReference = null, System.Guid? promoteLearningId = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))
         {
             if (jobId == null)
                 throw new System.ArgumentNullException("jobId");
@@ -1094,6 +1094,14 @@ namespace ResearchEngine.Blazor.Api
                     if (take != null)
                     {
                         urlBuilder_.Append(System.Uri.EscapeDataString("Take")).Append('=').Append(System.Uri.EscapeDataString(ConvertToString(take, System.Globalization.CultureInfo.InvariantCulture))).Append('&');
+                    }
+                    if (sourceReference != null)
+                    {
+                        urlBuilder_.Append(System.Uri.EscapeDataString("SourceReference")).Append('=').Append(System.Uri.EscapeDataString(ConvertToString(sourceReference, System.Globalization.CultureInfo.InvariantCulture))).Append('&');
+                    }
+                    if (promoteLearningId != null)
+                    {
+                        urlBuilder_.Append(System.Uri.EscapeDataString("PromoteLearningId")).Append('=').Append(System.Uri.EscapeDataString(ConvertToString(promoteLearningId, System.Globalization.CultureInfo.InvariantCulture))).Append('&');
                     }
                     urlBuilder_.Length--;
 

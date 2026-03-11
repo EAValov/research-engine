@@ -53,6 +53,8 @@ public static partial class ResearchApi
             jobId,
             req.SkipValue,
             req.TakeValue,
+            req.SourceReferenceValue,
+            req.PromoteLearningId,
             ct);
 
         var items = result.Items.Select(l => new LearningListItemDto(

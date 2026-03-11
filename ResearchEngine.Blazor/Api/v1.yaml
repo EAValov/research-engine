@@ -304,6 +304,17 @@ paths:
               - integer
               - string
             format: int32
+        - name: SourceReference
+          in: query
+          schema:
+            maxLength: 4000
+            minLength: 0
+            type: string
+        - name: PromoteLearningId
+          in: query
+          schema:
+            type: string
+            format: uuid
       responses:
         '200':
           description: OK
