@@ -14,6 +14,7 @@ public static partial class ResearchApi
         [FromBody] StartSynthesisRequest request,
         IResearchJobRepository jobRepository,
         IResearchSynthesisRepository synthesisRepository,
+        IResearchSynthesisOverridesRepository synthesisOverridesRepository,
         IReportSynthesisService synthesisService,
         CancellationToken ct)
     {
@@ -35,6 +36,24 @@ public static partial class ResearchApi
             request.Outline,
             request.Instructions,
             ct);
+
+        var sourceOverrides = request.SourceOverrides?.ToList() ?? new List<SynthesisSourceOverrideDto>();
+        if (sourceOverrides.Count > 0)
+        {
+            await synthesisOverridesRepository.AddOrUpdateSynthesisSourceOverridesAsync(
+                synthesisId,
+                sourceOverrides,
+                ct);
+        }
+
+        var learningOverrides = request.LearningOverrides?.ToList() ?? new List<SynthesisLearningOverrideDto>();
+        if (learningOverrides.Count > 0)
+        {
+            await synthesisOverridesRepository.AddOrUpdateSynthesisLearningOverridesAsync(
+                synthesisId,
+                learningOverrides,
+                ct);
+        }
 
         return Results.Created(
             $"/api/syntheses/{synthesisId}",
