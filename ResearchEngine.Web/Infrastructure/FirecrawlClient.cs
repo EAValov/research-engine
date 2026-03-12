@@ -1,4 +1,5 @@
 using System.Net.Http.Json;
+using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Options;
@@ -57,6 +58,7 @@ public class FirecrawlClient : ISearchClient, ICrawlClient
         {
             Content = new StringContent(jsonPayload, Encoding.UTF8, "application/json")
         };
+        AddApiKeyHeaders(request);
 
         _logger.LogDebug(
             "Firecrawl search: query='{Query}', limit={Limit}, location='{Location}'",
@@ -159,6 +161,7 @@ public class FirecrawlClient : ISearchClient, ICrawlClient
         {
             Content = new StringContent(jsonPayload, Encoding.UTF8, "application/json")
         };
+        AddApiKeyHeaders(request);
 
         _logger.LogDebug("Firecrawl scrape: url={Url}", url);
 
@@ -248,5 +251,24 @@ public class FirecrawlClient : ISearchClient, ICrawlClient
     private sealed class FirecrawlScrapeData
     {
         public string? markdown { get; set; }
+    }
+
+    private void AddApiKeyHeaders(HttpRequestMessage request)
+    {
+        var apiKey = _options.ApiKey?.Trim();
+        if (string.IsNullOrWhiteSpace(apiKey))
+            return;
+
+        // Firecrawl API commonly uses bearer auth; also send x-api-key for compatibility.
+        if (apiKey.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+        {
+            request.Headers.TryAddWithoutValidation("Authorization", apiKey);
+        }
+        else
+        {
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
+        }
+
+        request.Headers.TryAddWithoutValidation("x-api-key", apiKey);
     }
 }

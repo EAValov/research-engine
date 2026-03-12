@@ -4,19 +4,20 @@ metadata:
   name: research-stack-secrets
 type: Opaque
 stringData:
-  ChatConfig__ApiKey: "CHANGE_ME"
-  EmbeddingConfig__ApiKey: "CHANGE_ME"
-  BearerAuthenticationOptions__BearerTokens__0: "9h32F2fNuwMQL0OUujpUoIF6l8S/lGPOM1ylNhH+MKQ="
+  ChatConfig__ApiKey: "Y6BksOt4+wdRsAJwZIrFV3Yo37fdl+2tPScWnfaT9S+IXekwc6HgcJqQVvfPpoD4"
+  EmbeddingConfig__ApiKey: "ollama"
+  BearerAuthenticationOptions__BearerTokens__0: "RYCQlDNSFnJgUrOIZdnh4mlOghdkzhCntgeDjsJqCYFz7tou1F1bZi8oNJ4C0hav"
   POSTGRES_DB: "firecrawl"
   POSTGRES_USER: "firecrawl"
-  POSTGRES_PASSWORD: "firecrawl"
-  ConnectionStrings__ResearchDb: "Host=nuq-postgres;Port=5432;Database=research;Username=firecrawl;Password=firecrawl"
-  ConnectionStrings__HangfireDb: "Host=nuq-postgres;Port=5432;Database=jobs;Username=firecrawl;Password=firecrawl"
-  NUQ_DATABASE_URL: "postgresql://firecrawl:firecrawl@nuq-postgres:5432/firecrawl?sslmode=disable"
-  DATABASE_URL: "postgresql://firecrawl:firecrawl@nuq-postgres:5432/firecrawl?sslmode=disable"
-  OPENAI_API_KEY: "local"
-  FIRE_CRAWL_API_KEY: ""
-  BULL_AUTH_KEY: "CHANGEME"
+  POSTGRES_PASSWORD: "df3a275eb955fcc7d3048a479d4d757a"
+  ConnectionStrings__ResearchDb: "Host=nuq-postgres;Port=5432;Database=research;Username=firecrawl;Password=df3a275eb955fcc7d3048a479d4d757a"
+  ConnectionStrings__HangfireDb: "Host=nuq-postgres;Port=5432;Database=jobs;Username=firecrawl;Password=df3a275eb955fcc7d3048a479d4d757a"
+  NUQ_DATABASE_URL: "postgresql://firecrawl:df3a275eb955fcc7d3048a479d4d757a@nuq-postgres:5432/firecrawl?sslmode=disable"
+  DATABASE_URL: "postgresql://firecrawl:df3a275eb955fcc7d3048a479d4d757a@nuq-postgres:5432/firecrawl?sslmode=disable"
+  OPENAI_API_KEY: "A54TBSzKIZfUXbwz1vBvoZcIis4ClU8vWtdfyYIjF7k="
+  FIRE_CRAWL_API_KEY: "WkMuaTD254l96hxmUIKrATIAFNyRK0UiMss12ayDO+A="
+  BULL_AUTH_KEY: "28d4f12a03a9476ba93e59e3fa752623e090f9798ff94d1089dd5f706ae8213f"
+  SEARXNG_SECRET: "fc57350014683f0e6e5938408f9742ccc584ceb561476e682af398e5d807dc78"
 
 ---
 apiVersion: v1
@@ -54,7 +55,7 @@ data:
     embedding.llm.local:8443 {
       tls internal
       encode zstd gzip
-      reverse_proxy vllm-embeddings:8001
+      reverse_proxy ollama:11434
     }
     research-api.llm.local:8443 {
       tls internal
@@ -66,6 +67,28 @@ data:
       encode zstd gzip
       reverse_proxy research-blazor:8082
     }
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: searxng-config
+data:
+  settings.yml: |
+    use_default_settings: true
+    general:
+      instance_name: "Research Stack Search"
+    server:
+      bind_address: "0.0.0.0"
+      port: 8085
+      # Is overwritten by ${SEARXNG_SECRET}
+      secret_key: "ultrasecretkey"
+    search:
+      formats:
+        - html
+        - json
+    ui:
+      static_use_hash: true
 
 ---
 apiVersion: v1
@@ -95,7 +118,7 @@ spec:
           value: /data
 
     - name: vllm
-      image: vllm/vllm-openai:v0.17.0
+      image: vllm/vllm-openai:v0.17.1
       ports:
         - containerPort: 8000
           hostPort: 8000
@@ -135,29 +158,28 @@ spec:
         - name: vllm-compile-cache
           mountPath: /root/.cache/vllm
 
-    - name: vllm-embeddings
-      image: vllm-openai-cpu
-      ports:
-        - containerPort: 8001
-      env:
-        - name: HF_HOME
-          value: /root/.cache/huggingface
-        - name: HUGGINGFACE_HUB_CACHE
-          value: /root/.cache/huggingface
+    - name: ollama
+      image: ollama/ollama:0.17.7
+      command: ["/bin/sh", "-c"]
       args:
-        - "Qwen/Qwen3-Embedding-0.6B"
-        - "--task"
-        - "embedding"
-        - "--host"
-        - "0.0.0.0"
-        - "--port"
-        - "8001"
+        - |
+          set -eu
+          ollama serve &
+          pid="$!"
+          until ollama list >/dev/null 2>&1; do sleep 2; done
+          ollama pull qwen3-embedding:0.6b
+          wait "$pid"
+      ports:
+        - containerPort: 11434
+      env:
+        - name: OLLAMA_HOST
+          value: "0.0.0.0:11434"
       volumeMounts:
-        - name: models
-          mountPath: /root/.cache/huggingface
+        - name: ollama-data
+          mountPath: /root/.ollama
 
     - name: open-webui
-      image: ghcr.io/open-webui/open-webui:0.8.5
+      image: ghcr.io/open-webui/open-webui:0.8.10
       ports:
         - containerPort: 8081
       env:
@@ -304,6 +326,11 @@ spec:
     - name: searxng
       image: searxng/searxng:latest@sha256:95e59f5ba7d48b4c7ee92f2705907e52c5b98715b0d8c4802863322a502a8c4a
       env:
+        - name: SEARXNG_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: research-stack-secrets
+              key: SEARXNG_SECRET
         - name: GRANIAN_HOST
           value: "0.0.0.0"
         - name: GRANIAN_PORT
@@ -311,7 +338,7 @@ spec:
       ports:
         - containerPort: 8085
       volumeMounts:
-        - name: searxng-config
+        - name: searxng-settings
           mountPath: /etc/searxng
           readOnly: true
 
@@ -347,6 +374,11 @@ spec:
           value: "redis:6379"
         - name: FirecrawlOptions__BaseUrl
           value: "http://firecrawl:3002"
+        - name: FirecrawlOptions__ApiKey
+          valueFrom:
+            secretKeyRef:
+              name: research-stack-secrets
+              key: FIRE_CRAWL_API_KEY
         - name: FirecrawlOptions__HttpClientTimeoutSeconds
           value: "600"
         - name: ChatConfig__Endpoint
@@ -354,9 +386,9 @@ spec:
         - name: ChatConfig__ModelId
           value: "nvidia/Qwen3-30B-A3B-NVFP4"
         - name: EmbeddingConfig__Endpoint
-          value: "http://vllm-embeddings:8001/v1"
+          value: "http://ollama:11434/v1"
         - name: EmbeddingConfig__ModelId
-          value: "Qwen/Qwen3-Embedding-0.6B"
+          value: "qwen3-embedding:0.6b"
         - name: EmbeddingConfig__Dimension
           value: "1024"
         - name: RedisEventBusOptions__ConnectionString
@@ -431,29 +463,20 @@ spec:
       configMap:
         name: caddyfile
     - name: caddy-data
-      hostPath:
-        path: /mnt/c/LLM/caddy
-        type: DirectoryOrCreate
+      persistentVolumeClaim:
+        claimName: caddy-data
     - name: models
-      hostPath:
-        path: /mnt/c/LLM/models
-        type: DirectoryOrCreate
+      persistentVolumeClaim:
+        claimName: models
     - name: openwebui-data
-      hostPath:
-        path: /mnt/c/LLM/open-webui
-        type: DirectoryOrCreate
+      persistentVolumeClaim:
+        claimName: openwebui-data
     - name: firecrawl-data
-      hostPath:
-        path: /mnt/c/LLM/firecrawl
-        type: DirectoryOrCreate
+      persistentVolumeClaim:
+        claimName: firecrawl-data
     - name: playwright-data
-      hostPath:
-        path: /mnt/c/LLM/playwright
-        type: DirectoryOrCreate
-    - name: searxng-config
-      hostPath:
-        path: /mnt/c/LLM/searxng
-        type: DirectoryOrCreate
+      persistentVolumeClaim:
+        claimName: playwright-data
     - name: postgres-data
       persistentVolumeClaim:
         claimName: postgres-data
@@ -464,7 +487,12 @@ spec:
     - name: vllm-compile-cache
       persistentVolumeClaim:
         claimName: vllm-compile-cache
+    - name: ollama-data
+      persistentVolumeClaim:
+        claimName: ollama-data
     - name: research-api-log
-      hostPath:
-        path: /mnt/c/LLM/logs
-        type: DirectoryOrCreate
+      persistentVolumeClaim:
+        claimName: research-api-log
+    - name: searxng-settings
+      configMap:
+        name: searxng-config
