@@ -1,4 +1,25 @@
 apiVersion: v1
+kind: Secret
+metadata:
+  name: research-stack-secrets
+type: Opaque
+stringData:
+  ChatConfig__ApiKey: "CHANGE_ME"
+  EmbeddingConfig__ApiKey: "CHANGE_ME"
+  BearerAuthenticationOptions__BearerTokens__0: "9h32F2fNuwMQL0OUujpUoIF6l8S/lGPOM1ylNhH+MKQ="
+  POSTGRES_DB: "firecrawl"
+  POSTGRES_USER: "firecrawl"
+  POSTGRES_PASSWORD: "firecrawl"
+  ConnectionStrings__ResearchDb: "Host=nuq-postgres;Port=5432;Database=research;Username=firecrawl;Password=firecrawl"
+  ConnectionStrings__HangfireDb: "Host=nuq-postgres;Port=5432;Database=jobs;Username=firecrawl;Password=firecrawl"
+  NUQ_DATABASE_URL: "postgresql://firecrawl:firecrawl@nuq-postgres:5432/firecrawl?sslmode=disable"
+  DATABASE_URL: "postgresql://firecrawl:firecrawl@nuq-postgres:5432/firecrawl?sslmode=disable"
+  OPENAI_API_KEY: "local"
+  FIRE_CRAWL_API_KEY: ""
+  BULL_AUTH_KEY: "CHANGEME"
+
+---
+apiVersion: v1
 kind: ConfigMap
 metadata:
   name: caddyfile
@@ -13,28 +34,39 @@ data:
     webui.llm.local:8443 {
       tls internal
       encode zstd gzip
-      reverse_proxy llm-stack-open-webui:8081
+      reverse_proxy open-webui:8081
     }
     api.llm.local:8443 {
       tls internal
       encode zstd gzip
-      reverse_proxy llm-stack-vllm:8000
+      reverse_proxy vllm:8000
     }
     crawl.llm.local:8443 {
       tls internal
       encode zstd gzip
-      reverse_proxy llm-stack-firecrawl:3002
+      reverse_proxy firecrawl:3002
     }
     search.llm.local:8443 {
       tls internal
       encode zstd gzip
-      reverse_proxy llm-stack-searxng:8085
+      reverse_proxy searxng:8085
     }
     embedding.llm.local:8443 {
       tls internal
       encode zstd gzip
-      reverse_proxy llm-stack-vllm-embeddings:8001
+      reverse_proxy vllm-embeddings:8001
     }
+    research-api.llm.local:8443 {
+      tls internal
+      encode zstd gzip
+      reverse_proxy research-api:8080
+    }
+    research-webui.llm.local:8443 {
+      tls internal
+      encode zstd gzip
+      reverse_proxy research-blazor:8082
+    }
+
 ---
 apiVersion: v1
 kind: Pod
@@ -102,7 +134,7 @@ spec:
           readOnly: true
         - name: vllm-compile-cache
           mountPath: /root/.cache/vllm
-          
+
     - name: vllm-embeddings
       image: vllm-openai-cpu
       ports:
@@ -134,9 +166,12 @@ spec:
         - name: HOST
           value: "0.0.0.0"
         - name: OPENAI_API_BASE_URL
-          value: http://127.0.0.1:8000/v1
+          value: "http://vllm:8000/v1"
         - name: OPENAI_API_KEY
-          value: "local"
+          valueFrom:
+            secretKeyRef:
+              name: research-stack-secrets
+              key: OPENAI_API_KEY
         - name: ENABLE_MODEL_SELECTOR
           value: "true"
         - name: WEBUI_URL
@@ -146,15 +181,18 @@ spec:
         - name: WEB_SEARCH_ENGINE
           value: "searxng"
         - name: SEARXNG_QUERY_URL
-          value: "http://127.0.0.1:8085/search?q=<query>"
+          value: "http://searxng:8085/search?q=<query>"
         - name: WEB_SEARCH_RESULT_COUNT
           value: "4"
         - name: RAG_WEB_LOADER_ENGINE
           value: "firecrawl"
         - name: FIRE_CRAWL_API_BASE_URL
-          value: "http://127.0.0.1:3002/v1"
+          value: "http://firecrawl:3002/v1"
         - name: FIRE_CRAWL_API_KEY
-          value: ""  
+          valueFrom:
+            secretKeyRef:
+              name: research-stack-secrets
+              key: FIRE_CRAWL_API_KEY
         - name: WEB_LOADER_CONCURRENT_REQUESTS
           value: "4"
       volumeMounts:
@@ -163,10 +201,10 @@ spec:
 
     - name: redis
       image: redis:7-alpine
-      command: ["redis-server","--bind","0.0.0.0"]
+      command: ["redis-server", "--bind", "0.0.0.0"]
       ports:
         - containerPort: 6379
-        
+
     - name: firecrawl-playwright
       image: ghcr.io/firecrawl/playwright-service@sha256:46967190643b3506bbf32774c841787af353d750bcf4d8ee9edc25ecf35e0dea
       ports:
@@ -182,18 +220,27 @@ spec:
       image: localhost/nuq-postgres:latest
       env:
         - name: POSTGRES_DB
-          value: firecrawl
+          valueFrom:
+            secretKeyRef:
+              name: research-stack-secrets
+              key: POSTGRES_DB
         - name: POSTGRES_USER
-          value: firecrawl
+          valueFrom:
+            secretKeyRef:
+              name: research-stack-secrets
+              key: POSTGRES_USER
         - name: POSTGRES_PASSWORD
-          value: firecrawl
+          valueFrom:
+            secretKeyRef:
+              name: research-stack-secrets
+              key: POSTGRES_PASSWORD
       ports:
         - containerPort: 5432
-          hostPort: 5432 
+          hostPort: 5432
       volumeMounts:
         - name: postgres-data
           mountPath: /var/lib/postgresql/data
-          
+
     - name: firecrawl
       image: ghcr.io/firecrawl/firecrawl@sha256:24aab751ce90357f1398cef41c82707a3aa65f66334af636fd2e5b9a2f4d8921
       ports:
@@ -206,20 +253,44 @@ spec:
           value: "0.0.0.0"
         - name: USE_DB_AUTHENTICATION
           value: "false"
+        - name: POSTGRES_DB
+          valueFrom:
+            secretKeyRef:
+              name: research-stack-secrets
+              key: POSTGRES_DB
+        - name: POSTGRES_USER
+          valueFrom:
+            secretKeyRef:
+              name: research-stack-secrets
+              key: POSTGRES_USER
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: research-stack-secrets
+              key: POSTGRES_PASSWORD
         - name: BULL_AUTH_KEY
-          value: "CHANGEME"
+          valueFrom:
+            secretKeyRef:
+              name: research-stack-secrets
+              key: BULL_AUTH_KEY
         - name: REDIS_URL
-          value: "redis://127.0.0.1:6379"
+          value: "redis://redis:6379"
         - name: REDIS_RATE_LIMIT_URL
-          value: "redis://127.0.0.1:6379"
+          value: "redis://redis:6379"
         - name: PLAYWRIGHT_MICROSERVICE_URL
-          value: "http://127.0.0.1:3000/scrape"
+          value: "http://firecrawl-playwright:3000/scrape"
         - name: SEARXNG_ENDPOINT
-          value: "http://127.0.0.1:8085"
+          value: "http://searxng:8085"
         - name: NUQ_DATABASE_URL
-          value: "postgresql://firecrawl:firecrawl@127.0.0.1:5432/firecrawl?sslmode=disable"
+          valueFrom:
+            secretKeyRef:
+              name: research-stack-secrets
+              key: NUQ_DATABASE_URL
         - name: DATABASE_URL
-          value: "postgresql://firecrawl:firecrawl@127.0.0.1:5432/firecrawl?sslmode=disable"
+          valueFrom:
+            secretKeyRef:
+              name: research-stack-secrets
+              key: DATABASE_URL
         - name: BLOCK_MEDIA
           value: "true"
         - name: MAX_CPU
@@ -238,12 +309,123 @@ spec:
         - name: GRANIAN_PORT
           value: "8085"
       ports:
-        - containerPort: 8085        
+        - containerPort: 8085
       volumeMounts:
         - name: searxng-config
           mountPath: /etc/searxng
           readOnly: true
-          
+
+    - name: research-api
+      image: localhost/research-api:chat
+      workingDir: /app
+      envFrom:
+        - secretRef:
+            name: research-stack-secrets
+            optional: false
+      env:
+        - name: API_SERVER_PORT
+          value: "8080"
+        - name: API_SERVER_HOST_PORT
+          value: "8090"
+        - name: BLAZOR_PORT
+          value: "8082"
+        - name: BLAZOR_HOST_PORT
+          value: "5170"
+        - name: ASPNETCORE_URLS
+          value: "http://0.0.0.0:8080"
+        - name: ConnectionStrings__ResearchDb
+          valueFrom:
+            secretKeyRef:
+              name: research-stack-secrets
+              key: ConnectionStrings__ResearchDb
+        - name: ConnectionStrings__HangfireDb
+          valueFrom:
+            secretKeyRef:
+              name: research-stack-secrets
+              key: ConnectionStrings__HangfireDb
+        - name: ConnectionStrings__Redis
+          value: "redis:6379"
+        - name: FirecrawlOptions__BaseUrl
+          value: "http://firecrawl:3002"
+        - name: FirecrawlOptions__HttpClientTimeoutSeconds
+          value: "600"
+        - name: ChatConfig__Endpoint
+          value: "http://vllm:8000/v1"
+        - name: ChatConfig__ModelId
+          value: "nvidia/Qwen3-30B-A3B-NVFP4"
+        - name: EmbeddingConfig__Endpoint
+          value: "http://vllm-embeddings:8001/v1"
+        - name: EmbeddingConfig__ModelId
+          value: "Qwen/Qwen3-Embedding-0.6B"
+        - name: EmbeddingConfig__Dimension
+          value: "1024"
+        - name: RedisEventBusOptions__ConnectionString
+          value: "redis:6379"
+        - name: BearerAuthenticationOptions__Enabled
+          value: "true"
+        - name: Cors__AllowedOrigins__0
+          value: "http://localhost:5170"
+        - name: Cors__AllowedOrigins__1
+          value: "http://localhost:5173"
+        - name: Cors__AllowedOrigins__2
+          value: "http://127.0.0.1:5170"
+        - name: Cors__AllowedOrigins__3
+          value: "http://127.0.0.1:5173"
+        - name: Cors__AllowedOrigins__4
+          value: "https://research-webui.llm.local:8443"
+      ports:
+        - containerPort: 8080
+          hostPort: 8090
+      volumeMounts:
+        - name: research-api-log
+          mountPath: /app/logs
+          readOnly: false
+      livenessProbe:
+        httpGet:
+          path: /health/live
+          port: 8080
+        initialDelaySeconds: 10
+        periodSeconds: 10
+      readinessProbe:
+        httpGet:
+          path: /health/ready
+          port: 8080
+        initialDelaySeconds: 5
+        periodSeconds: 10
+
+    - name: research-blazor
+      image: localhost/research-blazor:latest
+      envFrom:
+        - secretRef:
+            name: research-stack-secrets
+            optional: false
+      env:
+        - name: BLAZOR_PORT
+          value: "8082"
+        - name: BLAZOR_HOST_PORT
+          value: "5170"
+        - name: API_SERVER_PORT
+          value: "8080"
+        - name: API_SERVER_HOST_PORT
+          value: "8090"
+        - name: API_BASE_URL
+          value: "https://research-api.llm.local:8443"
+      ports:
+        - containerPort: 8082
+          hostPort: 5170
+      livenessProbe:
+        httpGet:
+          path: /index.html
+          port: 8082
+        initialDelaySeconds: 5
+        periodSeconds: 10
+      readinessProbe:
+        httpGet:
+          path: /index.html
+          port: 8082
+        initialDelaySeconds: 3
+        periodSeconds: 10
+
   volumes:
     - name: caddy-config
       configMap:
@@ -282,3 +464,7 @@ spec:
     - name: vllm-compile-cache
       persistentVolumeClaim:
         claimName: vllm-compile-cache
+    - name: research-api-log
+      hostPath:
+        path: /mnt/c/LLM/logs
+        type: DirectoryOrCreate
