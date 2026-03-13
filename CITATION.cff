@@ -1,0 +1,21 @@
+cff-version: 1.2.0
+message: "If you use Research Engine in academic work, benchmarks, or comparative evaluations, please cite this software."
+title: "Research Engine"
+authors:
+  - family-names: "Valov"
+    given-names: "Evgenii"
+repository-code: "https://github.com/<your-github-username>/research-engine"
+license: "AGPL-3.0"
+abstract: >-
+  Research Engine is an LLM-driven local-first and privacy-focused deep research application.
+keywords:
+  - local llm
+  - deep research
+  - retrieval augmented generation
+  - rag
+  - vector search
+  - blazor
+  - dotnet
+  - privacy
+version: "0.1.0"
+date-released: 2026-03-13
