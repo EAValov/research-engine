@@ -33,6 +33,8 @@ data:
       redir https://{host}:8443{uri}
     }
     research-webui.llm.local:8443 {
+      # Caddy issues a local-development certificate chain here.
+      # Trust it on the host with Deploy/trust-caddy-local-ca.ps1.
       tls internal
       encode zstd gzip
       reverse_proxy research-webui:8082
@@ -147,49 +149,6 @@ spec:
       volumeMounts:
         - name: ollama-data
           mountPath: /root/.ollama
-
-    - name: open-webui
-      image: ghcr.io/open-webui/open-webui:0.8.10
-      ports:
-        - containerPort: 8081
-      env:
-        - name: PORT
-          value: "8081"
-        - name: HOST
-          value: "0.0.0.0"
-        - name: OPENAI_API_BASE_URL
-          value: "http://vllm:8000/v1"
-        - name: OPENAI_API_KEY
-          valueFrom:
-            secretKeyRef:
-              name: research-stack-secrets
-              key: OPENAI_API_KEY
-        - name: ENABLE_MODEL_SELECTOR
-          value: "true"
-        - name: WEBUI_URL
-          value: "https://webui.llm.local:8443"
-        - name: ENABLE_WEB_SEARCH
-          value: "true"
-        - name: WEB_SEARCH_ENGINE
-          value: "searxng"
-        - name: SEARXNG_QUERY_URL
-          value: "http://searxng:8085/search?q=<query>"
-        - name: WEB_SEARCH_RESULT_COUNT
-          value: "4"
-        - name: RAG_WEB_LOADER_ENGINE
-          value: "firecrawl"
-        - name: FIRE_CRAWL_API_BASE_URL
-          value: "http://firecrawl:3002/v1"
-        - name: FIRE_CRAWL_API_KEY
-          valueFrom:
-            secretKeyRef:
-              name: research-stack-secrets
-              key: FIRE_CRAWL_API_KEY
-        - name: WEB_LOADER_CONCURRENT_REQUESTS
-          value: "4"
-      volumeMounts:
-        - name: openwebui-data
-          mountPath: /app/backend/data
 
     - name: redis
       image: redis:7-alpine
