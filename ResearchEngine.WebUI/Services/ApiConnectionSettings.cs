@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Configuration;
+using Microsoft.AspNetCore.Components;
 
 namespace ResearchEngine.WebUI.Services;
 
@@ -10,11 +11,14 @@ public sealed class ApiConnectionSettings
 
     public ApiConnectionSettings(
         AuthTokenProvider authTokenProvider,
-        IConfiguration configuration)
+        IConfiguration configuration,
+        NavigationManager navigationManager)
     {
         _authTokenProvider = authTokenProvider;
 
-        _fallbackBaseUrl = NormalizeBaseUrl(configuration["ApiBaseUrl"])
+        _fallbackBaseUrl = ResolveFallbackBaseUrl(
+                configuration["ApiBaseUrl"],
+                navigationManager.BaseUri)
             ?? "http://localhost:8090/";
         _apiBaseUrl = _fallbackBaseUrl;
 
@@ -44,6 +48,29 @@ public sealed class ApiConnectionSettings
         return true;
     }
 
+    public static string? ResolveFallbackBaseUrl(string? configuredBaseUrl, string? currentPageBaseUrl)
+    {
+        var configured = NormalizeBaseUrl(configuredBaseUrl);
+        var current = NormalizeBaseUrl(currentPageBaseUrl);
+
+        if (configured is null)
+            return current;
+
+        if (current is null)
+            return configured;
+
+        if (Uri.TryCreate(configured, UriKind.Absolute, out var configuredUri)
+            && Uri.TryCreate(current, UriKind.Absolute, out var currentUri)
+            && IsLocalDeploymentUri(configuredUri)
+            && IsLocalDeploymentUri(currentUri)
+            && configuredUri.IsLoopback != currentUri.IsLoopback)
+        {
+            return current;
+        }
+
+        return configured;
+    }
+
     public static string? NormalizeBaseUrl(string? raw)
     {
         if (string.IsNullOrWhiteSpace(raw))
@@ -60,4 +87,18 @@ public sealed class ApiConnectionSettings
 
     private static string TrimTrailingSlash(string value)
         => value.TrimEnd('/');
+
+    public static bool IsLocalDeploymentUrl(string? raw)
+    {
+        if (NormalizeBaseUrl(raw) is not { } normalized
+            || !Uri.TryCreate(normalized, UriKind.Absolute, out var uri))
+        {
+            return false;
+        }
+
+        return IsLocalDeploymentUri(uri);
+    }
+
+    private static bool IsLocalDeploymentUri(Uri uri)
+        => uri.IsLoopback || uri.Host.EndsWith(".llm.local", StringComparison.OrdinalIgnoreCase);
 }

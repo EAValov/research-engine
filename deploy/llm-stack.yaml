@@ -30,13 +30,15 @@ data:
       admin off
     }
     :9080 {
-      redir https://{host}:8443{uri}
+      redir https://{host}:8443{uri} permanent
     }
     research-webui.llm.local:8443 {
       # Caddy issues a local-development certificate chain here.
-      # Trust it on the host with Deploy/trust-caddy-local-ca.ps1.
+      # Trust it on the host with deploy/trust-caddy-local-ca.ps1.
       tls internal
       encode zstd gzip
+      @api path /api* /health* /openapi* /scalar* /hangfire*
+      reverse_proxy @api research-api:8080
       reverse_proxy research-webui:8082
     }
 
@@ -93,7 +95,6 @@ spec:
       image: vllm/vllm-openai:v0.17.1
       ports:
         - containerPort: 8000
-          hostPort: 8000
       resources:
         limits:
           "nvidia.com/gpu=all": 1
@@ -187,7 +188,6 @@ spec:
               key: POSTGRES_PASSWORD
       ports:
         - containerPort: 5432
-          hostPort: 5432
       volumeMounts:
         - name: postgres-data
           mountPath: /var/lib/postgresql/data
@@ -196,7 +196,6 @@ spec:
       image: ghcr.io/firecrawl/firecrawl@sha256:24aab751ce90357f1398cef41c82707a3aa65f66334af636fd2e5b9a2f4d8921
       ports:
         - containerPort: 3002
-          hostPort: 8095
       env:
         - name: PORT
           value: "3002"
@@ -274,21 +273,24 @@ spec:
     - name: research-api
       image: research-api:latest
       workingDir: /app
-      envFrom:
-        - secretRef:
-            name: research-stack-secrets
-            optional: false
       env:
-        - name: API_SERVER_PORT
-          value: "8080"
-        - name: API_SERVER_HOST_PORT
-          value: "8090"
-        - name: WEBUI_PORT
-          value: "8082"
-        - name: WEBUI_HOST_PORT
-          value: "5170"
         - name: ASPNETCORE_URLS
           value: "http://0.0.0.0:8080"
+        - name: ChatConfig__ApiKey
+          valueFrom:
+            secretKeyRef:
+              name: research-stack-secrets
+              key: ChatConfig__ApiKey
+        - name: EmbeddingConfig__ApiKey
+          valueFrom:
+            secretKeyRef:
+              name: research-stack-secrets
+              key: EmbeddingConfig__ApiKey
+        - name: BearerAuthenticationOptions__BearerTokens__0
+          valueFrom:
+            secretKeyRef:
+              name: research-stack-secrets
+              key: BearerAuthenticationOptions__BearerTokens__0
         - name: ConnectionStrings__ResearchDb
           valueFrom:
             secretKeyRef:
@@ -299,8 +301,6 @@ spec:
             secretKeyRef:
               name: research-stack-secrets
               key: ConnectionStrings__HangfireDb
-        - name: ConnectionStrings__Redis
-          value: "redis:6379"
         - name: FirecrawlOptions__BaseUrl
           value: "http://firecrawl:3002"
         - name: FirecrawlOptions__ApiKey
@@ -325,18 +325,9 @@ spec:
         - name: BearerAuthenticationOptions__Enabled
           value: "true"
         - name: Cors__AllowedOrigins__0
-          value: "http://localhost:5170"
-        - name: Cors__AllowedOrigins__1
-          value: "http://localhost:5173"
-        - name: Cors__AllowedOrigins__2
-          value: "http://127.0.0.1:5170"
-        - name: Cors__AllowedOrigins__3
-          value: "http://127.0.0.1:5173"
-        - name: Cors__AllowedOrigins__4
           value: "https://research-webui.llm.local:8443"
       ports:
         - containerPort: 8080
-          hostPort: 8090
       volumeMounts:
         - name: research-api-log
           mountPath: /app/logs
@@ -356,24 +347,18 @@ spec:
 
     - name: research-webui
       image: research-webui:latest
-      envFrom:
-        - secretRef:
-            name: research-stack-secrets
-            optional: false
       env:
         - name: WEBUI_PORT
           value: "8082"
-        - name: WEBUI_HOST_PORT
-          value: "5170"
-        - name: API_SERVER_PORT
-          value: "8080"
-        - name: API_SERVER_HOST_PORT
-          value: "8090"
         - name: API_BASE_URL
-          value: "https://research-api.llm.local:8443"
+          value: "https://research-webui.llm.local:8443"
+        - name: BearerAuthenticationOptions__BearerTokens__0
+          valueFrom:
+            secretKeyRef:
+              name: research-stack-secrets
+              key: BearerAuthenticationOptions__BearerTokens__0
       ports:
         - containerPort: 8082
-          hostPort: 5170
       livenessProbe:
         httpGet:
           path: /index.html
@@ -397,9 +382,6 @@ spec:
     - name: models
       persistentVolumeClaim:
         claimName: models
-    - name: openwebui-data
-      persistentVolumeClaim:
-        claimName: openwebui-data
     - name: firecrawl-data
       persistentVolumeClaim:
         claimName: firecrawl-data

@@ -1,5 +1,5 @@
 param(
-    [string]$ContainerName = "llm-stack-caddy",
+    [string]$ContainerName = "",
     [string]$CertOutputPath = "$PSScriptRoot\.generated\caddy-local-root.crt",
     [ValidateSet("CurrentUser", "LocalMachine")]
     [string]$StoreScope = "CurrentUser"
@@ -18,10 +18,20 @@ function Ensure-Command {
 Ensure-Command -Name "podman"
 Ensure-Command -Name "certutil"
 
+if ([string]::IsNullOrWhiteSpace($ContainerName)) {
+    foreach ($candidate in @("research-edge-caddy", "llm-stack-caddy")) {
+        $isCandidateRunning = podman ps --format "{{.Names}}" | Select-String -Pattern "^$candidate$" -Quiet
+        if ($isCandidateRunning) {
+            $ContainerName = $candidate
+            break
+        }
+    }
+}
+
 Write-Host "Checking container '$ContainerName'..."
 $isRunning = podman ps --format "{{.Names}}" | Select-String -Pattern "^$ContainerName$" -Quiet
 if (-not $isRunning) {
-    throw "Container '$ContainerName' is not running. Start the stack first."
+    throw "No supported Caddy container is running. Start either the modular stack or llm-stack first."
 }
 
 $outputDirectory = Split-Path -Path $CertOutputPath -Parent

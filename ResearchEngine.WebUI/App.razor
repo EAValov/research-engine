@@ -1,4 +1,5 @@
 @using ResearchEngine.WebUI.State
+@using ResearchEngine.WebUI.Services
 @inject AppStateStore AppState
 @inject ResearchEngine.WebUI.Services.ApiConnectionSettings ApiConnection
 
@@ -21,7 +22,7 @@
 
         var saved = AppState.GetApiSettings();
 
-        var apiBaseUrl = string.IsNullOrWhiteSpace(saved.BaseUrl)
+        var apiBaseUrl = string.IsNullOrWhiteSpace(saved.BaseUrl) || ShouldPreferFallback(saved.BaseUrl, ApiConnection.FallbackApiBaseUrl)
             ? ApiConnection.FallbackApiBaseUrl
             : saved.BaseUrl;
 
@@ -42,5 +43,31 @@
             ApiConnection.TryApply(ApiConnection.FallbackApiBaseUrl, bearerToken, authEnabled);
             AppState.SetApiSettings(ApiConnection.ApiBaseUrl, bearerToken, authEnabled);
         }
+    }
+
+    private static bool ShouldPreferFallback(string? savedBaseUrl, string fallbackBaseUrl)
+    {
+        var normalizedSaved = ApiConnectionSettings.NormalizeBaseUrl(savedBaseUrl);
+        var normalizedFallback = ApiConnectionSettings.NormalizeBaseUrl(fallbackBaseUrl);
+
+        if (normalizedSaved is null || normalizedFallback is null)
+            return false;
+
+        if (string.Equals(normalizedSaved, normalizedFallback, StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        if (!ApiConnectionSettings.IsLocalDeploymentUrl(normalizedSaved)
+            || !ApiConnectionSettings.IsLocalDeploymentUrl(normalizedFallback))
+        {
+            return false;
+        }
+
+        if (!Uri.TryCreate(normalizedSaved, UriKind.Absolute, out var savedUri)
+            || !Uri.TryCreate(normalizedFallback, UriKind.Absolute, out var fallbackUri))
+        {
+            return false;
+        }
+
+        return savedUri.IsLoopback != fallbackUri.IsLoopback;
     }
 }

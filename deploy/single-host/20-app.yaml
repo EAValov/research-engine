@@ -1,0 +1,175 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: research-app
+  annotations:
+    io.podman.annotations.networks: '["llm-net"]'
+spec:
+  hostname: research-app
+  containers:
+    - name: research-postgres
+      image: docker.io/pgvector/pgvector:pg17
+      env:
+        - name: POSTGRES_DB
+          valueFrom:
+            secretKeyRef:
+              name: research-single-host-secrets
+              key: RESEARCH_POSTGRES_DB
+        - name: POSTGRES_USER
+          valueFrom:
+            secretKeyRef:
+              name: research-single-host-secrets
+              key: RESEARCH_POSTGRES_USER
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: research-single-host-secrets
+              key: RESEARCH_POSTGRES_PASSWORD
+      ports:
+        - containerPort: 5432
+      volumeMounts:
+        - name: research-postgres-data
+          mountPath: /var/lib/postgresql/data
+
+    - name: research-redis
+      image: docker.io/library/redis:7-alpine
+      command: ["redis-server", "--bind", "0.0.0.0"]
+      ports:
+        - containerPort: 6379
+
+    - name: ollama
+      image: docker.io/ollama/ollama:0.17.7
+      command: ["/bin/sh", "-c"]
+      args:
+        - |
+          set -eu
+          ollama serve &
+          pid="$!"
+          until ollama list >/dev/null 2>&1; do sleep 2; done
+          ollama pull qwen3-embedding:0.6b
+          wait "$pid"
+      ports:
+        - containerPort: 11434
+      env:
+        - name: OLLAMA_HOST
+          value: "0.0.0.0:11434"
+      volumeMounts:
+        - name: ollama-data
+          mountPath: /root/.ollama
+
+    - name: research-api
+      image: localhost/research-api:latest
+      workingDir: /app
+      env:
+        - name: ASPNETCORE_URLS
+          value: "http://0.0.0.0:8080"
+        - name: ChatConfig__ApiKey
+          valueFrom:
+            secretKeyRef:
+              name: research-single-host-secrets
+              key: ChatConfig__ApiKey
+        - name: EmbeddingConfig__ApiKey
+          valueFrom:
+            secretKeyRef:
+              name: research-single-host-secrets
+              key: EmbeddingConfig__ApiKey
+        - name: BearerAuthenticationOptions__BearerTokens__0
+          valueFrom:
+            secretKeyRef:
+              name: research-single-host-secrets
+              key: BearerAuthenticationOptions__BearerTokens__0
+        - name: ConnectionStrings__ResearchDb
+          valueFrom:
+            secretKeyRef:
+              name: research-single-host-secrets
+              key: RESEARCH_CONNECTION_STRING
+        - name: ConnectionStrings__HangfireDb
+          valueFrom:
+            secretKeyRef:
+              name: research-single-host-secrets
+              key: RESEARCH_CONNECTION_STRING
+        - name: FirecrawlOptions__BaseUrl
+          value: "http://research-crawl:3002"
+        - name: FirecrawlOptions__ApiKey
+          valueFrom:
+            secretKeyRef:
+              name: research-single-host-secrets
+              key: FIRE_CRAWL_API_KEY
+        - name: FirecrawlOptions__HttpClientTimeoutSeconds
+          value: "600"
+        - name: ChatConfig__Endpoint
+          value: "http://research-model:8000/v1"
+        - name: ChatConfig__ModelId
+          value: "nvidia/Qwen3-30B-A3B-NVFP4"
+        - name: EmbeddingConfig__Endpoint
+          value: "http://127.0.0.1:11434/v1"
+        - name: EmbeddingConfig__ModelId
+          value: "qwen3-embedding:0.6b"
+        - name: EmbeddingConfig__Dimension
+          value: "1024"
+        - name: RedisEventBusOptions__ConnectionString
+          value: "127.0.0.1:6379"
+        - name: BearerAuthenticationOptions__Enabled
+          value: "true"
+        - name: Cors__AllowedOrigins__0
+          value: "http://localhost:8080"
+        - name: Cors__AllowedOrigins__1
+          value: "http://127.0.0.1:8080"
+        - name: Cors__AllowedOrigins__2
+          value: "https://research-webui.llm.local:8443"
+      ports:
+        - containerPort: 8080
+      volumeMounts:
+        - name: research-api-log
+          mountPath: /app/logs
+          readOnly: false
+      livenessProbe:
+        httpGet:
+          path: /health/live
+          port: 8080
+        initialDelaySeconds: 10
+        periodSeconds: 10
+      readinessProbe:
+        httpGet:
+          path: /health/ready
+          port: 8080
+        initialDelaySeconds: 5
+        periodSeconds: 10
+
+    - name: research-webui
+      image: localhost/research-webui:latest
+      env:
+        - name: WEBUI_PORT
+          value: "8082"
+        - name: API_BASE_URL
+          value: "http://localhost:8080"
+        - name: BearerAuthenticationOptions__BearerTokens__0
+          valueFrom:
+            secretKeyRef:
+              name: research-single-host-secrets
+              key: BearerAuthenticationOptions__BearerTokens__0
+      ports:
+        - containerPort: 8082
+      livenessProbe:
+        httpGet:
+          path: /index.html
+          port: 8082
+        initialDelaySeconds: 5
+        periodSeconds: 10
+      readinessProbe:
+        httpGet:
+          path: /index.html
+          port: 8082
+        initialDelaySeconds: 3
+        periodSeconds: 10
+
+  volumes:
+    - name: research-postgres-data
+      persistentVolumeClaim:
+        claimName: research-postgres-data
+    - name: ollama-data
+      persistentVolumeClaim:
+        claimName: research-ollama-data
+    - name: research-api-log
+      persistentVolumeClaim:
+        claimName: research-api-log

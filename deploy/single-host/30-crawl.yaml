@@ -1,0 +1,162 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: research-searxng-config
+data:
+  settings.yml: |
+    use_default_settings: true
+    general:
+      instance_name: "Research Stack Search"
+    server:
+      bind_address: "0.0.0.0"
+      port: 8085
+      secret_key: "overwritten-by-secret"
+    search:
+      formats:
+        - html
+        - json
+    ui:
+      static_use_hash: true
+
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: research-crawl
+  annotations:
+    io.podman.annotations.networks: '["llm-net"]'
+spec:
+  hostname: research-crawl
+  containers:
+    - name: crawl-postgres
+      image: localhost/nuq-postgres:latest
+      env:
+        - name: POSTGRES_DB
+          valueFrom:
+            secretKeyRef:
+              name: research-single-host-secrets
+              key: CRAWL_POSTGRES_DB
+        - name: POSTGRES_USER
+          valueFrom:
+            secretKeyRef:
+              name: research-single-host-secrets
+              key: CRAWL_POSTGRES_USER
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: research-single-host-secrets
+              key: CRAWL_POSTGRES_PASSWORD
+      ports:
+        - containerPort: 5432
+      volumeMounts:
+        - name: crawl-postgres-data
+          mountPath: /var/lib/postgresql/data
+
+    - name: crawl-redis
+      image: docker.io/library/redis:7-alpine
+      command: ["redis-server", "--bind", "0.0.0.0"]
+      ports:
+        - containerPort: 6379
+
+    - name: firecrawl-playwright
+      image: ghcr.io/firecrawl/playwright-service@sha256:46967190643b3506bbf32774c841787af353d750bcf4d8ee9edc25ecf35e0dea
+      ports:
+        - containerPort: 3000
+      env:
+        - name: PORT
+          value: "3000"
+      volumeMounts:
+        - name: crawl-playwright-data
+          mountPath: /app/data
+
+    - name: searxng
+      image: searxng/searxng:latest@sha256:95e59f5ba7d48b4c7ee92f2705907e52c5b98715b0d8c4802863322a502a8c4a
+      env:
+        - name: SEARXNG_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: research-single-host-secrets
+              key: SEARXNG_SECRET
+        - name: GRANIAN_HOST
+          value: "0.0.0.0"
+        - name: GRANIAN_PORT
+          value: "8085"
+      ports:
+        - containerPort: 8085
+      volumeMounts:
+        - name: searxng-settings
+          mountPath: /etc/searxng
+          readOnly: true
+
+    - name: firecrawl
+      image: ghcr.io/firecrawl/firecrawl@sha256:24aab751ce90357f1398cef41c82707a3aa65f66334af636fd2e5b9a2f4d8921
+      ports:
+        - containerPort: 3002
+      env:
+        - name: PORT
+          value: "3002"
+        - name: HOST
+          value: "0.0.0.0"
+        - name: USE_DB_AUTHENTICATION
+          value: "false"
+        - name: POSTGRES_DB
+          valueFrom:
+            secretKeyRef:
+              name: research-single-host-secrets
+              key: CRAWL_POSTGRES_DB
+        - name: POSTGRES_USER
+          valueFrom:
+            secretKeyRef:
+              name: research-single-host-secrets
+              key: CRAWL_POSTGRES_USER
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: research-single-host-secrets
+              key: CRAWL_POSTGRES_PASSWORD
+        - name: BULL_AUTH_KEY
+          valueFrom:
+            secretKeyRef:
+              name: research-single-host-secrets
+              key: BULL_AUTH_KEY
+        - name: REDIS_URL
+          value: "redis://127.0.0.1:6379"
+        - name: REDIS_RATE_LIMIT_URL
+          value: "redis://127.0.0.1:6379"
+        - name: PLAYWRIGHT_MICROSERVICE_URL
+          value: "http://127.0.0.1:3000/scrape"
+        - name: SEARXNG_ENDPOINT
+          value: "http://127.0.0.1:8085"
+        - name: NUQ_DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: research-single-host-secrets
+              key: CRAWL_DATABASE_URL
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: research-single-host-secrets
+              key: CRAWL_DATABASE_URL
+        - name: BLOCK_MEDIA
+          value: "true"
+        - name: MAX_CPU
+          value: "0.95"
+        - name: MAX_RAM
+          value: "0.95"
+      volumeMounts:
+        - name: crawl-firecrawl-data
+          mountPath: /app/data
+
+  volumes:
+    - name: crawl-postgres-data
+      persistentVolumeClaim:
+        claimName: crawl-nuq-postgres-data
+    - name: crawl-firecrawl-data
+      persistentVolumeClaim:
+        claimName: crawl-firecrawl-data
+    - name: crawl-playwright-data
+      persistentVolumeClaim:
+        claimName: crawl-playwright-data
+    - name: searxng-settings
+      configMap:
+        name: research-searxng-config
