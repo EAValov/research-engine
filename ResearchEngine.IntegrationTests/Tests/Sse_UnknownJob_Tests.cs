@@ -1,7 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using ResearchEngine.IntegrationTests.Infrastructure;
-using ResearchEngine.Web;
+using ResearchEngine.API;
 
 namespace ResearchEngine.IntegrationTests.Tests;
 

@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
@@ -37,7 +37,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\ResearchEngine.Web\ResearchEngine.Web.csproj" />
+    <ProjectReference Include="..\ResearchEngine.API\ResearchEngine.API.csproj" />
   </ItemGroup>
 
 </Project>

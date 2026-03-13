@@ -1,0 +1,104 @@
+@page "/"
+@using ResearchEngine.WebUI.Api
+@using ResearchEngine.WebUI.Components.Common
+@using ResearchEngine.WebUI.Components.Research
+@using ResearchEngine.WebUI.Services
+@inject IResearchApiClient Api
+@inject NavigationManager Nav
+
+<ResearchComposer />
+
+<section class="jobs" aria-label="Existing jobs">
+    <div class="jobs-head">
+        <h2 class="h2">Recent</h2>
+        <button type="button" class="secondary" @onclick="ReloadAsync" disabled="@_loading">
+            @(_loading ? "Refreshing…" : "Refresh")
+        </button>
+    </div>
+
+    @if (_error is not null)
+    {
+        <ErrorBanner Error="_error" OnRetry="ReloadAsync" />
+    }
+    else if (_loading)
+    {
+        <p aria-live="polite">Loading…</p>
+    }
+    else if (_jobs.Count == 0)
+    {
+        <p>No jobs yet. Create one above.</p>
+    }
+    else
+    {
+        <ul class="list" role="list">
+            @foreach (var j in _jobs)
+            {
+                <li class="row" tabindex="0" @onclick="() => OpenJob(j.Id)" @onkeydown="e => OnRowKeyDown(e, j.Id)"
+                    aria-label="@($"{j.Query}. Status {j.Status}. Created {j.CreatedAt}.")">
+                    <div class="main">
+                        <div class="q">@j.Query</div>
+                        <div class="meta">
+                            <span class="pill">@j.Status</span>
+                            <span class="dot">•</span>
+                            <span>@j.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</span>
+                            <span class="dot">•</span>
+                            <span>@j.TargetLanguage</span>
+                            @if (!string.IsNullOrWhiteSpace(j.Region))
+                            {
+                                <span class="dot">•</span>
+                                <span>@j.Region</span>
+                            }
+                        </div>
+                    </div>
+                    <div class="side">
+                        <span class="mono">@ShortId(j.Id)</span>
+                    </div>
+                </li>
+            }
+        </ul>
+    }
+</section>
+
+@code {
+    private bool _loading = true;
+    private ApiError? _error;
+    private readonly List<ResearchJobListItemDto> _jobs = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await ReloadAsync();
+    }
+
+    private async Task ReloadAsync()
+    {
+        _loading = true;
+        _error = null;
+        _jobs.Clear();
+
+        try
+        {
+            var resp = await Api.JobsGETAsync();
+            _jobs.AddRange(resp.Jobs
+                .OrderByDescending(x => x.UpdatedAt)
+                .ToList());
+        }
+        catch (Exception ex)
+        {
+            _error = ApiErrorMapper.Map(ex);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void OpenJob(Guid jobId) => Nav.NavigateTo($"/jobs/{jobId}");
+
+    private void OnRowKeyDown(KeyboardEventArgs e, Guid jobId)
+    {
+        if (e.Key == "Enter" || e.Key == " ")
+            OpenJob(jobId);
+    }
+
+    private static string ShortId(Guid id) => id.ToString("N")[..8];
+}

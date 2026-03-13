@@ -1,6 +1,6 @@
 using System.Net.Http.Json;
 using System.Text.Json;
-using ResearchEngine.Web;
+using ResearchEngine.API;
 
 namespace ResearchEngine.IntegrationTests.Helpers;
 

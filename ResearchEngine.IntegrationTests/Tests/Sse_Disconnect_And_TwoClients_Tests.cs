@@ -4,7 +4,7 @@ using Xunit;
 using ResearchEngine.IntegrationTests.Infrastructure;
 using ResearchEngine.IntegrationTests.Helpers;
 using static ResearchEngine.IntegrationTests.Helpers.SseTestHelpers;
-using ResearchEngine.Web;
+using ResearchEngine.API;
 
 namespace ResearchEngine.IntegrationTests.Tests;
 

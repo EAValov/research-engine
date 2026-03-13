@@ -1,0 +1,217 @@
+@using ResearchEngine.WebUI.Api
+@using ResearchEngine.WebUI.Components.Common
+@using ResearchEngine.WebUI.Services
+@inject SynthesisHistoryFacade History
+@inject IJSRuntime JS
+
+<div class="list-wrap">
+    @if (_error is not null)
+    {
+        <ErrorBanner Error="_error" OnRetry="ReloadAsync" />
+    }
+
+    @if (_loading && _items.Count == 0)
+    {
+        <p aria-live="polite">Loading syntheses…</p>
+    }
+    else if (_items.Count == 0)
+    {
+        <p>No syntheses yet.</p>
+    }
+    else
+    {
+        <ul class="hist" role="list" aria-label="Synthesis history list">
+            @foreach (var s in _items)
+            {
+                var isCurrent = CurrentSynthesisId is not null && s.SynthesisId == CurrentSynthesisId.Value;
+
+                <li class="row @(isCurrent ? "current" : "")" tabindex="0">
+                    <div class="main">
+                        <div class="line">
+                            <span class="id">@ShortId(s.SynthesisId)</span>
+                            <span class="status">@s.Status</span>
+                            @if (IsRunningStatus(s.Status))
+                            {
+                                <span class="status-spinner" aria-hidden="true"></span>
+                            }
+                            @if (s.ParentSynthesisId is not null)
+                            {
+                                <span class="parent" title="Has parent synthesis">↳</span>
+                            }
+                        </div>
+
+                        <div class="meta">
+                            <span>Created: @Fmt(s.CreatedAt)</span>
+                            @if (s.CompletedAt is not null)
+                            {
+                                <span class="dot">•</span>
+                                <span>Completed: @Fmt(s.CompletedAt.Value)</span>
+                            }
+                            <span class="dot">•</span>
+                            <span>@s.SectionCount sections</span>
+                        </div>
+
+                        @if (!string.IsNullOrWhiteSpace(s.ErrorMessage))
+                        {
+                            <div class="err">@s.ErrorMessage</div>
+                        }
+                    </div>
+
+                    <div class="actions">
+                        <button type="button" class="btn" @onclick="() => OnOpen.InvokeAsync(s.SynthesisId)">Open</button>
+
+                        <button type="button" class="btn" @onclick="() => OnSetCompareA.InvokeAsync(s.SynthesisId)" aria-label="Set as compare A">
+                            A
+                        </button>
+
+                        <button type="button" class="btn" @onclick="() => OnSetCompareB.InvokeAsync(s.SynthesisId)" aria-label="Set as compare B">
+                            B
+                        </button>
+
+                        <button type="button" class="btn" @onclick="() => OnUseAsBase.InvokeAsync(s.SynthesisId)">Use as base</button>
+
+                        <button type="button" class="ghost" @onclick="() => OnCopyId.InvokeAsync(s.SynthesisId)" aria-label="Copy synthesis id">
+                            Copy
+                        </button>
+
+                        @if (CanDeleteFromUi(s))
+                        {
+                            <button type="button"
+                                    class="ghost"
+                                    disabled="@(_deletingId == s.SynthesisId)"
+                                    @onclick="() => DeleteAsync(s.SynthesisId)">
+                                @(_deletingId == s.SynthesisId ? "Deleting…" : "Delete")
+                            </button>
+                        }
+                    </div>
+                </li>
+            }
+        </ul>
+
+        <div class="foot">
+            <button type="button" class="load"
+                    @onclick="LoadMoreAsync"
+                    disabled="@(!_hasMore || _loading)">
+                @(_loading ? "Loading…" : (_hasMore ? "Load more" : "No more"))
+            </button>
+
+            @if (_totalCount is not null)
+            {
+                <span class="count">@_items.Count / @_totalCount</span>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public Guid JobId { get; set; }
+    [Parameter] public Guid? CurrentSynthesisId { get; set; }
+
+    [Parameter] public EventCallback<Guid> OnOpen { get; set; }
+    [Parameter] public EventCallback<Guid> OnSetCompareA { get; set; }
+    [Parameter] public EventCallback<Guid> OnSetCompareB { get; set; }
+    [Parameter] public EventCallback<Guid> OnUseAsBase { get; set; }
+    [Parameter] public EventCallback<Guid> OnCopyId { get; set; }
+    [Parameter] public EventCallback<Guid> OnDeleted { get; set; }
+
+    private readonly List<SynthesisListItemDto> _items = new();
+    private ApiError? _error;
+    private bool _loading;
+
+    private int _skip = 0;
+    private const int Take = 20;
+
+    private int? _totalCount;
+    private bool _hasMore = true;
+    private Guid? _deletingId;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_items.Count == 0)
+            await ReloadAsync();
+    }
+
+    private async Task ReloadAsync()
+    {
+        _items.Clear();
+        _skip = 0;
+        _totalCount = null;
+        _hasMore = true;
+        _error = null;
+        await LoadMoreAsync();
+    }
+
+    private async Task LoadMoreAsync()
+    {
+        if (_loading || !_hasMore) return;
+
+        _loading = true;
+        _error = null;
+
+        var res = await History.ListSynthesesAsync(JobId, _skip, Take);
+        if (!res.IsSuccess)
+        {
+            _error = res.Error;
+            _loading = false;
+            return;
+        }
+
+        var resp = res.Data!;
+        var page = resp.Syntheses ?? Array.Empty<SynthesisListItemDto>();
+
+        _items.AddRange(page);
+        _skip += page.Count;
+
+        // ListSynthesesResponse.Count is treated as total available items
+        _totalCount = resp.Count;
+
+        _hasMore = _totalCount is null
+            ? page.Count == Take
+            : _skip < _totalCount.Value;
+
+        _loading = false;
+    }
+
+    private static string ShortId(Guid id) => id.ToString("N")[..8];
+    private static string Fmt(DateTimeOffset dto) => dto.ToLocalTime().ToString("yyyy-MM-dd HH:mm");
+
+    private static bool CanDeleteFromUi(SynthesisListItemDto s)
+        => string.Equals(s.Status?.Trim(), "Failed", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsRunningStatus(string? status)
+        => string.Equals(status?.Trim(), "Running", StringComparison.OrdinalIgnoreCase);
+
+    private async Task DeleteAsync(Guid synthesisId)
+    {
+        if (_deletingId is not null) return;
+
+        var ok = false;
+        try { ok = await JS.InvokeAsync<bool>("confirm", $"Delete synthesis {ShortId(synthesisId)}?"); }
+        catch { }
+
+        if (!ok) return;
+
+        _deletingId = synthesisId;
+        _error = null;
+
+        try
+        {
+            var res = await History.DeleteSynthesisAsync(synthesisId);
+            if (!res.IsSuccess)
+            {
+                _error = res.Error;
+                return;
+            }
+
+            _items.RemoveAll(x => x.SynthesisId == synthesisId);
+            if (_totalCount is > 0)
+                _totalCount--;
+
+            await OnDeleted.InvokeAsync(synthesisId);
+        }
+        finally
+        {
+            _deletingId = null;
+        }
+    }
+}

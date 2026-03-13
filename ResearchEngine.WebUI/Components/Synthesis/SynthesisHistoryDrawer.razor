@@ -1,0 +1,244 @@
+@using ResearchEngine.WebUI.Api
+@using ResearchEngine.WebUI.Services
+@inject SynthesisHistoryFacade History
+@inject IJSRuntime JS
+
+<div class="overlay @(IsOpen ? "open" : "")" @onclick="OnOverlayClick" aria-hidden="@(!IsOpen)">
+    <div class="drawer"
+         role="dialog"
+         aria-modal="true"
+         aria-label="Synthesis history"
+         tabindex="-1"
+         @onclick:stopPropagation="true"
+         @onkeydown="OnKeyDown">
+
+        <div class="head">
+            <div class="title">Synthesis</div>
+
+            <div class="right">
+                <button type="button" class="x" @onclick="Close" aria-label="Close">×</button>
+            </div>
+        </div>
+
+        <div class="tabs" role="tablist" aria-label="Synthesis tabs">
+            <button type="button"
+                    class="tab @(_tab == "history" ? "active" : "")"
+                    role="tab"
+                    aria-selected="@(_tab == "history")"
+                    @onclick="@(() => _tab = "history")">
+                History
+            </button>
+
+            <button type="button"
+                    class="tab @(_tab == "compare" ? "active" : "")"
+                    role="tab"
+                    aria-selected="@(_tab == "compare")"
+                    @onclick="@(() => _tab = "compare")">
+                Compare
+            </button>
+        </div>
+
+        <div class="body">
+            @if (_tab == "history")
+            {
+                <SynthesisList JobId="JobId"
+                               CurrentSynthesisId="CurrentSynthesisId"
+                               OnOpen="OnOpenClicked"
+                               OnSetCompareA="SetCompareAAsync"
+                               OnSetCompareB="SetCompareBAsync"
+                               OnUseAsBase="OnUseAsBaseClicked"
+                               OnCopyId="CopyIdAsync"
+                               OnDeleted="OnDeletedClicked" />
+            }
+            else
+            {
+                <SynthesisCompareView
+                    JobId="JobId"
+                    AId="_aId"
+                    BId="_bId"
+                    AStatus="@_aStatus"
+                    BStatus="@_bStatus"
+                    AMarkdown="@_aMarkdown"
+                    BMarkdown="@_bMarkdown"
+                    Error="@_compareError"
+                    OnSwap="SwapAsync"
+                    OnPickA="PickAAsync"
+                    OnPickB="PickBAsync" />
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter] public Guid JobId { get; set; }
+
+    [Parameter] public bool IsOpen { get; set; }
+    [Parameter] public EventCallback<bool> IsOpenChanged { get; set; }
+
+    [Parameter] public Guid? CurrentSynthesisId { get; set; }
+
+    // actions back to JobDetailPage
+    [Parameter] public EventCallback<Guid> OpenSynthesis { get; set; }
+    [Parameter] public EventCallback<SynthesisDto> UseAsBase { get; set; }
+    [Parameter] public EventCallback<Guid> DeleteSynthesis { get; set; }
+
+    private string _tab = "history";
+
+    // compare state + cache
+    private Guid? _aId;
+    private Guid? _bId;
+
+    private string _aMarkdown = "";
+    private string _bMarkdown = "";
+    private string? _aStatus;
+    private string? _bStatus;
+
+    private ApiError? _compareError;
+
+    private readonly Dictionary<Guid, SynthesisDto> _cache = new();
+
+    private Task Close() => IsOpenChanged.InvokeAsync(false);
+
+    private Task OnOverlayClick() => Close();
+
+    private Task OnKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape")
+            return Close();
+        return Task.CompletedTask;
+    }
+
+    private async Task OnOpenClicked(Guid id)
+    {
+        await OpenSynthesis.InvokeAsync(id);
+    }
+
+    private async Task OnUseAsBaseClicked(Guid id)
+    {
+        _compareError = null;
+
+        var dto = await EnsureLoadedAsync(id);
+        if (dto is null)
+            return;
+
+        await UseAsBase.InvokeAsync(dto);
+    }
+
+    private Task OnDeletedClicked(Guid synthesisId)
+        => DeleteSynthesis.InvokeAsync(synthesisId);
+
+    private async Task SetCompareAAsync(Guid id)
+    {
+        _tab = "compare";
+        _aId = id;
+        await LoadCompareSideAsync(isA: true, id);
+    }
+
+    private async Task SetCompareBAsync(Guid id)
+    {
+        _tab = "compare";
+        _bId = id;
+        await LoadCompareSideAsync(isA: false, id);
+    }
+
+    private async Task PickAAsync(Guid id)
+    {
+        _aId = id;
+        await LoadCompareSideAsync(isA: true, id);
+    }
+
+    private async Task PickBAsync(Guid id)
+    {
+        _bId = id;
+        await LoadCompareSideAsync(isA: false, id);
+    }
+
+    private async Task SwapAsync()
+    {
+        (_aId, _bId) = (_bId, _aId);
+        (_aMarkdown, _bMarkdown) = (_bMarkdown, _aMarkdown);
+        (_aStatus, _bStatus) = (_bStatus, _aStatus);
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task CopyIdAsync(Guid id)
+    {
+        try
+        {
+            await JS.InvokeAsync<bool>("researchEngine.jobEvents.copyText", id.ToString());
+        }
+        catch { }
+    }
+
+    private async Task LoadCompareSideAsync(bool isA, Guid id)
+    {
+        _compareError = null;
+
+        var dto = await EnsureLoadedAsync(id);
+        if (dto is null)
+            return;
+
+        var md = ComposeMarkdown(dto);
+
+        if (isA)
+        {
+            _aMarkdown = md;
+            _aStatus = dto.Status;
+        }
+        else
+        {
+            _bMarkdown = md;
+            _bStatus = dto.Status;
+        }
+
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task<SynthesisDto?> EnsureLoadedAsync(Guid id)
+    {
+        if (_cache.TryGetValue(id, out var cached))
+            return cached;
+
+        var res = await History.GetSynthesisAsync(id);
+        if (!res.IsSuccess)
+        {
+            _compareError = res.Error;
+            await InvokeAsync(StateHasChanged);
+            return null;
+        }
+
+        _cache[id] = res.Data!;
+        return res.Data!;
+    }
+
+    // Markdown composition rules:
+    // - Order by Index
+    // - Section heading: ## {Title}
+    // - Content: ContentMarkdown else Summary else "_No content._"
+    private static string ComposeMarkdown(SynthesisDto s)
+    {
+        var sections = (s.Sections ?? Array.Empty<SynthesisSectionDto>())
+            .OrderBy(x => x.Index)
+            .ToList();
+
+        if (sections.Count == 0)
+            return string.Empty;
+
+        var parts = new List<string>(sections.Count * 2);
+
+        foreach (var sec in sections)
+        {
+            var title = string.IsNullOrWhiteSpace(sec.Title) ? "Section" : sec.Title.Trim();
+            parts.Add($"## {title}");
+
+            if (!string.IsNullOrWhiteSpace(sec.ContentMarkdown))
+                parts.Add(sec.ContentMarkdown.Trim());
+            else if (!string.IsNullOrWhiteSpace(sec.Summary))
+                parts.Add(sec.Summary.Trim());
+            else
+                parts.Add("_No content._");
+        }
+
+        return string.Join("\n\n", parts);
+    }
+}

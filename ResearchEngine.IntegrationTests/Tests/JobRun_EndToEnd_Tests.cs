@@ -2,7 +2,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using ResearchEngine.IntegrationTests.Helpers;
 using ResearchEngine.IntegrationTests.Infrastructure;
-using ResearchEngine.Web;
+using ResearchEngine.API;
 using Xunit;
 
 namespace ResearchEngine.IntegrationTests.Tests;

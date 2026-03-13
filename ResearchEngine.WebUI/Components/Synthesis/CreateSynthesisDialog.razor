@@ -1,0 +1,147 @@
+@using ResearchEngine.WebUI.Components.Common
+@using ResearchEngine.WebUI.Services
+
+@if (IsOpen)
+{
+    <div class="dlg-overlay" @onclick="OnOverlayClick" aria-hidden="false">
+        <div class="dlg"
+             role="dialog"
+             aria-modal="true"
+             aria-label="Create synthesis"
+             tabindex="-1"
+             @onclick:stopPropagation="true"
+             @onkeydown="OnKeyDown">
+
+            <div class="dlg-head">
+                <div class="dlg-title">New synthesis</div>
+                <button type="button" class="x" @onclick="Close" aria-label="Close">×</button>
+            </div>
+
+            @if (Error is not null)
+            {
+                <ErrorBanner Error="Error" />
+            }
+
+            @if (BaseSynthesisId is not null)
+            {
+                <div class="base">
+                    <span class="muted">Base:</span>
+                    <span class="mono">@ShortId(BaseSynthesisId.Value)</span>
+
+                    <label class="check">
+                        <input type="checkbox" @bind="_useAsParent" />
+                        <span>Use as parent (link)</span>
+                    </label>
+                </div>
+            }
+
+            <div class="hint">
+                @if (_bothEmpty)
+                {
+                    <span class="warn">Tip: Add instructions and/or an outline for best results.</span> 
+                }
+                else
+                {
+                    <span class="muted">You can guide the model with instructions and optionally a custom outline.</span>
+                }
+            </div>
+
+            <div class="field">
+                <label for="instr">Instructions</label>
+                <textarea id="instr" rows="5" @bind="_instructions" placeholder="Optional guidance…"></textarea>
+            </div>
+
+            <div class="field">
+                <label for="outline">Outline</label>
+                <textarea id="outline" rows="6" @bind="_outline" placeholder="Optional outline (one section per line)…"></textarea>
+            </div>
+
+            <div class="field inline">
+                <label class="check">
+                    <input type="checkbox" @bind="_applyOverrides" disabled="@(!HasOverrides)" />
+                    <span>Apply current pin/exclude overrides</span>
+                </label>
+
+                @if (HasOverrides)
+                {
+                    <div class="small muted">@OverridesSummary</div>
+                }
+            </div>
+
+            <div class="dlg-actions">
+                <button type="button" class="secondary" @onclick="Close" disabled="@Busy">Cancel</button>
+                <button type="button" class="primary" @onclick="CreateAndRun" disabled="@Busy">
+                    @(Busy ? "Running…" : "Create & Run")
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public bool IsOpen { get; set; }
+    [Parameter] public EventCallback<bool> IsOpenChanged { get; set; }
+
+    [Parameter] public bool HasOverrides { get; set; }
+    [Parameter] public string OverridesSummary { get; set; } = "";
+
+    [Parameter] public bool Busy { get; set; }
+    [Parameter] public ApiError? Error { get; set; }
+
+    // Prefill / base
+    [Parameter] public string? PrefillInstructions { get; set; }
+    [Parameter] public string? PrefillOutline { get; set; }
+    [Parameter] public Guid? BaseSynthesisId { get; set; }
+
+    [Parameter] public Func<CreateSynthesisInput, Task>? OnCreateAndRun { get; set; }
+
+    private string _instructions = "";
+    private string _outline = "";
+    private bool _applyOverrides = true;
+
+    private bool _useAsParent = true;
+
+    private bool _bothEmpty => string.IsNullOrWhiteSpace(_instructions) && string.IsNullOrWhiteSpace(_outline);
+
+    protected override void OnParametersSet()
+    {
+        if (!IsOpen)
+            return;
+
+        // best-effort prefill only when opening
+        _instructions = PrefillInstructions ?? "";
+        _outline = PrefillOutline ?? "";
+
+        _applyOverrides = HasOverrides;
+        _useAsParent = BaseSynthesisId is null ? false : true;
+    }
+
+    private Task Close() => IsOpenChanged.InvokeAsync(false);
+
+    private Task OnOverlayClick() => Close();
+
+    private Task OnKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape")
+            return Close();
+
+        return Task.CompletedTask;
+    }
+
+    private async Task CreateAndRun()
+    {
+        if (OnCreateAndRun is null)
+            return;
+
+        var input = new CreateSynthesisInput(
+            Instructions: _instructions,
+            Outline: _outline,
+            ApplyOverrides: _applyOverrides,
+            ParentSynthesisId: (_useAsParent ? BaseSynthesisId : null),
+            UseLatestAsParent: (BaseSynthesisId is null));
+
+        await OnCreateAndRun.Invoke(input);
+    }
+
+    private static string ShortId(Guid id) => id.ToString("N")[..8];
+}

@@ -8,7 +8,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using ResearchEngine.Domain;
 using ResearchEngine.IntegrationTests.Helpers;
 using ResearchEngine.IntegrationTests.Infrastructure;
-using ResearchEngine.Web;
+using ResearchEngine.API;
 
 namespace ResearchEngine.IntegrationTests.Tests;
 

@@ -1,0 +1,2071 @@
+openapi: '3.1.1'
+info:
+  title: ResearchEngine.API | v1
+  version: 1.0.0
+servers:
+  - url: http://localhost:8090/
+paths:
+  /v1/models:
+    get:
+      tags:
+        - OpenAiModelEndpoints
+      responses:
+        '200':
+          description: OK
+  /v1/chat/completions:
+    post:
+      tags:
+        - OpenAiModelEndpoints
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChatRequest'
+        required: true
+      responses:
+        '200':
+          description: OK
+  /api/ping:
+    get:
+      tags:
+        - Research API
+      responses:
+        '200':
+          description: OK
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+  /api/jobs:
+    get:
+      tags:
+        - Research API
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListResearchJobsResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+    post:
+      tags:
+        - Research API
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateResearchJobRequest'
+        required: true
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateResearchJobResponse'
+        '400':
+          description: Bad Request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+  '/api/jobs/{jobId}':
+    get:
+      tags:
+        - Research API
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GetResearchJobResponse'
+        '404':
+          description: Not Found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+    delete:
+      tags:
+        - Research API
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - type: 'null'
+                - $ref: '#/components/schemas/DeleteJobRequest'
+      responses:
+        '204':
+          description: No Content
+        '404':
+          description: Not Found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+  '/api/jobs/{jobId}/cancel':
+    post:
+      tags:
+        - Research API
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - type: 'null'
+                - $ref: '#/components/schemas/CancelJobRequest'
+      responses:
+        '202':
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CancelJobResponse'
+        '404':
+          description: Not Found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+  '/api/jobs/{jobId}/sources':
+    get:
+      tags:
+        - Research API
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListSourcesResponse'
+        '404':
+          description: Not Found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+  '/api/jobs/{jobId}/sources/{sourceId}':
+    delete:
+      tags:
+        - Research API
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: sourceId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: No Content
+        '404':
+          description: Not Found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+  '/api/jobs/{jobId}/learnings':
+    get:
+      tags:
+        - Research API
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: Skip
+          in: query
+          schema:
+            maximum: 2147483647
+            minimum: 0
+            pattern: '^-?(?:0|[1-9]\d*)$'
+            type:
+              - integer
+              - string
+            format: int32
+        - name: Take
+          in: query
+          schema:
+            maximum: 500
+            minimum: 1
+            pattern: '^-?(?:0|[1-9]\d*)$'
+            type:
+              - integer
+              - string
+            format: int32
+        - name: SourceReference
+          in: query
+          schema:
+            maxLength: 4000
+            minLength: 0
+            type: string
+        - name: PromoteLearningId
+          in: query
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListLearningsResponse'
+        '404':
+          description: Not Found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+    post:
+      tags:
+        - Research API
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddLearningRequest'
+        required: true
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AddLearningResponse'
+        '400':
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Not Found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+  '/api/jobs/{jobId}/learnings/{learningId}':
+    delete:
+      tags:
+        - Research API
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: learningId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: No Content
+        '404':
+          description: Not Found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+  '/api/learnings/{learningId}/group':
+    get:
+      tags:
+        - Research API
+      parameters:
+        - name: learningId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+        '404':
+          description: Not Found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+  /api/learnings/groups/resolve:
+    post:
+      tags:
+        - Research API
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BatchResolveLearningGroupsRequest'
+        required: true
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BatchResolveLearningGroupsResponse'
+        '400':
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+  '/api/jobs/{jobId}/syntheses':
+    get:
+      tags:
+        - Research API
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: skip
+          in: query
+          schema:
+            pattern: '^-?(?:0|[1-9]\d*)$'
+            type:
+              - integer
+              - string
+            format: int32
+        - name: take
+          in: query
+          schema:
+            pattern: '^-?(?:0|[1-9]\d*)$'
+            type:
+              - integer
+              - string
+            format: int32
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListSynthesesResponse'
+        '404':
+          description: Not Found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+    post:
+      tags:
+        - Research API
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StartSynthesisRequest'
+        required: true
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateSynthesisResponse'
+        '404':
+          description: Not Found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '400':
+          description: Bad Request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+  '/api/jobs/{jobId}/syntheses/latest':
+    get:
+      tags:
+        - Research API
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LatestSynthesisResponse'
+        '404':
+          description: Not Found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+  '/api/syntheses/{synthesisId}':
+    get:
+      tags:
+        - Research API
+      parameters:
+        - name: synthesisId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SynthesisDto'
+        '404':
+          description: Not Found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+    delete:
+      tags:
+        - Research API
+      parameters:
+        - name: synthesisId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: No Content
+        '404':
+          description: Not Found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+  '/api/syntheses/{synthesisId}/run':
+    post:
+      tags:
+        - Research API
+      parameters:
+        - name: synthesisId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RunSynthesisTerminalResponse'
+        '202':
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RunSynthesisAcceptedResponse'
+        '404':
+          description: Not Found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+  '/api/syntheses/{synthesisId}/overrides/sources':
+    put:
+      tags:
+        - Research API
+      parameters:
+        - name: synthesisId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/SynthesisSourceOverrideDto'
+        required: true
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UpsertOverridesResponse'
+        '404':
+          description: Not Found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+  '/api/syntheses/{synthesisId}/overrides/learnings':
+    put:
+      tags:
+        - Research API
+      parameters:
+        - name: synthesisId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/SynthesisLearningOverrideDto'
+        required: true
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UpsertOverridesResponse'
+        '404':
+          description: Not Found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+  '/api/jobs/{jobId}/events':
+    get:
+      tags:
+        - Research API
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ResearchEventDto'
+        '404':
+          description: Not Found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+  '/api/jobs/{jobId}/events/stream-token':
+    post:
+      tags:
+        - Research API
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateSseTokenResponse'
+        '404':
+          description: Not Found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+  '/api/jobs/{jobId}/events/stream':
+    get:
+      tags:
+        - Research API
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '404':
+          description: Not Found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+  /api/protocol/clarifications:
+    post:
+      tags:
+        - Research Protocol API
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProtocolClarificationsRequest'
+        required: true
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProtocolClarificationsResponse'
+        '400':
+          description: Bad Request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+  /api/protocol/parameters:
+    post:
+      tags:
+        - Research Protocol API
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProtocolParametersRequest'
+        required: true
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProtocolParametersResponse'
+        '400':
+          description: Bad Request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+components:
+  schemas:
+    AddedLearningDto:
+      required:
+        - learningId
+        - sourceId
+        - learningGroupId
+        - importanceScore
+        - createdAt
+        - text
+      type: object
+      properties:
+        learningId:
+          type: string
+          format: uuid
+        sourceId:
+          type: string
+          format: uuid
+        learningGroupId:
+          type: string
+          format: uuid
+        importanceScore:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
+          format: float
+        createdAt:
+          type: string
+          format: date-time
+        text:
+          type: string
+    AddLearningRequest:
+      required:
+        - text
+      type: object
+      properties:
+        text:
+          maxLength: 10000
+          minLength: 3
+          type: string
+        reference:
+          maxLength: 4000
+          type:
+            - 'null'
+            - string
+        evidenceText:
+          maxLength: 20000
+          type:
+            - 'null'
+            - string
+        importanceScore:
+          maximum: 1
+          minimum: 0
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: float
+        language:
+          maxLength: 20
+          type:
+            - 'null'
+            - string
+        region:
+          maxLength: 500
+          type:
+            - 'null'
+            - string
+    AddLearningResponse:
+      required:
+        - jobId
+        - learning
+      type: object
+      properties:
+        jobId:
+          type: string
+          format: uuid
+        learning:
+          $ref: '#/components/schemas/AddedLearningDto'
+    BatchResolveLearningGroupsRequest:
+      required:
+        - learningIds
+      type: object
+      properties:
+        learningIds:
+          minItems: 1
+          type: array
+          items:
+            type: string
+            format: uuid
+    BatchResolveLearningGroupsResponse:
+      required:
+        - items
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ResolvedLearningGroupDto'
+    CancelJobRequest:
+      type: object
+      properties:
+        reason:
+          maxLength: 2000
+          type:
+            - 'null'
+            - string
+    CancelJobResponse:
+      required:
+        - jobId
+        - status
+      type: object
+      properties:
+        jobId:
+          type: string
+          format: uuid
+        status:
+          type: string
+    ChatMessage:
+      type: object
+      properties:
+        role:
+          type: string
+        content:
+          type: string
+    ChatRequest:
+      type: object
+      properties:
+        model:
+          type: string
+        stream:
+          type: boolean
+        messages:
+          type: array
+          items:
+            $ref: '#/components/schemas/ChatMessage'
+    ClarificationDto:
+      required:
+        - question
+        - answer
+      type: object
+      properties:
+        question:
+          type: string
+        answer:
+          type: string
+    CreateResearchJobRequest:
+      required:
+        - query
+        - clarifications
+        - breadth
+        - depth
+        - language
+        - region
+      type: object
+      properties:
+        query:
+          type: string
+        clarifications:
+          type:
+            - 'null'
+            - array
+          items:
+            $ref: '#/components/schemas/ClarificationDto'
+        breadth:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - 'null'
+            - integer
+            - string
+          format: int32
+        depth:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - 'null'
+            - integer
+            - string
+          format: int32
+        language:
+          type:
+            - 'null'
+            - string
+        region:
+          type:
+            - 'null'
+            - string
+    CreateResearchJobResponse:
+      required:
+        - jobId
+      type: object
+      properties:
+        jobId:
+          type: string
+          format: uuid
+    CreateSseTokenResponse:
+      required:
+        - jobId
+        - ticket
+        - streamUrl
+        - expiresAtUtc
+      type: object
+      properties:
+        jobId:
+          type: string
+          format: uuid
+        ticket:
+          type: string
+        streamUrl:
+          type: string
+        expiresAtUtc:
+          type: string
+          format: date-time
+    CreateSynthesisResponse:
+      required:
+        - jobId
+        - synthesisId
+      type: object
+      properties:
+        jobId:
+          type: string
+          format: uuid
+        synthesisId:
+          type: string
+          format: uuid
+    DeleteJobRequest:
+      type: object
+      properties:
+        reason:
+          maxLength: 2000
+          type:
+            - 'null'
+            - string
+    ErrorResponse:
+      required:
+        - error
+      type: object
+      properties:
+        error:
+          type: string
+    GetResearchJobResponse:
+      required:
+        - id
+        - query
+        - breadth
+        - depth
+        - status
+        - targetLanguage
+        - region
+        - createdAt
+        - updatedAt
+        - clarifications
+        - sourcesCount
+        - synthesesCount
+        - latestSynthesis
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        query:
+          type: string
+        breadth:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
+        depth:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
+        status:
+          type: string
+        targetLanguage:
+          type: string
+        region:
+          type:
+            - 'null'
+            - string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        clarifications:
+          type: array
+          items:
+            $ref: '#/components/schemas/ClarificationDto'
+        sourcesCount:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
+        synthesesCount:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
+        latestSynthesis:
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/LatestSynthesisSummaryDto'
+    GroupEvidenceItemDto:
+      required:
+        - learningId
+        - sourceId
+        - sourceReference
+        - importanceScore
+        - text
+        - createdAt
+      type: object
+      properties:
+        learningId:
+          type: string
+          format: uuid
+        sourceId:
+          type: string
+          format: uuid
+        sourceReference:
+          type: string
+        importanceScore:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
+          format: float
+        text:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+    LatestSynthesisResponse:
+      required:
+        - jobId
+        - synthesis
+      type: object
+      properties:
+        jobId:
+          type: string
+          format: uuid
+        synthesis:
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/SynthesisDto'
+    LatestSynthesisSummaryDto:
+      required:
+        - id
+        - status
+        - createdAt
+        - completedAt
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        status:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        completedAt:
+          type:
+            - 'null'
+            - string
+          format: date-time
+    LearningGroupCardDto:
+      required:
+        - groupId
+        - jobId
+        - canonicalText
+        - canonicalImportanceScore
+        - memberCount
+        - distinctSourceCount
+        - representativeLearningId
+        - representativeLearningText
+        - evidence
+      type: object
+      properties:
+        groupId:
+          type: string
+          format: uuid
+        jobId:
+          type: string
+          format: uuid
+        canonicalText:
+          type: string
+        canonicalImportanceScore:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
+          format: float
+        memberCount:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
+        distinctSourceCount:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
+        representativeLearningId:
+          type: string
+          format: uuid
+        representativeLearningText:
+          type: string
+        evidence:
+          type: array
+          items:
+            $ref: '#/components/schemas/GroupEvidenceItemDto'
+    LearningListItemDto:
+      required:
+        - learningId
+        - sourceId
+        - sourceReference
+        - importanceScore
+        - createdAt
+        - text
+      type: object
+      properties:
+        learningId:
+          type: string
+          format: uuid
+        sourceId:
+          type: string
+          format: uuid
+        sourceReference:
+          type: string
+        importanceScore:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
+          format: float
+        createdAt:
+          type: string
+          format: date-time
+        text:
+          type: string
+    ListLearningsResponse:
+      required:
+        - jobId
+        - skip
+        - take
+        - total
+        - page
+        - learnings
+      type: object
+      properties:
+        jobId:
+          type: string
+          format: uuid
+        skip:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
+        take:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
+        total:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
+        page:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
+        learnings:
+          type: array
+          items:
+            $ref: '#/components/schemas/LearningListItemDto'
+    ListResearchJobsResponse:
+      required:
+        - count
+        - jobs
+      type: object
+      properties:
+        count:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
+        jobs:
+          type: array
+          items:
+            $ref: '#/components/schemas/ResearchJobListItemDto'
+    ListSourcesResponse:
+      required:
+        - jobId
+        - count
+        - sources
+      type: object
+      properties:
+        jobId:
+          type: string
+          format: uuid
+        count:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
+        sources:
+          type: array
+          items:
+            $ref: '#/components/schemas/SourceListItemDto'
+    ListSynthesesResponse:
+      required:
+        - jobId
+        - skip
+        - take
+        - count
+        - syntheses
+      type: object
+      properties:
+        jobId:
+          type: string
+          format: uuid
+        skip:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
+        take:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
+        count:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
+        syntheses:
+          type: array
+          items:
+            $ref: '#/components/schemas/SynthesisListItemDto'
+    ProblemDetails:
+      type: object
+      properties:
+        type:
+          type:
+            - 'null'
+            - string
+        title:
+          type:
+            - 'null'
+            - string
+        status:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - 'null'
+            - integer
+            - string
+          format: int32
+        detail:
+          type:
+            - 'null'
+            - string
+        instance:
+          type:
+            - 'null'
+            - string
+    ProtocolClarificationsRequest:
+      required:
+        - query
+      type: object
+      properties:
+        query:
+          type: string
+        includeConfigureQuestions:
+          type: boolean
+          default: false
+    ProtocolClarificationsResponse:
+      required:
+        - questions
+      type: object
+      properties:
+        questions:
+          type: array
+          items:
+            type: string
+    ProtocolParametersRequest:
+      required:
+        - query
+        - clarifications
+        - overrides
+      type: object
+      properties:
+        query:
+          type: string
+        clarifications:
+          type:
+            - 'null'
+            - array
+          items:
+            $ref: '#/components/schemas/ClarificationDto'
+        overrides:
+          type:
+            - 'null'
+            - object
+    ProtocolParametersResponse:
+      required:
+        - breadth
+        - depth
+        - language
+        - region
+      type: object
+      properties:
+        breadth:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
+        depth:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
+        language:
+          type: string
+        region:
+          type:
+            - 'null'
+            - string
+    ResearchEventDto:
+      required:
+        - id
+        - timestamp
+        - stage
+        - message
+      type: object
+      properties:
+        id:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
+        timestamp:
+          type: string
+          format: date-time
+        stage:
+          type: string
+        message:
+          type: string
+    ResearchJobListItemDto:
+      required:
+        - id
+        - query
+        - breadth
+        - depth
+        - status
+        - targetLanguage
+        - region
+        - createdAt
+        - updatedAt
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        query:
+          type: string
+        breadth:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
+        depth:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
+        status:
+          type: string
+        targetLanguage:
+          type: string
+        region:
+          type:
+            - 'null'
+            - string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    ResolvedLearningGroupDto:
+      required:
+        - learningId
+        - group
+      type: object
+      properties:
+        learningId:
+          type: string
+          format: uuid
+        group:
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/LearningGroupCardDto'
+    RunSynthesisAcceptedResponse:
+      required:
+        - jobId
+        - synthesisId
+        - hangfireJobId
+        - status
+        - createdAt
+      type: object
+      properties:
+        jobId:
+          type: string
+          format: uuid
+        synthesisId:
+          type: string
+          format: uuid
+        hangfireJobId:
+          type: string
+        status:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+    RunSynthesisTerminalResponse:
+      required:
+        - jobId
+        - synthesisId
+        - status
+        - createdAt
+        - completedAt
+        - message
+      type: object
+      properties:
+        jobId:
+          type: string
+          format: uuid
+        synthesisId:
+          type: string
+          format: uuid
+        status:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        completedAt:
+          type:
+            - 'null'
+            - string
+          format: date-time
+        message:
+          type: string
+    SourceListItemDto:
+      required:
+        - sourceId
+        - reference
+        - title
+        - language
+        - region
+        - createdAt
+        - learningCount
+      type: object
+      properties:
+        sourceId:
+          type: string
+          format: uuid
+        reference:
+          type: string
+        title:
+          type:
+            - 'null'
+            - string
+        language:
+          type:
+            - 'null'
+            - string
+        region:
+          type:
+            - 'null'
+            - string
+        createdAt:
+          type: string
+          format: date-time
+        learningCount:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
+    StartSynthesisRequest:
+      type: object
+      properties:
+        parentSynthesisId:
+          type:
+            - 'null'
+            - string
+          format: uuid
+        useLatestAsParent:
+          type:
+            - 'null'
+            - boolean
+        outline:
+          maxLength: 10000
+          type:
+            - 'null'
+            - string
+        instructions:
+          maxLength: 10000
+          type:
+            - 'null'
+            - string
+        sourceOverrides:
+          maxItems: 10000
+          type:
+            - 'null'
+            - array
+          items:
+            $ref: '#/components/schemas/SynthesisSourceOverrideDto'
+        learningOverrides:
+          maxItems: 50000
+          type:
+            - 'null'
+            - array
+          items:
+            $ref: '#/components/schemas/SynthesisLearningOverrideDto'
+    SynthesisDto:
+      required:
+        - id
+        - jobId
+        - parentSynthesisId
+        - status
+        - outline
+        - instructions
+        - createdAt
+        - completedAt
+        - errorMessage
+        - sections
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        jobId:
+          type: string
+          format: uuid
+        parentSynthesisId:
+          type:
+            - 'null'
+            - string
+          format: uuid
+        status:
+          type: string
+        outline:
+          type:
+            - 'null'
+            - string
+        instructions:
+          type:
+            - 'null'
+            - string
+        createdAt:
+          type: string
+          format: date-time
+        completedAt:
+          type:
+            - 'null'
+            - string
+          format: date-time
+        errorMessage:
+          type:
+            - 'null'
+            - string
+        sections:
+          type: array
+          items:
+            $ref: '#/components/schemas/SynthesisSectionDto'
+    SynthesisLearningOverrideDto:
+      required:
+        - learningId
+        - scoreOverride
+        - excluded
+        - pinned
+      type: object
+      properties:
+        learningId:
+          type: string
+          format: uuid
+        scoreOverride:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: float
+        excluded:
+          type:
+            - 'null'
+            - boolean
+        pinned:
+          type:
+            - 'null'
+            - boolean
+    SynthesisListItemDto:
+      required:
+        - synthesisId
+        - jobId
+        - parentSynthesisId
+        - status
+        - createdAt
+        - completedAt
+        - errorMessage
+        - sectionCount
+      type: object
+      properties:
+        synthesisId:
+          type: string
+          format: uuid
+        jobId:
+          type: string
+          format: uuid
+        parentSynthesisId:
+          type:
+            - 'null'
+            - string
+          format: uuid
+        status:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        completedAt:
+          type:
+            - 'null'
+            - string
+          format: date-time
+        errorMessage:
+          type:
+            - 'null'
+            - string
+        sectionCount:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
+    SynthesisSectionDto:
+      required:
+        - id
+        - synthesisId
+        - sectionKey
+        - index
+        - title
+        - description
+        - isConclusion
+        - summary
+        - contentMarkdown
+        - createdAt
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        synthesisId:
+          type: string
+          format: uuid
+        sectionKey:
+          type: string
+          format: uuid
+        index:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
+        title:
+          type: string
+        description:
+          type:
+            - 'null'
+            - string
+        isConclusion:
+          type: boolean
+        summary:
+          type:
+            - 'null'
+            - string
+        contentMarkdown:
+          type:
+            - 'null'
+            - string
+        createdAt:
+          type: string
+          format: date-time
+    SynthesisSourceOverrideDto:
+      required:
+        - sourceId
+        - excluded
+        - pinned
+      type: object
+      properties:
+        sourceId:
+          type: string
+          format: uuid
+        excluded:
+          type:
+            - 'null'
+            - boolean
+        pinned:
+          type:
+            - 'null'
+            - boolean
+    UpsertOverridesResponse:
+      required:
+        - synthesisId
+        - updated
+      type: object
+      properties:
+        synthesisId:
+          type: string
+          format: uuid
+        updated:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
+tags:
+  - name: OpenAiModelEndpoints
+  - name: Research API
+  - name: Research Protocol API

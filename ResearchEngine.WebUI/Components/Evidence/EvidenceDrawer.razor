@@ -1,0 +1,267 @@
+@using ResearchEngine.WebUI.Services
+@implements IDisposable
+@inject OverridesStore Overrides
+@inject IJSRuntime JS
+
+@if (IsOpen)
+{
+    <div class="overlay @(IsOpen ? "open" : "")"
+         role="presentation"
+         @onclick="OnOverlayClick">
+        <div class="drawer"
+             role="dialog"
+             aria-modal="true"
+             aria-label="Evidence"
+             tabindex="-1"
+             @onclick:stopPropagation>
+            <div class="head">
+                <div class="title">Evidence</div>
+
+                <div class="ovr">
+                    <div class="ovr-text" title="@OverridesText">@OverridesText</div>
+
+                    <button type="button"
+                            class="ovr-clear"
+                            disabled="@(!HasOverrides)"
+                            @onclick="ClearOverridesAsync">
+                        Clear overrides
+                    </button>
+
+                    <button type="button" class="x" @onclick="Close" aria-label="Close">×</button>
+                </div>
+            </div>
+
+            <div class="tabs" role="tablist" aria-label="Evidence tabs">
+                <button type="button"
+                        class="tab @(_activeTab == "sources" ? "active" : "")"
+                        role="tab"
+                        aria-selected="@(_activeTab == "sources")"
+                        @onclick="@(() => SelectTabAsync("sources"))">
+                    Sources
+                </button>
+
+                <button type="button"
+                        class="tab @(_activeTab == "learnings" ? "active" : "")"
+                        role="tab"
+                        aria-selected="@(_activeTab == "learnings")"
+                        @onclick="@(() => SelectTabAsync("learnings"))">
+                    Learnings
+                </button>
+            </div>
+
+            <div class="body">
+                @if (_activeTab == "sources")
+                {
+                    <SourcesPanel JobId="JobId"
+                                  IsOpen="@IsOpen"
+                                  FilterText="@_sourcesFilter"
+                                  FilterTextChanged="OnSourcesFilterChangedAsync"
+                                  OnShowLearningsForSource="ShowLearningsForSourceAsync" />
+                }
+                else
+                {
+                    <LearningsPanel JobId="JobId"
+                                    IsOpen="@IsOpen"
+                                    HighlightLearningId="@EffectiveHighlightLearningId"
+                                    FocusSourceReference="@EffectiveFocusSourceReference"
+                                    RestrictToGroupId="@RestrictToLearningGroupId"
+                                    FilterText="@_learningsFilter"
+                                    FilterTextChanged="OnLearningsFilterChangedAsync"
+                                    InitialLoadedCount="@_learningsLoadedCount"
+                                    LoadedCountChanged="OnLearningsLoadedCountChangedAsync" />
+                }
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public Guid JobId { get; set; }
+
+    [Parameter] public bool IsOpen { get; set; }
+    [Parameter] public EventCallback<bool> IsOpenChanged { get; set; }
+
+    // Backward-compatible: if you still set InitialTab from parent, it will apply when opening.
+    [Parameter] public string? InitialTab { get; set; } = "sources";
+
+    // Preferred: persistable active tab (two-way)
+    [Parameter] public string ActiveTab { get; set; } = "sources";
+    [Parameter] public EventCallback<string> ActiveTabChanged { get; set; }
+
+    [Parameter] public Guid? HighlightLearningId { get; set; }
+    [Parameter] public string? FocusSourceReference { get; set; }
+
+    // Persisted filters + paging restore
+    [Parameter] public string SourcesFilter { get; set; } = "";
+    [Parameter] public EventCallback<string> SourcesFilterChanged { get; set; }
+
+    [Parameter] public string LearningsFilter { get; set; } = "";
+    [Parameter] public EventCallback<string> LearningsFilterChanged { get; set; }
+
+    [Parameter] public int LearningsLoadedCount { get; set; } = 25;
+    [Parameter] public EventCallback<int> LearningsLoadedCountChanged { get; set; }
+    [Parameter] public Guid? RestrictToLearningGroupId { get; set; }
+
+    private string _activeTab = "sources";
+    private string _sourcesFilter = "";
+    private string _learningsFilter = "";
+    private string? _drawerFocusSourceReference;
+    private string? _lastExternalFocusSourceReference;
+    private bool _hasLocalFocusOverride;
+    private int _learningsLoadedCount = 25;
+    private bool _stateInitialized;
+
+    private string? EffectiveFocusSourceReference
+        => _hasLocalFocusOverride
+            ? NormalizeNullable(_drawerFocusSourceReference)
+            : NormalizeNullable(FocusSourceReference) ?? NormalizeNullable(_drawerFocusSourceReference);
+
+    private Guid? EffectiveHighlightLearningId
+        => _hasLocalFocusOverride ? null : HighlightLearningId;
+
+    private OverridesSummary Summary => Overrides.GetSummary(JobId);
+    private bool HasOverrides => Overrides.HasAny(JobId);
+
+    private string OverridesText
+        => $"Pinned: {Summary.PinnedSources} sources, {Summary.PinnedLearnings} learnings · Excluded: {Summary.ExcludedSources} sources, {Summary.ExcludedLearnings} learnings";
+
+    protected override void OnInitialized()
+    {
+        Overrides.Changed += OnOverridesChanged;
+    }
+
+    public void Dispose()
+    {
+        Overrides.Changed -= OnOverridesChanged;
+    }
+
+    protected override void OnParametersSet()
+    {
+        if (!IsOpen)
+        {
+            _stateInitialized = false;
+            _drawerFocusSourceReference = null;
+            _lastExternalFocusSourceReference = null;
+            _hasLocalFocusOverride = false;
+            return;
+        }
+
+        var externalFocusSourceReference = NormalizeNullable(FocusSourceReference);
+
+        // Pick tab in this order:
+        // 1) ActiveTab (preferred state binding)
+        // 2) InitialTab (back-compat)
+        var tab = (ActiveTab ?? "").Trim().ToLowerInvariant();
+        if (tab is not ("sources" or "learnings"))
+            tab = (InitialTab ?? "sources").Trim().ToLowerInvariant();
+
+        if (tab is "sources" or "learnings")
+            _activeTab = tab;
+
+        if (!_stateInitialized || SourcesFilterChanged.HasDelegate)
+            _sourcesFilter = SourcesFilter ?? "";
+
+        if (!_stateInitialized || LearningsFilterChanged.HasDelegate)
+            _learningsFilter = LearningsFilter ?? "";
+
+        if (!_stateInitialized)
+        {
+            _drawerFocusSourceReference = externalFocusSourceReference;
+            _lastExternalFocusSourceReference = externalFocusSourceReference;
+            _hasLocalFocusOverride = false;
+        }
+
+        // Apply external focus changes only when the parent value actually changed.
+        // This prevents stale external focus from overriding explicit local source picks.
+        if (_stateInitialized &&
+            !string.Equals(_lastExternalFocusSourceReference, externalFocusSourceReference, StringComparison.Ordinal))
+        {
+            _drawerFocusSourceReference = externalFocusSourceReference;
+            _lastExternalFocusSourceReference = externalFocusSourceReference;
+            _hasLocalFocusOverride = false;
+        }
+
+        if (!_stateInitialized || LearningsLoadedCountChanged.HasDelegate)
+            _learningsLoadedCount = LearningsLoadedCount;
+
+        _stateInitialized = true;
+    }
+
+    private void OnOverridesChanged(Guid jobId)
+    {
+        if (jobId != JobId) return;
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    private Task Close() => IsOpenChanged.InvokeAsync(false);
+    private Task OnOverlayClick() => Close();
+
+    private async Task SelectTabAsync(string tab)
+    {
+        _activeTab = tab;
+
+        ActiveTab = tab;
+        if (ActiveTabChanged.HasDelegate)
+            await ActiveTabChanged.InvokeAsync(tab);
+    }
+
+    private async Task ShowLearningsForSourceAsync(string sourceReference)
+    {
+        var normalizedSourceReference = NormalizeNullable(sourceReference);
+
+        // Switch tab and open learnings focused to this source.
+        await SelectTabAsync("learnings");
+        _drawerFocusSourceReference = normalizedSourceReference;
+        _hasLocalFocusOverride = true;
+        _learningsFilter = normalizedSourceReference ?? "";
+
+        if (LearningsFilterChanged.HasDelegate)
+            await LearningsFilterChanged.InvokeAsync(_learningsFilter);
+    }
+
+    private async Task OnSourcesFilterChangedAsync(string value)
+    {
+        _sourcesFilter = value ?? "";
+        if (SourcesFilterChanged.HasDelegate)
+            await SourcesFilterChanged.InvokeAsync(_sourcesFilter);
+    }
+
+    private async Task OnLearningsFilterChangedAsync(string value)
+    {
+        _learningsFilter = value ?? "";
+        if (string.IsNullOrWhiteSpace(_learningsFilter))
+        {
+            _drawerFocusSourceReference = null;
+            _hasLocalFocusOverride = false;
+        }
+
+        if (LearningsFilterChanged.HasDelegate)
+            await LearningsFilterChanged.InvokeAsync(_learningsFilter);
+    }
+
+    private async Task OnLearningsLoadedCountChangedAsync(int value)
+    {
+        _learningsLoadedCount = value;
+        if (LearningsLoadedCountChanged.HasDelegate)
+            await LearningsLoadedCountChanged.InvokeAsync(value);
+    }
+
+    private async Task ClearOverridesAsync()
+    {
+        if (!HasOverrides) return;
+
+        var ok = false;
+        try { ok = await JS.InvokeAsync<bool>("confirm", "Clear all draft pin/exclude overrides for this job?"); } catch { }
+
+        if (!ok) return;
+
+        Overrides.Clear(JobId);
+        // Counters update via Overrides.Changed.
+    }
+
+    private static string? NormalizeNullable(string? value)
+    {
+        var v = value?.Trim();
+        return string.IsNullOrWhiteSpace(v) ? null : v;
+    }
+}

@@ -4,7 +4,7 @@
     <Platform Name="x64" />
     <Platform Name="x86" />
   </Configurations>
-  <Project Path="ResearchEngine.Blazor/ResearchEngine.Blazor.csproj" />
+  <Project Path="ResearchEngine.WebUI/ResearchEngine.WebUI.csproj" />
   <Project Path="ResearchEngine.IntegrationTests/ResearchEngine.IntegrationTests.csproj" />
-  <Project Path="ResearchEngine.Web/ResearchEngine.Web.csproj" />
+  <Project Path="ResearchEngine.API/ResearchEngine.API.csproj" />
 </Solution>

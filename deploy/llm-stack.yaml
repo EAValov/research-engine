@@ -65,7 +65,7 @@ data:
     research-webui.llm.local:8443 {
       tls internal
       encode zstd gzip
-      reverse_proxy research-blazor:8082
+      reverse_proxy research-webui:8082
     }
 
 ---
@@ -343,7 +343,7 @@ spec:
           readOnly: true
 
     - name: research-api
-      image: localhost/research-api:chat
+      image: research-api:latest
       workingDir: /app
       envFrom:
         - secretRef:
@@ -354,9 +354,9 @@ spec:
           value: "8080"
         - name: API_SERVER_HOST_PORT
           value: "8090"
-        - name: BLAZOR_PORT
+        - name: WEBUI_PORT
           value: "8082"
-        - name: BLAZOR_HOST_PORT
+        - name: WEBUI_HOST_PORT
           value: "5170"
         - name: ASPNETCORE_URLS
           value: "http://0.0.0.0:8080"
@@ -425,16 +425,16 @@ spec:
         initialDelaySeconds: 5
         periodSeconds: 10
 
-    - name: research-blazor
-      image: localhost/research-blazor:latest
+    - name: research-webui
+      image: research-webui:latest
       envFrom:
         - secretRef:
             name: research-stack-secrets
             optional: false
       env:
-        - name: BLAZOR_PORT
+        - name: WEBUI_PORT
           value: "8082"
-        - name: BLAZOR_HOST_PORT
+        - name: WEBUI_HOST_PORT
           value: "5170"
         - name: API_SERVER_PORT
           value: "8080"

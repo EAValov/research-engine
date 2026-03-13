@@ -1,0 +1,229 @@
+@using ResearchEngine.WebUI.Api
+@using ResearchEngine.WebUI.Components.Common
+@using ResearchEngine.WebUI.Services
+@inject EvidenceFacade Evidence
+@inject OverridesStore Overrides
+@inject IJSRuntime JS
+
+<div class="panel">
+    <div class="toolbar">
+        <div class="left">
+            <label class="sr-only" for="src-filter">Filter</label>
+            <input id="src-filter"
+                   class="filter"
+                   placeholder="Filter sources…"
+                   value="@_filter"
+                   @oninput="OnFilterInput" />
+        </div>
+    </div>
+
+    @if (_error is not null)
+    {
+        <ErrorBanner Error="_error" OnRetry="ReloadAsync" />
+    }
+
+    @if (_loading)
+    {
+        <p aria-live="polite">Loading sources…</p>
+    }
+    else if (Filtered().Count == 0)
+    {
+        <p>No sources.</p>
+    }
+    else
+    {
+        <ul class="list" role="list">
+            @foreach (var s in Filtered())
+            {
+                var pinned = Overrides.IsPinnedSource(JobId, s.SourceId);
+                var excluded = Overrides.IsExcludedSource(JobId, s.SourceId);
+
+                <li class="row" tabindex="0">
+                    <div class="title">
+                        @(string.IsNullOrWhiteSpace(s.Title) ? s.Reference : s.Title)
+                    </div>
+
+                    @if (!string.IsNullOrWhiteSpace(s.Title))
+                    {
+                        <div class="ref muted">@s.Reference</div>
+                    }
+
+                    <div class="meta muted">
+                        <button type="button"
+                                class="link"
+                                title="Show learnings from this source"
+                                @onclick="() => ShowLearningsAsync(s.Reference)">
+                            @s.LearningCount learnings
+                        </button>
+                        <span class="dot">•</span>
+                        <span>@s.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</span>
+                    </div>
+
+                    <div class="actions" aria-label="Overrides">
+                        <button type="button"
+                                class="ghost"
+                                disabled="@(!CanOpenExternalUrl(s.Reference))"
+                                @onclick="() => OpenExternalAsync(s.Reference)">
+                            Open
+                        </button>
+
+                        <button type="button"
+                                class="toggle @(pinned ? "active" : "")"
+                                @onclick="() => TogglePinned(s.SourceId)"
+                                aria-pressed="@pinned">
+                            Pin
+                        </button>
+
+                        <button type="button"
+                                class="toggle @(excluded ? "active" : "")"
+                                @onclick="() => ToggleExcluded(s.SourceId)"
+                                aria-pressed="@excluded">
+                            Exclude
+                        </button>
+
+                        <button type="button" class="ghost" @onclick="() => DeleteAsync(s.SourceId)">Delete</button>
+                    </div>
+                </li>
+            }
+        </ul>
+    }
+</div>
+
+@code {
+    [Parameter] public Guid JobId { get; set; }
+    [Parameter] public bool IsOpen { get; set; }
+
+    [Parameter] public string FilterText { get; set; } = "";
+    [Parameter] public EventCallback<string> FilterTextChanged { get; set; }
+
+    // Used to switch to learnings tab and apply a filter in the parent drawer.
+    [Parameter] public EventCallback<string> OnShowLearningsForSource { get; set; }
+
+    private bool _loading;
+    private ApiError? _error;
+    private readonly List<SourceListItemDto> _items = new();
+    private bool _loadedOnce;
+
+    private string _filter = "";
+
+    protected override async Task OnParametersSetAsync()
+    {
+        var incoming = FilterText ?? "";
+
+        if (_filter != incoming)
+            _filter = incoming;
+
+        if (IsOpen && !_loadedOnce)
+            await ReloadAsync();
+    }
+
+    private async Task ReloadAsync()
+    {
+        _loading = true;
+        _error = null;
+        _items.Clear();
+
+        var res = await Evidence.GetSourcesAsync(JobId);
+        if (!res.IsSuccess)
+        {
+            _error = res.Error;
+            _loading = false;
+            return;
+        }
+
+        _items.AddRange(res.Data ?? Array.Empty<SourceListItemDto>());
+        _loadedOnce = true;
+        _loading = false;
+    }
+
+    private async Task OnFilterInput(ChangeEventArgs e)
+    {
+        _filter = e.Value?.ToString() ?? "";
+        if (FilterTextChanged.HasDelegate)
+            await FilterTextChanged.InvokeAsync(_filter);
+    }
+
+    private List<SourceListItemDto> Filtered()
+    {
+        var f = (_filter ?? "").Trim();
+        if (string.IsNullOrWhiteSpace(f))
+            return _items;
+
+        return _items.Where(x =>
+            ((x.Title ?? "").Contains(f, StringComparison.OrdinalIgnoreCase)) ||
+            ((x.Reference ?? "").Contains(f, StringComparison.OrdinalIgnoreCase))
+        ).ToList();
+    }
+
+    private void TogglePinned(Guid sourceId)
+    {
+        Overrides.TogglePinnedSource(JobId, sourceId);
+        StateHasChanged();
+    }
+
+    private void ToggleExcluded(Guid sourceId)
+    {
+        Overrides.ToggleExcludedSource(JobId, sourceId);
+        StateHasChanged();
+    }
+
+    private async Task ShowLearningsAsync(string? sourceReference)
+    {
+        if (!OnShowLearningsForSource.HasDelegate) return;
+        await OnShowLearningsForSource.InvokeAsync(sourceReference ?? "");
+    }
+
+    private async Task OpenExternalAsync(string? rawReference)
+    {
+        var url = BuildExternalUrl(rawReference);
+        if (url is null) return;
+
+        try { await JS.InvokeVoidAsync("open", url, "_blank", "noopener,noreferrer"); } catch { }
+    }
+
+    private static bool CanOpenExternalUrl(string? rawReference)
+        => BuildExternalUrl(rawReference) is not null;
+
+    private static string? BuildExternalUrl(string? rawReference)
+    {
+        var raw = rawReference?.Trim();
+        if (string.IsNullOrWhiteSpace(raw))
+            return null;
+
+        if (Uri.TryCreate(raw, UriKind.Absolute, out var absolute) &&
+            (absolute.Scheme == Uri.UriSchemeHttp || absolute.Scheme == Uri.UriSchemeHttps))
+        {
+            return absolute.ToString();
+        }
+
+        if (Uri.TryCreate($"https://{raw}", UriKind.Absolute, out var withScheme) &&
+            (withScheme.Scheme == Uri.UriSchemeHttp || withScheme.Scheme == Uri.UriSchemeHttps))
+        {
+            return withScheme.ToString();
+        }
+
+        return null;
+    }
+
+    private async Task DeleteAsync(Guid sourceId)
+    {
+        var ok = false;
+        try { ok = await JS.InvokeAsync<bool>("confirm", "Delete this source?"); } catch { }
+        if (!ok) return;
+
+        _error = null;
+
+        var idx = _items.FindIndex(x => x.SourceId == sourceId);
+        if (idx < 0) return;
+
+        var removed = _items[idx];
+        _items.RemoveAt(idx);
+
+        var res = await Evidence.DeleteSourceAsync(JobId, sourceId);
+        if (!res.IsSuccess)
+        {
+            _items.Insert(idx, removed);
+            _error = res.Error;
+        }
+    }
+}

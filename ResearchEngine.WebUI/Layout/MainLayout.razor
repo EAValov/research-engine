@@ -1,0 +1,452 @@
+@inherits LayoutComponentBase
+@implements IAsyncDisposable
+@using ResearchEngine.WebUI.State
+@using ResearchEngine.WebUI.Services
+@inject AppStateStore AppState
+@inject ApiConnectionSettings ApiConnection
+@inject HttpClient Http
+@inject IJSRuntime JS
+
+<div class="app" data-theme="@_applied">
+    <header class="header">
+        <div class="header-left">
+            <a class="brand" href="/" aria-label="Go to job list">Research Engine</a>
+            <div class="api-health" aria-label="API health indicators">
+                <span class="@GetIndicatorClass(_liveStatus)" title="@GetIndicatorTitle("Live", _liveStatus)">Live</span>
+                <span class="@GetIndicatorClass(_readyStatus)" title="@GetIndicatorTitle("Ready", _readyStatus)">Ready</span>
+            </div>
+        </div>
+
+        <div class="header-right">
+            <button type="button"
+                    class="settings-toggle"
+                    @onclick="OpenSettings"
+                    aria-label="Open API settings"
+                    title="API settings">
+                Settings
+            </button>
+
+            <button type="button"
+                    class="theme-toggle"
+                    @onclick="ToggleThemeAsync"
+                    aria-label="@ThemeAriaLabel"
+                    title="@ThemeAriaLabel">
+                <span class="theme-icon" aria-hidden="true">@ThemeGlyph</span>
+                <span class="theme-text">@ThemeLabel</span>
+            </button>
+        </div>
+    </header>
+
+    <main class="main" id="mainContent">
+        @Body
+    </main>
+
+    @if (_settingsOpen)
+    {
+        <div class="settings-overlay" @onclick="CloseSettings">
+            <section class="settings-dialog"
+                     role="dialog"
+                     aria-modal="true"
+                     aria-labelledby="apiSettingsTitle"
+                     @onclick:stopPropagation="true">
+                <div class="settings-head">
+                    <h2 id="apiSettingsTitle">API Settings</h2>
+                    <button type="button" class="close-btn" @onclick="CloseSettings" aria-label="Close settings">×</button>
+                </div>
+
+                <div class="settings-body">
+                    <label class="settings-field">
+                        <span>API URL</span>
+                        <input class="settings-input"
+                               value="@_draftApiBaseUrl"
+                               @oninput="OnApiBaseUrlChanged"
+                               placeholder="https://api.example.com" />
+                    </label>
+
+                    <label class="settings-switch">
+                        <input type="checkbox"
+                               checked="@_draftApiAuthEnabled"
+                               @onchange="OnApiAuthChanged" />
+                        <span>API Auth</span>
+                    </label>
+
+                    <label class="settings-field">
+                        <span>Bearer token</span>
+                        <input class="settings-input"
+                               value="@_draftBearerToken"
+                               @oninput="OnBearerTokenChanged"
+                               disabled="@(!_draftApiAuthEnabled)"
+                               placeholder="Paste token" />
+                    </label>
+
+                    @if (!string.IsNullOrWhiteSpace(_settingsSuccess))
+                    {
+                        <p class="settings-success">@_settingsSuccess</p>
+                    }
+
+                    @if (!string.IsNullOrWhiteSpace(_settingsError))
+                    {
+                        <p class="settings-error">@_settingsError</p>
+                    }
+                </div>
+
+                <div class="settings-actions">
+                    <button type="button" class="secondarybtn" @onclick="CloseSettings">Cancel</button>
+                    <button type="button"
+                            class="secondarybtn"
+                            @onclick="TestSettingsAsync"
+                            disabled="@(!CanTestSettings)">
+                        @(_testingSettings ? "Testing..." : "Test API")
+                    </button>
+                    <button type="button"
+                            class="primarybtn"
+                            @onclick="SaveSettingsAsync"
+                            disabled="@(_savingSettings || _testingSettings)">
+                        @(_savingSettings ? "Saving..." : "Save")
+                    </button>
+                </div>
+            </section>
+        </div>
+    }
+</div>
+
+@code {
+    private enum ApiProbeStatus
+    {
+        Unknown,
+        Healthy,
+        Unhealthy,
+        Unreachable
+    }
+
+    private readonly record struct ProbeResult(ApiProbeStatus Status, int? StatusCode = null);
+
+    // Stored preference: "light" | "dark" | (null/empty/"system") => follow system
+    private string _applied = string.Empty; // actual applied (light|dark)
+
+    private bool _settingsOpen;
+    private bool _savingSettings;
+    private bool _testingSettings;
+    private string _draftApiBaseUrl = string.Empty;
+    private string _draftBearerToken = string.Empty;
+    private bool _draftApiAuthEnabled = true;
+    private string? _settingsError;
+    private string? _settingsSuccess;
+
+    private ApiProbeStatus _liveStatus = ApiProbeStatus.Unknown;
+    private ApiProbeStatus _readyStatus = ApiProbeStatus.Unknown;
+    private CancellationTokenSource? _healthPollCts;
+    private Task? _healthPollTask;
+
+    private string ThemeLabel => _applied == "dark" ? "Dark" : "Light";
+    private string ThemeGlyph => _applied == "dark" ? "🌙" : "☀️";
+
+    private string ThemeAriaLabel => _applied == "dark"
+        ? "Theme: dark. Click to switch to light."
+        : "Theme: light. Click to switch to dark.";
+
+    private bool CanTestSettings =>
+        ApiConnectionSettings.NormalizeBaseUrl(_draftApiBaseUrl) is not null
+        && !_testingSettings
+        && !_savingSettings;
+
+    protected override void OnInitialized()
+    {
+        _healthPollCts = new CancellationTokenSource();
+        _healthPollTask = PollApiHealthLoopAsync(_healthPollCts.Token);
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+
+        LoadApiDraftFromRuntime();
+
+        var pref = AppState.GetTheme();
+        try
+        {
+            if (pref is "dark" or "light")
+            {
+                _applied = await JS.InvokeAsync<string>("researchEngine.theme.set", pref);
+            }
+            else
+            {
+                // default: system theme (but not a user-selectable option)
+                _applied = await JS.InvokeAsync<string>("researchEngine.theme.init");
+            }
+        }
+        catch
+        {
+            _applied = (pref == "dark") ? "dark" : "light";
+        }
+
+        StateHasChanged();
+    }
+
+    private async Task ToggleThemeAsync()
+    {
+        var next = _applied == "dark" ? "light" : "dark";
+
+        AppState.SetTheme(next);
+
+        try
+        {
+            _applied = await JS.InvokeAsync<string>("researchEngine.theme.set", next);
+        }
+        catch
+        {
+            _applied = next;
+        }
+    }
+
+    private void OpenSettings()
+    {
+        LoadApiDraftFromRuntime();
+        ResetSettingsMessages();
+        _settingsOpen = true;
+    }
+
+    private void CloseSettings()
+    {
+        _settingsOpen = false;
+        ResetSettingsMessages();
+    }
+
+    private void LoadApiDraftFromRuntime()
+    {
+        _draftApiBaseUrl = ApiConnection.ApiBaseUrl;
+        _draftBearerToken = ApiConnection.BearerToken;
+        _draftApiAuthEnabled = ApiConnection.AuthEnabled;
+    }
+
+    private async Task SaveSettingsAsync()
+    {
+        ResetSettingsMessages();
+        _savingSettings = true;
+
+        try
+        {
+            var success = ApiConnection.TryApply(_draftApiBaseUrl, _draftBearerToken, _draftApiAuthEnabled);
+            if (!success)
+            {
+                _settingsError = "Enter a valid absolute API URL that starts with http:// or https://.";
+                return;
+            }
+
+            _draftApiBaseUrl = ApiConnection.ApiBaseUrl;
+            AppState.SetApiSettings(_draftApiBaseUrl, _draftBearerToken, _draftApiAuthEnabled);
+
+            _settingsOpen = false;
+            await RefreshApiHealthAsync(CancellationToken.None);
+        }
+        finally
+        {
+            _savingSettings = false;
+        }
+    }
+
+    private void OnApiBaseUrlChanged(ChangeEventArgs e)
+    {
+        _draftApiBaseUrl = e.Value?.ToString() ?? string.Empty;
+        ResetSettingsMessages();
+    }
+
+    private void OnBearerTokenChanged(ChangeEventArgs e)
+    {
+        _draftBearerToken = e.Value?.ToString() ?? string.Empty;
+        ResetSettingsMessages();
+    }
+
+    private void OnApiAuthChanged(ChangeEventArgs e)
+    {
+        _draftApiAuthEnabled = e.Value is bool value && value;
+        ResetSettingsMessages();
+    }
+
+    private async Task TestSettingsAsync()
+    {
+        ResetSettingsMessages();
+
+        var normalizedBaseUrl = ApiConnectionSettings.NormalizeBaseUrl(_draftApiBaseUrl);
+        if (normalizedBaseUrl is null)
+        {
+            _settingsError = "Enter a valid absolute API URL that starts with http:// or https://.";
+            return;
+        }
+
+        _testingSettings = true;
+        try
+        {
+            var probe = await ProbeEndpointDirectAsync(
+                normalizedBaseUrl,
+                "/api/ping",
+                _draftApiAuthEnabled,
+                _draftBearerToken,
+                CancellationToken.None);
+
+            if (probe.Status == ApiProbeStatus.Healthy)
+            {
+                _settingsSuccess = "API request succeeded.";
+            }
+            else
+            {
+                _settingsError = probe.StatusCode is { } code
+                    ? $"API request failed with HTTP {code}."
+                    : "API request failed. Check URL, token, CORS, and API availability.";
+            }
+        }
+        finally
+        {
+            _testingSettings = false;
+        }
+    }
+
+    private async Task PollApiHealthLoopAsync(CancellationToken ct)
+    {
+        try
+        {
+            await RefreshApiHealthAsync(ct);
+
+            using var timer = new PeriodicTimer(TimeSpan.FromSeconds(5));
+            while (await timer.WaitForNextTickAsync(ct))
+                await RefreshApiHealthAsync(ct);
+        }
+        catch (OperationCanceledException)
+        {
+            // expected on layout disposal
+        }
+    }
+
+    private async Task RefreshApiHealthAsync(CancellationToken ct)
+    {
+        var liveTask = ProbeCurrentApiEndpointAsync("/health/live", ct);
+        var readyTask = ProbeCurrentApiEndpointAsync("/health/ready", ct);
+
+        await Task.WhenAll(liveTask, readyTask);
+
+        var live = await liveTask;
+        var ready = await readyTask;
+
+        await InvokeAsync(() =>
+        {
+            _liveStatus = live.Status;
+            _readyStatus = ready.Status;
+            StateHasChanged();
+        });
+    }
+
+    private async Task<ProbeResult> ProbeCurrentApiEndpointAsync(string relativePath, CancellationToken ct)
+    {
+        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        linkedCts.CancelAfter(TimeSpan.FromSeconds(4));
+
+        try
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, relativePath);
+            using var response = await Http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, linkedCts.Token);
+
+            return response.IsSuccessStatusCode
+                ? new ProbeResult(ApiProbeStatus.Healthy, (int)response.StatusCode)
+                : new ProbeResult(ApiProbeStatus.Unhealthy, (int)response.StatusCode);
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            return new ProbeResult(ApiProbeStatus.Unreachable);
+        }
+        catch (HttpRequestException)
+        {
+            return new ProbeResult(ApiProbeStatus.Unreachable);
+        }
+    }
+
+    private static async Task<ProbeResult> ProbeEndpointDirectAsync(
+        string baseUrl,
+        string relativePath,
+        bool authEnabled,
+        string bearerToken,
+        CancellationToken ct)
+    {
+        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        linkedCts.CancelAfter(TimeSpan.FromSeconds(4));
+
+        try
+        {
+            using var client = new HttpClient
+            {
+                BaseAddress = new Uri(baseUrl, UriKind.Absolute)
+            };
+
+            using var request = new HttpRequestMessage(HttpMethod.Get, relativePath);
+
+            if (authEnabled && !string.IsNullOrWhiteSpace(bearerToken))
+            {
+                request.Headers.Authorization =
+                    new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", bearerToken.Trim());
+            }
+
+            using var response = await client.SendAsync(
+                request,
+                HttpCompletionOption.ResponseHeadersRead,
+                linkedCts.Token);
+
+            return response.IsSuccessStatusCode
+                ? new ProbeResult(ApiProbeStatus.Healthy, (int)response.StatusCode)
+                : new ProbeResult(ApiProbeStatus.Unhealthy, (int)response.StatusCode);
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            return new ProbeResult(ApiProbeStatus.Unreachable);
+        }
+        catch (HttpRequestException)
+        {
+            return new ProbeResult(ApiProbeStatus.Unreachable);
+        }
+    }
+
+    private static string GetIndicatorClass(ApiProbeStatus status)
+        => status switch
+        {
+            ApiProbeStatus.Healthy => "health-indicator is-healthy",
+            ApiProbeStatus.Unhealthy => "health-indicator is-unhealthy",
+            ApiProbeStatus.Unreachable => "health-indicator is-unreachable",
+            _ => "health-indicator is-unknown"
+        };
+
+    private static string GetIndicatorTitle(string name, ApiProbeStatus status)
+        => status switch
+        {
+            ApiProbeStatus.Healthy => $"{name}: healthy",
+            ApiProbeStatus.Unhealthy => $"{name}: unhealthy",
+            ApiProbeStatus.Unreachable => $"{name}: unreachable",
+            _ => $"{name}: checking"
+        };
+
+    private void ResetSettingsMessages()
+    {
+        _settingsError = null;
+        _settingsSuccess = null;
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_healthPollCts is null)
+            return;
+
+        _healthPollCts.Cancel();
+
+        if (_healthPollTask is not null)
+        {
+            try
+            {
+                await _healthPollTask;
+            }
+            catch (OperationCanceledException)
+            {
+                // expected
+            }
+        }
+
+        _healthPollCts.Dispose();
+        _healthPollCts = null;
+    }
+}
