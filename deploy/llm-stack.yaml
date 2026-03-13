@@ -32,36 +32,6 @@ data:
     :9080 {
       redir https://{host}:8443{uri}
     }
-    webui.llm.local:8443 {
-      tls internal
-      encode zstd gzip
-      reverse_proxy open-webui:8081
-    }
-    api.llm.local:8443 {
-      tls internal
-      encode zstd gzip
-      reverse_proxy vllm:8000
-    }
-    crawl.llm.local:8443 {
-      tls internal
-      encode zstd gzip
-      reverse_proxy firecrawl:3002
-    }
-    search.llm.local:8443 {
-      tls internal
-      encode zstd gzip
-      reverse_proxy searxng:8085
-    }
-    embedding.llm.local:8443 {
-      tls internal
-      encode zstd gzip
-      reverse_proxy ollama:11434
-    }
-    research-api.llm.local:8443 {
-      tls internal
-      encode zstd gzip
-      reverse_proxy research-api:8080
-    }
     research-webui.llm.local:8443 {
       tls internal
       encode zstd gzip

@@ -8,11 +8,6 @@ public sealed record LearningSimilarityOptions
     [Range(0.0, 1.0)]
     public float MinImportance { get; init; } = 0.4f;
 
-    // If we already have ≥ this fraction of topK from local,
-    // we skip global search (0–1).
-    [Range(0.0, 1.0)]
-    public float MinLocalFractionForNoGlobal { get; init; } = 0.75f;
-
     // Diversity filter: max learnings from the same URL
     [Range(1, 1000)]
     public int DiversityMaxPerUrl { get; init; } = 3;

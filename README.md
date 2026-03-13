@@ -203,15 +203,15 @@ Configuration values and deployment details are documented separately.
 
 See:
 
-- [Configuration Guide](./docs/configuration.md)
-- [Deployment Guide](./docs/deployment.md)
+- [Configuration Guide](./Docs/configuration.md)
+- [Deployment Guide](./Docs/deployment.md)
 
 ## Repository Structure
 
 - `src/` - application source code
-- `docs/` - documentation
-- `deploy/` - deployment manifests
-- `examples/` - example generated reports
+- `Docs/` - documentation
+- `Deploy/` - deployment manifests
+- `Examples/` - example generated reports
 
 ## License
 
