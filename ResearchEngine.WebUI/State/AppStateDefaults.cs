@@ -19,7 +19,7 @@ public static class AppStateDefaults
             Api = new ApiConnectionState
             {
                 BaseUrl = "",
-                BearerToken = "",
+                ApiKey = "",
                 AuthEnabled = true
             },
             Jobs = new Dictionary<Guid, JobUiState>()

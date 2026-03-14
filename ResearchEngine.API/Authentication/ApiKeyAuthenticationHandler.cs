@@ -9,10 +9,10 @@ using Serilog;
 
 namespace ResearchEngine.API.Authentication;
 
-public sealed class BearerAuthenticationHandler : AuthenticationHandler<BearerAuthenticationOptions>
+public sealed class ApiKeyAuthenticationHandler : AuthenticationHandler<AuthenticationOptions>
 {
-    public BearerAuthenticationHandler(
-        IOptionsMonitor<BearerAuthenticationOptions> options,
+    public ApiKeyAuthenticationHandler(
+        IOptionsMonitor<AuthenticationOptions> options,
         ILoggerFactory logger,
         UrlEncoder encoder)
         : base(options, logger, encoder) { }
@@ -34,12 +34,12 @@ public sealed class BearerAuthenticationHandler : AuthenticationHandler<BearerAu
         if (!header.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
             return Task.FromResult(AuthenticateResult.NoResult());
 
-        var token = header.Substring(prefix.Length).Trim();
-        if (string.IsNullOrEmpty(token))
-            return Task.FromResult(AuthenticateResult.Fail("Missing bearer token"));
+        var apiKey = header.Substring(prefix.Length).Trim();
+        if (string.IsNullOrEmpty(apiKey))
+            return Task.FromResult(AuthenticateResult.Fail("Missing API key"));
 
-        if (!IsTokenAllowed(token, Options.BearerTokens))
-            return Task.FromResult(AuthenticateResult.Fail("Invalid token"));
+        if (!IsApiKeyAllowed(apiKey, Options.ApiKeys))
+            return Task.FromResult(AuthenticateResult.Fail("Invalid API key"));
 
         // Authenticated identity with no claims
         var identity = new ClaimsIdentity(authenticationType: Scheme.Name);
@@ -54,19 +54,19 @@ public sealed class BearerAuthenticationHandler : AuthenticationHandler<BearerAu
         return base.HandleChallengeAsync(properties);
     }
 
-    private static bool IsTokenAllowed(string token, IReadOnlyCollection<string> allowed)
+    private static bool IsApiKeyAllowed(string apiKey, IReadOnlyCollection<string> allowed)
     {
         if (allowed.Count == 0) return false;
 
-        var tokenBytes = Encoding.UTF8.GetBytes(token);
+        var apiKeyBytes = Encoding.UTF8.GetBytes(apiKey);
         foreach (var candidate in allowed)
         {
             if (string.IsNullOrEmpty(candidate)) continue;
 
             var candidateBytes = Encoding.UTF8.GetBytes(candidate);
-            if (candidateBytes.Length != tokenBytes.Length) continue;
+            if (candidateBytes.Length != apiKeyBytes.Length) continue;
 
-            if (CryptographicOperations.FixedTimeEquals(candidateBytes, tokenBytes))
+            if (CryptographicOperations.FixedTimeEquals(candidateBytes, apiKeyBytes))
                 return true;
         }
 
@@ -74,9 +74,9 @@ public sealed class BearerAuthenticationHandler : AuthenticationHandler<BearerAu
     }
 }
 
-public sealed class BearerAuthenticationOptions : AuthenticationSchemeOptions
+public sealed class AuthenticationOptions : AuthenticationSchemeOptions
 {
     public bool Enabled { get; set; } = true;
 
-    public IReadOnlyCollection<string> BearerTokens { get; set; } = Array.Empty<string>();
+    public IReadOnlyCollection<string> ApiKeys { get; set; } = Array.Empty<string>();
 }

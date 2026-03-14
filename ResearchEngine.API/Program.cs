@@ -110,12 +110,12 @@ builder.Services.AddValidation();
 
 // ---------- Authentication + Authorization ----------
 builder.Services.AddAuthentication("Bearer")
-    .AddScheme<BearerAuthenticationOptions, BearerAuthenticationHandler>(
+    .AddScheme<AuthenticationOptions, ApiKeyAuthenticationHandler>(
         "Bearer",
         options =>
         {
             builder.Configuration
-                .GetSection(nameof(BearerAuthenticationOptions))
+                .GetSection(nameof(AuthenticationOptions))
                 .Bind(options);
         });
 

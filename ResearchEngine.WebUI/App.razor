@@ -26,22 +26,22 @@
             ? ApiConnection.FallbackApiBaseUrl
             : saved.BaseUrl;
 
-        var bearerToken = saved.BearerToken ?? string.Empty;
+        var apiKey = saved.ApiKey ?? string.Empty;
         var authEnabled = saved.AuthEnabled;
 
-        if (ApiConnection.TryApply(apiBaseUrl, bearerToken, authEnabled))
+        if (ApiConnection.TryApply(apiBaseUrl, apiKey, authEnabled))
         {
             if (!string.Equals(saved.BaseUrl, apiBaseUrl, StringComparison.Ordinal)
-                || !string.Equals(saved.BearerToken ?? string.Empty, bearerToken, StringComparison.Ordinal)
+                || !string.Equals(saved.ApiKey ?? string.Empty, apiKey, StringComparison.Ordinal)
                 || saved.AuthEnabled != authEnabled)
             {
-                AppState.SetApiSettings(apiBaseUrl, bearerToken, authEnabled);
+                AppState.SetApiSettings(apiBaseUrl, apiKey, authEnabled);
             }
         }
         else
         {
-            ApiConnection.TryApply(ApiConnection.FallbackApiBaseUrl, bearerToken, authEnabled);
-            AppState.SetApiSettings(ApiConnection.ApiBaseUrl, bearerToken, authEnabled);
+            ApiConnection.TryApply(ApiConnection.FallbackApiBaseUrl, apiKey, authEnabled);
+            AppState.SetApiSettings(ApiConnection.ApiBaseUrl, apiKey, authEnabled);
         }
     }
 

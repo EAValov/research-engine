@@ -5,7 +5,7 @@ namespace ResearchEngine.WebUI.Services;
 
 public sealed class AuthTokenProvider(IConfiguration configuration)
 {
-    public string? Token { get; set; } = configuration["ApiAuth:BearerToken"];
+    public string? ApiKey { get; set; } = configuration["ApiAuth:ApiKey"];
     public bool Enabled { get; set; } = true;
 }
 
@@ -26,9 +26,9 @@ public sealed class AuthHeaderHandler(
                 : new Uri(apiBase, request.RequestUri);
         }
 
-        var token = tokenProvider.Token;
-        if (tokenProvider.Enabled && !string.IsNullOrWhiteSpace(token))
-            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        var apiKey = tokenProvider.ApiKey;
+        if (tokenProvider.Enabled && !string.IsNullOrWhiteSpace(apiKey))
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
 
         return base.SendAsync(request, cancellationToken);
     }

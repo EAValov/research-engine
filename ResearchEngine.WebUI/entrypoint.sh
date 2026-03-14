@@ -2,13 +2,13 @@
 set -eu
 
 : "${API_BASE_URL:=http://localhost:8090}"
-: "${BearerAuthenticationOptions__BearerTokens__0:=}"
+: "${AuthenticationOptions__ApiKeys__0:=}"
 
 cat > /srv/appsettings.json <<EOF
 {
   "ApiBaseUrl": "${API_BASE_URL}",
   "ApiAuth": {
-    "BearerToken": "${BearerAuthenticationOptions__BearerTokens__0}"
+    "ApiKey": "${AuthenticationOptions__ApiKeys__0}"
   }
 }
 EOF

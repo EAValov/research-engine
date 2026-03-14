@@ -31,7 +31,7 @@ public partial class SettingsDialog : ComponentBase
     private bool _applyCompleted;
     private int _applyFeedbackVersion;
     private string _draftApiBaseUrl = string.Empty;
-    private string _draftBearerToken = string.Empty;
+    private string _draftApiKey = string.Empty;
     private bool _draftApiAuthEnabled = true;
     private ResearchOrchestratorConfigModel _draftResearchOptions = new();
     private LearningSimilarityOptionsModel _draftLearningOptions = new();
@@ -42,7 +42,7 @@ public partial class SettingsDialog : ComponentBase
     private string? _settingsError;
     private string? _settingsSuccess;
     private string _baselineApiBaseUrl = string.Empty;
-    private string _baselineBearerToken = string.Empty;
+    private string _baselineApiKey = string.Empty;
     private bool _baselineApiAuthEnabled;
 
     private bool CanTestSettings =>
@@ -57,7 +57,7 @@ public partial class SettingsDialog : ComponentBase
             ApiConnectionSettings.NormalizeBaseUrl(_draftApiBaseUrl),
             ApiConnectionSettings.NormalizeBaseUrl(_baselineApiBaseUrl),
             StringComparison.OrdinalIgnoreCase)
-        || !string.Equals(_draftBearerToken, _baselineBearerToken, StringComparison.Ordinal)
+        || !string.Equals(_draftApiKey, _baselineApiKey, StringComparison.Ordinal)
         || _draftApiAuthEnabled != _baselineApiAuthEnabled;
 
     private bool HasRuntimeSettingsChanges =>
@@ -103,7 +103,7 @@ public partial class SettingsDialog : ComponentBase
     private void LoadApiDraftFromRuntime()
     {
         _draftApiBaseUrl = ApiConnection.ApiBaseUrl;
-        _draftBearerToken = ApiConnection.BearerToken;
+        _draftApiKey = ApiConnection.ApiKey;
         _draftApiAuthEnabled = ApiConnection.AuthEnabled;
     }
 
@@ -150,7 +150,7 @@ public partial class SettingsDialog : ComponentBase
             var saveResult = await UpdateRuntimeSettingsDirectAsync(
                 _draftApiBaseUrl,
                 _draftApiAuthEnabled,
-                _draftBearerToken,
+                _draftApiKey,
                 request,
                 CancellationToken.None);
 
@@ -182,12 +182,12 @@ public partial class SettingsDialog : ComponentBase
 
     private bool ApplyApiDraft()
     {
-        var success = ApiConnection.TryApply(_draftApiBaseUrl, _draftBearerToken, _draftApiAuthEnabled);
+        var success = ApiConnection.TryApply(_draftApiBaseUrl, _draftApiKey, _draftApiAuthEnabled);
         if (!success)
             return false;
 
         _draftApiBaseUrl = ApiConnection.ApiBaseUrl;
-        AppState.SetApiSettings(_draftApiBaseUrl, _draftBearerToken, _draftApiAuthEnabled);
+        AppState.SetApiSettings(_draftApiBaseUrl, _draftApiKey, _draftApiAuthEnabled);
         CaptureApiBaseline();
         return true;
     }
@@ -199,9 +199,9 @@ public partial class SettingsDialog : ComponentBase
         _fieldErrors.Remove("Api.BaseUrl");
     }
 
-    private void OnBearerTokenChanged(ChangeEventArgs e)
+    private void OnApiKeyChanged(ChangeEventArgs e)
     {
-        _draftBearerToken = e.Value?.ToString() ?? string.Empty;
+        _draftApiKey = e.Value?.ToString() ?? string.Empty;
         ResetSettingsMessages();
     }
 
@@ -238,14 +238,14 @@ public partial class SettingsDialog : ComponentBase
                 normalizedBaseUrl,
                 "api/ping",
                 _draftApiAuthEnabled,
-                _draftBearerToken,
+                _draftApiKey,
                 CancellationToken.None);
 
             if (probe.Status != HttpStatusCode.OK)
             {
                 _settingsError = probe.Status is { } status
                     ? $"API request failed with HTTP {(int)status}."
-                    : "API request failed. Check URL, token, CORS, and API availability.";
+                    : "API request failed. Check URL, API key, CORS, and API availability.";
                 return;
             }
 
@@ -268,7 +268,7 @@ public partial class SettingsDialog : ComponentBase
             var result = await GetRuntimeSettingsDirectAsync(
                 _draftApiBaseUrl,
                 _draftApiAuthEnabled,
-                _draftBearerToken,
+                _draftApiKey,
                 CancellationToken.None);
 
             if (result.Data is not null)
@@ -381,7 +381,7 @@ public partial class SettingsDialog : ComponentBase
     private void CaptureApiBaseline()
     {
         _baselineApiBaseUrl = _draftApiBaseUrl;
-        _baselineBearerToken = _draftBearerToken;
+        _baselineApiKey = _draftApiKey;
         _baselineApiAuthEnabled = _draftApiAuthEnabled;
     }
 
@@ -435,7 +435,7 @@ public partial class SettingsDialog : ComponentBase
         string baseUrl,
         string relativePath,
         bool authEnabled,
-        string bearerToken,
+        string apiKey,
         CancellationToken ct)
     {
         using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
@@ -448,7 +448,7 @@ public partial class SettingsDialog : ComponentBase
                 BaseAddress = new Uri(baseUrl, UriKind.Absolute)
             };
 
-            using var request = CreateAuthorizedRequest(HttpMethod.Get, relativePath, authEnabled, bearerToken);
+            using var request = CreateAuthorizedRequest(HttpMethod.Get, relativePath, authEnabled, apiKey);
             using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, linkedCts.Token);
             return (response.StatusCode, null);
         }
@@ -465,7 +465,7 @@ public partial class SettingsDialog : ComponentBase
     private static async Task<RuntimeSettingsCallResult> GetRuntimeSettingsDirectAsync(
         string baseUrl,
         bool authEnabled,
-        string bearerToken,
+        string apiKey,
         CancellationToken ct)
     {
         var normalizedBaseUrl = ApiConnectionSettings.NormalizeBaseUrl(baseUrl);
@@ -482,7 +482,7 @@ public partial class SettingsDialog : ComponentBase
                 BaseAddress = new Uri(normalizedBaseUrl, UriKind.Absolute)
             };
 
-            using var request = CreateAuthorizedRequest(HttpMethod.Get, "api/settings/runtime", authEnabled, bearerToken);
+            using var request = CreateAuthorizedRequest(HttpMethod.Get, "api/settings/runtime", authEnabled, apiKey);
             using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, linkedCts.Token);
             var body = await response.Content.ReadAsStringAsync(linkedCts.Token);
 
@@ -507,7 +507,7 @@ public partial class SettingsDialog : ComponentBase
     private static async Task<RuntimeSettingsCallResult> UpdateRuntimeSettingsDirectAsync(
         string baseUrl,
         bool authEnabled,
-        string bearerToken,
+        string apiKey,
         UpdateRuntimeSettingsRequestModel requestModel,
         CancellationToken ct)
     {
@@ -526,7 +526,7 @@ public partial class SettingsDialog : ComponentBase
             };
 
             var json = JsonSerializer.Serialize(requestModel, RuntimeSettingsJsonOptions);
-            using var request = CreateAuthorizedRequest(HttpMethod.Put, "api/settings/runtime", authEnabled, bearerToken);
+            using var request = CreateAuthorizedRequest(HttpMethod.Put, "api/settings/runtime", authEnabled, apiKey);
             request.Content = new StringContent(json, Encoding.UTF8, "application/json");
 
             using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, linkedCts.Token);
@@ -554,12 +554,12 @@ public partial class SettingsDialog : ComponentBase
         HttpMethod method,
         string relativePath,
         bool authEnabled,
-        string bearerToken)
+        string apiKey)
     {
         var request = new HttpRequestMessage(method, relativePath);
 
-        if (authEnabled && !string.IsNullOrWhiteSpace(bearerToken))
-            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", bearerToken.Trim());
+        if (authEnabled && !string.IsNullOrWhiteSpace(apiKey))
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey.Trim());
 
         return request;
     }

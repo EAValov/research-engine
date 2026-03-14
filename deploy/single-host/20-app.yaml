@@ -73,11 +73,11 @@ spec:
             secretKeyRef:
               name: research-single-host-secrets
               key: EmbeddingConfig__ApiKey
-        - name: BearerAuthenticationOptions__BearerTokens__0
+        - name: AuthenticationOptions__ApiKeys__0
           valueFrom:
             secretKeyRef:
               name: research-single-host-secrets
-              key: BearerAuthenticationOptions__BearerTokens__0
+              key: AuthenticationOptions__ApiKeys__0
         - name: ConnectionStrings__ResearchDb
           valueFrom:
             secretKeyRef:
@@ -109,7 +109,7 @@ spec:
           value: "1024"
         - name: RedisEventBusOptions__ConnectionString
           value: "127.0.0.1:6379"
-        - name: BearerAuthenticationOptions__Enabled
+        - name: AuthenticationOptions__Enabled
           value: "true"
         - name: Cors__AllowedOrigins__0
           value: "http://localhost:8080"
@@ -143,11 +143,11 @@ spec:
           value: "8082"
         - name: API_BASE_URL
           value: "http://localhost:8080"
-        - name: BearerAuthenticationOptions__BearerTokens__0
+        - name: AuthenticationOptions__ApiKeys__0
           valueFrom:
             secretKeyRef:
               name: research-single-host-secrets
-              key: BearerAuthenticationOptions__BearerTokens__0
+              key: AuthenticationOptions__ApiKeys__0
       ports:
         - containerPort: 8082
       livenessProbe:

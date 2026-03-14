@@ -6,7 +6,7 @@ type: Opaque
 stringData:
   ChatConfig__ApiKey: "Y6BksOt4+wdRsAJwZIrFV3Yo37fdl+2tPScWnfaT9S+IXekwc6HgcJqQVvfPpoD4"
   EmbeddingConfig__ApiKey: "ollama"
-  BearerAuthenticationOptions__BearerTokens__0: "RYCQlDNSFnJgUrOIZdnh4mlOghdkzhCntgeDjsJqCYFz7tou1F1bZi8oNJ4C0hav"
+  AuthenticationOptions__ApiKeys__0: "RYCQlDNSFnJgUrOIZdnh4mlOghdkzhCntgeDjsJqCYFz7tou1F1bZi8oNJ4C0hav"
   POSTGRES_DB: "firecrawl"
   POSTGRES_USER: "firecrawl"
   POSTGRES_PASSWORD: "df3a275eb955fcc7d3048a479d4d757a"
@@ -286,11 +286,11 @@ spec:
             secretKeyRef:
               name: research-stack-secrets
               key: EmbeddingConfig__ApiKey
-        - name: BearerAuthenticationOptions__BearerTokens__0
+        - name: AuthenticationOptions__ApiKeys__0
           valueFrom:
             secretKeyRef:
               name: research-stack-secrets
-              key: BearerAuthenticationOptions__BearerTokens__0
+              key: AuthenticationOptions__ApiKeys__0
         - name: ConnectionStrings__ResearchDb
           valueFrom:
             secretKeyRef:
@@ -322,7 +322,7 @@ spec:
           value: "1024"
         - name: RedisEventBusOptions__ConnectionString
           value: "redis:6379"
-        - name: BearerAuthenticationOptions__Enabled
+        - name: AuthenticationOptions__Enabled
           value: "true"
         - name: Cors__AllowedOrigins__0
           value: "https://research-webui.llm.local:8443"
@@ -352,11 +352,11 @@ spec:
           value: "8082"
         - name: API_BASE_URL
           value: "https://research-webui.llm.local:8443"
-        - name: BearerAuthenticationOptions__BearerTokens__0
+        - name: AuthenticationOptions__ApiKeys__0
           valueFrom:
             secretKeyRef:
               name: research-stack-secrets
-              key: BearerAuthenticationOptions__BearerTokens__0
+              key: AuthenticationOptions__ApiKeys__0
       ports:
         - containerPort: 8082
       livenessProbe:

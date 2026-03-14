@@ -22,28 +22,28 @@ public sealed class ApiConnectionSettings
             ?? "http://localhost:8090/";
         _apiBaseUrl = _fallbackBaseUrl;
 
-        var defaultToken = (configuration["ApiAuth:BearerToken"] ?? string.Empty).Trim();
+        var defaultApiKey = (configuration["ApiAuth:ApiKey"] ?? string.Empty).Trim();
 
-        _authTokenProvider.Token = defaultToken;
+        _authTokenProvider.ApiKey = defaultApiKey;
         _authTokenProvider.Enabled = true;
     }
 
     public string ApiBaseUrl => TrimTrailingSlash(_apiBaseUrl);
 
-    public string BearerToken => _authTokenProvider.Token ?? string.Empty;
+    public string ApiKey => _authTokenProvider.ApiKey ?? string.Empty;
 
     public bool AuthEnabled => _authTokenProvider.Enabled;
 
     public string FallbackApiBaseUrl => TrimTrailingSlash(_fallbackBaseUrl);
 
-    public bool TryApply(string? apiBaseUrl, string? bearerToken, bool authEnabled)
+    public bool TryApply(string? apiBaseUrl, string? apiKey, bool authEnabled)
     {
         var normalizedBaseUrl = NormalizeBaseUrl(apiBaseUrl);
         if (normalizedBaseUrl is null)
             return false;
 
         _apiBaseUrl = normalizedBaseUrl;
-        _authTokenProvider.Token = (bearerToken ?? string.Empty).Trim();
+        _authTokenProvider.ApiKey = (apiKey ?? string.Empty).Trim();
         _authTokenProvider.Enabled = authEnabled;
         return true;
     }

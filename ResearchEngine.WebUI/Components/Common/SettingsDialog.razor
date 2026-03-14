@@ -49,19 +49,19 @@
                             <input type="checkbox"
                                    checked="@_draftApiAuthEnabled"
                                    @onchange="OnApiAuthChanged" />
-                            <span title="Include the bearer token on API requests.">API Auth</span>
+                            <span title="Include the API key on API requests using the Bearer authorization scheme.">API Auth</span>
                         </label>
 
                         <label class="settings-field settings-field-full">
                             <span class="settings-label-row">
-                                <span>Bearer token</span>
-                                <span class="settings-help" title="Bearer token used for authenticated API requests.">Authorization token</span>
+                                <span>API key</span>
+                                <span class="settings-help" title="API key used for authenticated API requests and sent as Authorization: Bearer &lt;key&gt;.">Authorization key</span>
                             </span>
                             <input class="settings-input"
-                                   value="@_draftBearerToken"
-                                   @oninput="OnBearerTokenChanged"
+                                   value="@_draftApiKey"
+                                   @oninput="OnApiKeyChanged"
                                    disabled="@(!_draftApiAuthEnabled)"
-                                   placeholder="Paste token" />
+                                   placeholder="Paste API key" />
                         </label>
                     </div>
                 </section>

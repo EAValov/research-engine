@@ -105,7 +105,7 @@ public sealed class AppStateStore
             s.Api = new ApiConnectionState();
 
         s.Api.BaseUrl = NormalizeApiBaseUrl(s.Api.BaseUrl);
-        s.Api.BearerToken ??= "";
+        s.Api.ApiKey ??= "";
 
         s.Jobs ??= new Dictionary<Guid, JobUiState>();
 
@@ -183,10 +183,10 @@ public sealed class AppStateStore
     // API connection settings
     public ApiConnectionState GetApiSettings() => _state.Api;
 
-    public void SetApiSettings(string baseUrl, string bearerToken, bool authEnabled)
+    public void SetApiSettings(string baseUrl, string apiKey, bool authEnabled)
     {
         _state.Api.BaseUrl = NormalizeApiBaseUrl(baseUrl);
-        _state.Api.BearerToken = bearerToken?.Trim() ?? "";
+        _state.Api.ApiKey = apiKey?.Trim() ?? "";
         _state.Api.AuthEnabled = authEnabled;
         QueueSave();
     }

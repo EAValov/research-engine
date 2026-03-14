@@ -6,7 +6,7 @@ type: Opaque
 stringData:
   ChatConfig__ApiKey: "Y6BksOt4+wdRsAJwZIrFV3Yo37fdl+2tPScWnfaT9S+IXekwc6HgcJqQVvfPpoD4"
   EmbeddingConfig__ApiKey: "ollama"
-  BearerAuthenticationOptions__BearerTokens__0: "RYCQlDNSFnJgUrOIZdnh4mlOghdkzhCntgeDjsJqCYFz7tou1F1bZi8oNJ4C0hav"
+  AuthenticationOptions__ApiKeys__0: "RYCQlDNSFnJgUrOIZdnh4mlOghdkzhCntgeDjsJqCYFz7tou1F1bZi8oNJ4C0hav"
   RESEARCH_POSTGRES_DB: "research"
   RESEARCH_POSTGRES_USER: "research"
   RESEARCH_POSTGRES_PASSWORD: "research-password"

@@ -20,7 +20,7 @@ public sealed class AppState
 public sealed class ApiConnectionState
 {
     public string BaseUrl { get; set; } = string.Empty;
-    public string BearerToken { get; set; } = string.Empty;
+    public string ApiKey { get; set; } = string.Empty;
     public bool AuthEnabled { get; set; } = true;
 }
 

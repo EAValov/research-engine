@@ -1,48 +1,73 @@
 # Configuration Guide
 
-This document describes the runtime configuration currently used by the Research Engine solution.
+This document describes the current runtime configuration for the Research Engine solution.
 
-It is based on the implementation in:
+It is based on:
 
 - `ResearchEngine.API`
 - `ResearchEngine.WebUI`
-- the sample values in [README.md](/c:/LLM/ResearchApi/README.md)
-- the deployment example in [Deploy/llm-stack.yaml](/c:/LLM/ResearchApi/Deploy/llm-stack.yaml)
+- `ResearchEngine.API/appsettings.json`
+- the single-host deployment manifests in `Deploy/single-host`
 
 ## Configuration Sources
 
-The solution currently uses two configuration layers:
-
 ### API
 
-The API is an ASP.NET Core application. Its configuration comes from standard ASP.NET Core providers, including:
+The API uses standard ASP.NET Core configuration providers.
+
+In practice that means values can come from:
 
 - `ResearchEngine.API/appsettings.json`
 - environment variables
-- any other default ASP.NET Core provider you add later
 
 Environment variables use the standard `__` separator, for example:
 
 ```text
 ConnectionStrings__ResearchDb
 ChatConfig__Endpoint
-EmbeddingConfig__Dimension
-BearerAuthenticationOptions__BearerTokens__0
+EmbeddingConfig__Dimensions
 ```
 
 ### Web UI
 
-The Web UI is a Blazor WebAssembly app. At runtime it reads:
+The Web UI is a Blazor WebAssembly app.
 
-- `ResearchEngine.WebUI/wwwroot/appsettings.json`
+It has two layers of configuration:
 
-In the containerized setup, [ResearchEngine.WebUI/entrypoint.sh](/c:/LLM/ResearchApi/ResearchEngine.WebUI/entrypoint.sh) rewrites that file from environment variables before Caddy starts.
+- startup defaults from `ResearchEngine.WebUI/wwwroot/appsettings.json`
+- browser-local overrides stored by the settings dialog
 
-## Configuration Precedence
+In the containerized deployment, `ResearchEngine.WebUI/entrypoint.sh` rewrites the runtime `appsettings.json` before Caddy starts.
 
-For the API, standard ASP.NET Core precedence applies, so environment variables override values from `appsettings.json`.
+## Precedence
 
-For the Web UI container, the generated `/srv/appsettings.json` becomes the effective runtime configuration for the browser app.
+### API config values priority
+
+Standard ASP.NET Core precedence applies.
+
+That means environment variables override `appsettings.json`.
+
+This matters for the runtime settings UI:
+
+- the UI updates `ResearchOrchestratorConfig` and `LearningSimilarityOptions` by writing to `appsettings.json`
+- those changes take effect only if the same keys are not being overridden by environment variables
+
+In the current `Deploy/single-host` manifests:
+
+- `ResearchOrchestratorConfig` is not overridden by env vars
+- `LearningSimilarityOptions` is not overridden by env vars
+- `ChatConfig` is overridden by env vars
+- `EmbeddingConfig` is overridden by env vars
+- several other API settings are overridden by env vars as well
+
+### Web UI precedence
+
+For the browser app:
+
+1. deployment-generated `appsettings.json` provides defaults
+2. browser-local saved settings override those defaults for that user
+
+So the API URL and API key shown in the UI are user-overridable even if the container started with default values from environment variables.
 
 ## API Configuration
 
@@ -55,27 +80,37 @@ For the Web UI container, the generated `/srv/appsettings.json` becomes the effe
 }
 ```
 
-- `ResearchDb` is required.
-- `HangfireDb` is optional. If it is not set, the API falls back to `ResearchDb`.
+- `ResearchDb` is required
+- `HangfireDb` is optional; if it is missing, the API falls back to `ResearchDb`
 
 Usage:
 
 - `ResearchDb`
-  - main EF Core/PostgreSQL database
-  - health check target
+  - main PostgreSQL database for the application
+  - EF Core migrations target
+  - database health check target
 - `HangfireDb`
-  - Hangfire job storage
+  - Hangfire job storage database
 
 Notes:
 
-- PostgreSQL must support the `vector` extension because the app configures pgvector columns and indexes.
-- The application runs EF Core migrations automatically on startup outside the `Testing` environment.
+- PostgreSQL must support the `vector` extension
+- outside the `Testing` environment, migrations are applied automatically on startup
 
-Example environment variables:
+Single-host deployment example:
 
-```text
-ConnectionStrings__ResearchDb=Host=localhost;Port=5432;Database=research;Username=app;Password=secret
-ConnectionStrings__HangfireDb=Host=localhost;Port=5432;Database=jobs;Username=app;Password=secret
+```yaml
+env:
+  - name: ConnectionStrings__ResearchDb
+    valueFrom:
+      secretKeyRef:
+        name: research-single-host-secrets
+        key: RESEARCH_CONNECTION_STRING
+  - name: ConnectionStrings__HangfireDb
+    valueFrom:
+      secretKeyRef:
+        name: research-single-host-secrets
+        key: RESEARCH_CONNECTION_STRING
 ```
 
 ### `FirecrawlOptions`
@@ -88,18 +123,24 @@ ConnectionStrings__HangfireDb=Host=localhost;Port=5432;Database=jobs;Username=ap
 }
 ```
 
-- `BaseUrl` is the Firecrawl service base URL.
-- `ApiKey` is optional in code, but normally required for real Firecrawl deployments.
-- `HttpClientTimeoutSeconds` controls the timeout used for search and scrape requests.
+- `BaseUrl` is the Firecrawl service base URL
+- `ApiKey` is optional in the type, but typically required in real deployments
+- `HttpClientTimeoutSeconds` controls the timeout for search and scrape requests
 
-Usage:
+Single-host deployment example:
 
-- search requests go to `POST {BaseUrl}/v1/search`
-- scrape requests go to `POST {BaseUrl}/v1/scrape`
-
-Recommendation:
-
-- use a base URL without a trailing slash, for example `http://firecrawl:3002`
+```yaml
+env:
+  - name: FirecrawlOptions__BaseUrl
+    value: "http://research-crawl:3002"
+  - name: FirecrawlOptions__ApiKey
+    valueFrom:
+      secretKeyRef:
+        name: research-single-host-secrets
+        key: FIRE_CRAWL_API_KEY
+  - name: FirecrawlOptions__HttpClientTimeoutSeconds
+    value: "600"
+```
 
 ### `ChatConfig`
 
@@ -111,46 +152,79 @@ Recommendation:
 }
 ```
 
-- `Endpoint` is the OpenAI-compatible chat endpoint base.
-- `ApiKey` is optional.
-- `ModelId` is required.
+- `Endpoint` is the OpenAI-compatible chat backend
+- `ApiKey` is required by the current implementation
+- `ModelId` is required
 
 Usage:
 
-- chat generation uses the OpenAI SDK against `ChatConfig`
-- readiness checks call `{Endpoint}/models`
-- token counting uses a tokenizer request derived from this same backend
+- research planning and synthesis chat calls
+- `/health/ready` chat backend health check via `{Endpoint}/models`
+- tokenizer calls against the same backend family
 
 Important:
 
-- the current tokenizer implementation also expects a `POST /tokenize` endpoint on the same chat backend host
-- the sample configuration is written for a vLLM-style setup
+- the current tokenizer implementation expects a compatible `/tokenize` endpoint on the chat backend host
+- `ChatConfig` is not validated on startup by data annotations, so bad values may fail when first used
+
+Single-host deployment example:
+
+```yaml
+env:
+  - name: ChatConfig__Endpoint
+    value: "http://research-model:8000/v1"
+  - name: ChatConfig__ModelId
+    value: "nvidia/Qwen3-30B-A3B-NVFP4"
+  - name: ChatConfig__ApiKey
+    valueFrom:
+      secretKeyRef:
+        name: research-single-host-secrets
+        key: ChatConfig__ApiKey
+```
 
 ### `EmbeddingConfig`
 
 ```json
 "EmbeddingConfig": {
-  "Endpoint": "http://vllm-embeddings:8001/v1",
+  "Endpoint": "http://ollama:11434/v1",
   "ApiKey": "...",
   "ModelId": "Qwen/Qwen3-Embedding-0.6B",
   "Dimension": 1024
 }
 ```
 
-- `Endpoint` is the OpenAI-compatible embeddings endpoint base.
-- `ApiKey` is required by the current implementation.
-- `ModelId` is required.
-- `Dimension` is required and must match the actual embedding size returned by the model.
+- `Endpoint` is the OpenAI-compatible embeddings backend
+- `ApiKey` is required by the current implementation
+- `ModelId` is required
+- `Dimension` must match the real embedding vector size
 
 Usage:
 
-- embedding generation
-- pgvector column size in the database model
-- embedding readiness check via `{Endpoint}/models`
+- learning embeddings
+- learning-group embeddings
+- pgvector column dimensions in the EF model
+- `/health/ready` embedding backend health check via `{Endpoint}/models`
 
 Important:
 
-- if `Dimension` does not match the real embedding vector length, persistence/search will break
+- if `Dimension` does not match the actual vector length, persistence and vector search will break
+
+Single-host deployment example:
+
+```yaml
+env:
+  - name: EmbeddingConfig__Endpoint
+    value: "http://127.0.0.1:11434/v1"
+  - name: EmbeddingConfig__ModelId
+    value: "qwen3-embedding:0.6b"
+  - name: EmbeddingConfig__Dimension
+    value: "1024"
+  - name: EmbeddingConfig__ApiKey
+    valueFrom:
+      secretKeyRef:
+        name: research-single-host-secrets
+        key: EmbeddingConfig__ApiKey
+```
 
 ### `ResearchOrchestratorConfig`
 
@@ -162,84 +236,114 @@ Important:
 }
 ```
 
-- `LimitSearches` limits the number of search results requested per SERP query.
-- `MaxUrlParallelism` limits how many URLs are processed concurrently for learning extraction.
-- `MaxUrlsPerSerpQuery` caps how many URLs from one SERP query are crawled.
+This section is validated on startup.
 
-These values directly affect crawl speed, model load, and total job cost.
+Current validation:
+
+- `LimitSearches`: `1..1000`
+- `MaxUrlParallelism`: `1..1000`
+- `MaxUrlsPerSerpQuery`: `1..1000`
+
+Meaning:
+
+- `LimitSearches`
+  - maximum number of search results requested for each SERP query
+- `MaxUrlParallelism`
+  - maximum number of source URLs processed in parallel for one SERP query
+- `MaxUrlsPerSerpQuery`
+  - maximum number of unique URLs processed from a SERP query
+
+These settings are live-readable through `IOptionsMonitor` and are exposed in the Web UI settings dialog.
+
+In the current `Deploy/single-host` deployment, this section is not overridden by environment variables, so UI changes remain effective.
 
 ### `LearningSimilarityOptions`
 
-The code binds this section with startup validation.
-
-Current implementation:
-
 ```json
 "LearningSimilarityOptions": {
-  "MinImportance": 0.4,
-  "MinLocalFractionForNoGlobal": 0.75,
+  "MinImportance": 0.65,
   "DiversityMaxPerUrl": 3,
-  "DiversityMaxTextSimilarity": 0.85
+  "DiversityMaxTextSimilarity": 0.85,
+  "MaxLearningsPerSegment": 20,
+  "MinLearningsPerSegment": 5,
+  "GroupAssignSimilarityThreshold": 0.93,
+  "GroupSearchTopK": 5,
+  "MaxEvidenceLength": 20000
 }
 ```
+
+This section is validated on startup and also validated by the runtime settings endpoint.
+
+Current validation:
+
+- `MinImportance`: `0.0..1.0`
+- `DiversityMaxPerUrl`: `1..1000`
+- `DiversityMaxTextSimilarity`: `0.0..1.0`
+- `MaxLearningsPerSegment`: `1..1000`
+- `MinLearningsPerSegment`: `1..1000`
+- `GroupAssignSimilarityThreshold`: `0.0..1.0`
+- `GroupSearchTopK`: `1..50`
+- `MaxEvidenceLength`: `1..1_000_000`
+- cross-property rule: `MinLearningsPerSegment <= MaxLearningsPerSegment`
+
+Meaning:
 
 - `MinImportance`
-  - minimum learning importance score considered during synthesis retrieval
-- `MinLocalFractionForNoGlobal`
-  - present in code and validated, but not currently used by retrieval logic
+  - minimum importance score used when searching for similar learnings
 - `DiversityMaxPerUrl`
-  - limits how many learnings from the same source URL survive the diversity filter
+  - maximum number of returned learnings from the same source URL
 - `DiversityMaxTextSimilarity`
-  - suppresses near-duplicate learning texts during synthesis retrieval
+  - maximum allowed Jaccard similarity between learning texts during diversity filtering
+- `MaxLearningsPerSegment`
+  - upper bound for learnings extracted from a content segment
+- `MinLearningsPerSegment`
+  - lower bound for learnings extracted from a content segment
+- `GroupAssignSimilarityThreshold`
+  - minimum cosine similarity required to auto-assign a learning to an existing group
+- `GroupSearchTopK`
+  - number of nearest learning groups inspected during grouping
+- `MaxEvidenceLength`
+  - maximum stored evidence length in characters
 
-Important mismatch in the current sample config:
+These settings are live-readable through `IOptionsMonitor` and are exposed in the Web UI settings dialog.
 
-- `ResearchEngine.API/appsettings.json` currently contains:
+In the current `Deploy/single-host` deployment, this section is not overridden by environment variables, so UI changes remain effective.
 
-```json
-"LearningSimilarityOptions": {
-  "LocalMinImportance": 0.4,
-  "GlobalMinImportance": 0.65,
-  "MinLocalFractionForNoGlobal": 0.75,
-  "DiversityMaxPerUrl": 3,
-  "DiversityMaxTextSimilarity": 0.85
-}
-```
-
-- but the code only consumes `MinImportance`
-- `LocalMinImportance` and `GlobalMinImportance` are not read by the current implementation
-
-For actual runtime behavior, document and set `MinImportance`.
-
-### `BearerAuthenticationOptions`
+### `AuthenticationOptions`
 
 ```json
-"BearerAuthenticationOptions": {
+"AuthenticationOptions": {
   "Enabled": true,
-  "BearerTokens": [
-    "token-1"
+  "ApiKeys": [
+    "api-key-1"
   ]
 }
 ```
 
 - `Enabled`
-  - when `false`, the custom bearer handler returns `NoResult` and protected endpoints effectively stop requiring a token
-- `BearerTokens`
-  - allowed bearer tokens for API access
+  - when `false`, the API key authentication handler returns `NoResult`
+- `ApiKeys`
+  - allowed API keys for API access
 
-Usage:
+Notes:
 
-- most `/api/*` and `/api/protocol/*` endpoints require authorization
-- the SSE events stream endpoint is anonymous, but it uses a ticket flow managed by the API
+- most `/api/*` endpoints require authorization
+- the anonymous SSE stream still depends on the ticket flow created by the API
+- API keys should be supplied through secrets or environment variables, not committed JSON
+- requests still use the standard `Authorization: Bearer <api-key>` header format
 
-Container note:
+Single-host deployment example:
 
-- the Web UI container copies `BearerAuthenticationOptions__BearerTokens__0` into its browser config as the default bearer token
-
-Recommendation:
-
-- do not store real bearer tokens in source-controlled JSON files
-- prefer environment variables or secrets
+```yaml
+env:
+  - name: AuthenticationOptions__Enabled
+    value: "true"
+  - name: AuthenticationOptions__ApiKeys__0
+    valueFrom:
+      secretKeyRef:
+        name: research-single-host-secrets
+        key: AuthenticationOptions__ApiKeys__0
+```
 
 ### `RedisEventBusOptions`
 
@@ -249,17 +353,29 @@ Recommendation:
 }
 ```
 
-- `ConnectionString` is required and validated on startup
+This section is validated on startup.
+
+Current validation:
+
+- `ConnectionString` is required
 
 Usage:
 
-- Redis pub/sub event bus
+- research event bus
 - Redis health check
-- distributed cache used by IP rate limiting when rate limiting is enabled
+- distributed cache for IP rate limiting when enabled
+
+Single-host deployment example:
+
+```yaml
+env:
+  - name: RedisEventBusOptions__ConnectionString
+    value: "127.0.0.1:6379"
+```
 
 ### `Hangfire`
 
-This section is not present in the sample `appsettings.json`, but it is used by code.
+This section is optional and is not present in the sample `appsettings.json`, but the code supports it.
 
 Supported keys:
 
@@ -273,15 +389,12 @@ Supported keys:
 
 - `EnableServer`
   - default `true`
-  - when `false`, the API runs without starting Hangfire workers
 - `WorkerCount`
   - default `2`
-  - controls Hangfire server worker count
 - `QueuePollMs`
-  - optional
-  - sets the PostgreSQL Hangfire queue polling interval in milliseconds
+  - optional queue polling interval in milliseconds
 
-Queues used by the app:
+Queues used by the application:
 
 - `jobs`
 - `synthesis`
@@ -296,9 +409,9 @@ Queues used by the app:
 }
 ```
 
-- `AllowedOrigins` defines the origins allowed by the `WebUIDev` CORS policy
+`AllowedOrigins` defines the `WebUIDev` CORS policy.
 
-If this section is missing or empty, the API falls back to these defaults:
+If the section is missing or empty, the API falls back to these built-in defaults:
 
 - `http://localhost:5170`
 - `http://127.0.0.1:5170`
@@ -306,6 +419,18 @@ If this section is missing or empty, the API falls back to these defaults:
 - `http://127.0.0.1:5173`
 - `https://localhost:5001`
 - `http://localhost:5000`
+
+Single-host deployment example:
+
+```yaml
+env:
+  - name: Cors__AllowedOrigins__0
+    value: "http://localhost:8080"
+  - name: Cors__AllowedOrigins__1
+    value: "http://127.0.0.1:8080"
+  - name: Cors__AllowedOrigins__2
+    value: "https://research-webui.llm.local:8443"
+```
 
 ### `IpRateLimiting`
 
@@ -341,53 +466,122 @@ Related section:
 
 Notes:
 
-- counters and policies are stored in Redis
-- when enabled, the app trusts forwarded headers and reads `X-Forwarded-For`
+- Redis stores counters and policies
+- when rate limiting is enabled, forwarded headers are trusted and `X-Forwarded-For` is used
 
 ### `Serilog`
 
-Logging is configured from the `Serilog` section.
+Logging is configured through the `Serilog` section.
 
-The sample config writes logs to:
+The current sample configuration writes logs to:
 
 - console
 - `logs/app.log` with hourly rolling files
 
-You can change sink configuration, log levels, and retention entirely through the `Serilog` section.
+## API Runtime Settings Endpoint
+
+The API exposes a runtime settings endpoint:
+
+- `GET /api/settings/runtime`
+- `PUT /api/settings/runtime`
+
+It currently supports:
+
+- `ResearchOrchestratorConfig`
+- `LearningSimilarityOptions`
+- read-only model information from `ChatConfig` and `EmbeddingConfig`
+
+Behavior:
+
+- `PUT` writes the updated values to `ResearchEngine.API/appsettings.json`
+- the API reloads configuration immediately after writing
+- live consumers that use `IOptionsMonitor` pick up the new values
+
+Current live-update behavior:
+
+- `ResearchOrchestratorConfig`: live
+- `LearningSimilarityOptions`: live
+- `ChatConfig`: displayed, not updated by the endpoint
+- `EmbeddingConfig`: displayed, not updated by the endpoint
+
+Important:
+
+- environment-variable overrides still win over values written to `appsettings.json`
 
 ## Web UI Configuration
 
-### `ApiBaseUrl`
+### Startup Defaults
+
+The Web UI default config file is:
 
 ```json
-"ApiBaseUrl": "http://localhost:8090"
-```
-
-- base URL used by the browser app for API requests
-- must be an absolute `http` or `https` URL
-- trailing slashes are normalized automatically
-
-Fallback:
-
-- if no valid value is present, the Web UI falls back to `http://localhost:8090`
-
-### `ApiAuth`
-
-```json
-"ApiAuth": {
-  "BearerToken": ""
+{
+  "ApiBaseUrl": "http://localhost:8090",
+  "ApiAuth": {
+    "ApiKey": ""
+  }
 }
 ```
 
-- initial bearer token used by the browser app
-- this is only the default value; the UI lets the user change API URL, enable/disable auth, and update the token at runtime
+- `ApiBaseUrl`
+  - default API base URL for browser requests
+- `ApiAuth:ApiKey`
+  - default API key
 
-Container behavior:
+### Browser-Saved Settings
 
-- `API_BASE_URL` becomes `ApiBaseUrl`
-- `BearerAuthenticationOptions__BearerTokens__0` becomes `ApiAuth:BearerToken`
+The Web UI settings dialog allows the user to change:
 
-## Recommended Secret Handling
+- API base URL
+- API auth enabled/disabled
+- API key
+
+Those values are stored in browser local storage and override the startup defaults for that user.
+
+The same dialog also loads and updates the API runtime settings described above.
+
+### Web UI Container Mapping
+
+In the single-host deployment, the Web UI container receives:
+
+```yaml
+env:
+  - name: API_BASE_URL
+    value: "http://localhost:8080"
+  - name: AuthenticationOptions__ApiKeys__0
+    valueFrom:
+      secretKeyRef:
+        name: research-single-host-secrets
+        key: AuthenticationOptions__ApiKeys__0
+```
+
+`entrypoint.sh` maps those to:
+
+- `API_BASE_URL` -> `ApiBaseUrl`
+- `AuthenticationOptions__ApiKeys__0` -> `ApiAuth:ApiKey`
+
+These are only startup defaults. The browser can still override them later.
+
+## Single-Host Deployment Summary
+
+The current `Deploy/single-host` manifests configure these important runtime values through environment variables:
+
+- database connection strings
+- Firecrawl base URL and API key
+- chat endpoint, model id, and API key
+- embedding endpoint, model id, dimension, and API key
+- Redis connection string
+- API key auth enabled flag and API key
+- Web UI default API URL
+
+The same manifests currently do not override:
+
+- `ResearchOrchestratorConfig`
+- `LearningSimilarityOptions`
+
+That is why the Web UI runtime settings editor can change those two groups successfully in the deployed single-host setup.
+
+## Secrets
 
 Treat these values as secrets and inject them outside source control:
 
@@ -396,11 +590,13 @@ Treat these values as secrets and inject them outside source control:
 - `FirecrawlOptions__ApiKey`
 - `ChatConfig__ApiKey`
 - `EmbeddingConfig__ApiKey`
-- `BearerAuthenticationOptions__BearerTokens__*`
+- `AuthenticationOptions__ApiKeys__*`
 
-## Minimal API Example
+The single-host example stores them in `Deploy/single-host/00-common.yaml` as a Kubernetes-style `Secret` manifest for local deployment.
 
-This is a minimal environment-variable configuration for a local run:
+## Minimal Environment Variable Example
+
+API example:
 
 ```text
 ConnectionStrings__ResearchDb=Host=localhost;Port=5432;Database=research;Username=app;Password=secret
@@ -411,36 +607,38 @@ FirecrawlOptions__HttpClientTimeoutSeconds=600
 ChatConfig__Endpoint=http://localhost:8000/v1
 ChatConfig__ApiKey=your-chat-key
 ChatConfig__ModelId=your-chat-model
-EmbeddingConfig__Endpoint=http://localhost:8001/v1
+EmbeddingConfig__Endpoint=http://localhost:11434/v1
 EmbeddingConfig__ApiKey=your-embedding-key
 EmbeddingConfig__ModelId=your-embedding-model
 EmbeddingConfig__Dimension=1024
 ResearchOrchestratorConfig__LimitSearches=5
 ResearchOrchestratorConfig__MaxUrlParallelism=1
 ResearchOrchestratorConfig__MaxUrlsPerSerpQuery=20
-LearningSimilarityOptions__MinImportance=0.4
-LearningSimilarityOptions__MinLocalFractionForNoGlobal=0.75
+LearningSimilarityOptions__MinImportance=0.65
 LearningSimilarityOptions__DiversityMaxPerUrl=3
 LearningSimilarityOptions__DiversityMaxTextSimilarity=0.85
+LearningSimilarityOptions__MaxLearningsPerSegment=20
+LearningSimilarityOptions__MinLearningsPerSegment=5
+LearningSimilarityOptions__GroupAssignSimilarityThreshold=0.93
+LearningSimilarityOptions__GroupSearchTopK=5
+LearningSimilarityOptions__MaxEvidenceLength=20000
 RedisEventBusOptions__ConnectionString=localhost:6379
-BearerAuthenticationOptions__Enabled=true
-BearerAuthenticationOptions__BearerTokens__0=replace-with-a-real-token
+AuthenticationOptions__Enabled=true
+AuthenticationOptions__ApiKeys__0=replace-with-a-real-api-key
 Cors__AllowedOrigins__0=http://localhost:5170
 Hangfire__EnableServer=true
 Hangfire__WorkerCount=2
 ```
 
-For the Web UI:
+Web UI example:
 
 ```text
 API_BASE_URL=http://localhost:8090
-BearerAuthenticationOptions__BearerTokens__0=replace-with-a-real-token
+AuthenticationOptions__ApiKeys__0=replace-with-a-real-api-key
 ```
 
-## Known Gaps
+## Notes
 
-These are worth keeping in mind while reviewing the current configuration model:
-
-- `LearningSimilarityOptions` in the sample JSON is partly out of sync with the code
-- `ConnectionStrings__Redis` appears in the deployment manifest, but the current API code uses `RedisEventBusOptions:ConnectionString` instead
-- `ChatConfig` and `EmbeddingConfig` are not validated on startup, so invalid values may fail later when the related service is first used
+- `ChatConfig` and `EmbeddingConfig` are currently runtime-readable but not runtime-editable through the Web UI
+- `ResearchOrchestratorConfig` and `LearningSimilarityOptions` are the only settings groups currently updated by the runtime settings editor
+- the settings dialog reflects the effective API connection selected in the browser, not just the deployment defaults
