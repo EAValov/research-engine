@@ -44,6 +44,63 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
+  /api/settings/runtime:
+    get:
+      tags:
+        - Research API
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RuntimeSettingsResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+    put:
+      tags:
+        - Research API
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateRuntimeSettingsRequest'
+        required: true
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RuntimeSettingsResponse'
+        '400':
+          description: Bad Request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/HttpValidationProblemDetails'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
   /api/jobs:
     get:
       tags:
@@ -1351,6 +1408,38 @@ components:
         createdAt:
           type: string
           format: date-time
+    HttpValidationProblemDetails:
+      type: object
+      properties:
+        type:
+          type:
+            - 'null'
+            - string
+        title:
+          type:
+            - 'null'
+            - string
+        status:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - 'null'
+            - integer
+            - string
+          format: int32
+        detail:
+          type:
+            - 'null'
+            - string
+        instance:
+          type:
+            - 'null'
+            - string
+        errors:
+          type: object
+          additionalProperties:
+            type: array
+            items:
+              type: string
     LatestSynthesisResponse:
       required:
         - jobId
@@ -1462,6 +1551,73 @@ components:
           format: date-time
         text:
           type: string
+    LearningSimilarityOptions:
+      type: object
+      properties:
+        minImportance:
+          maximum: 1
+          minimum: 0
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
+          format: float
+        diversityMaxPerUrl:
+          maximum: 1000
+          minimum: 1
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
+        diversityMaxTextSimilarity:
+          maximum: 1
+          minimum: 0
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
+          format: double
+        maxLearningsPerSegment:
+          maximum: 1000
+          minimum: 1
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
+        minLearningsPerSegment:
+          maximum: 1000
+          minimum: 1
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
+        groupAssignSimilarityThreshold:
+          maximum: 1
+          minimum: 0
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
+          format: float
+        groupSearchTopK:
+          maximum: 50
+          minimum: 1
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
+        maxEvidenceLength:
+          maximum: 1000000
+          minimum: 1
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
     ListLearningsResponse:
       required:
         - jobId
@@ -1728,6 +1884,33 @@ components:
         updatedAt:
           type: string
           format: date-time
+    ResearchOrchestratorConfig:
+      type: object
+      properties:
+        limitSearches:
+          maximum: 1000
+          minimum: 1
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
+        maxUrlParallelism:
+          maximum: 1000
+          minimum: 1
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
+        maxUrlsPerSerpQuery:
+          maximum: 1000
+          minimum: 1
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
     ResolvedLearningGroupDto:
       required:
         - learningId
@@ -1791,6 +1974,29 @@ components:
           format: date-time
         message:
           type: string
+    RuntimeModelInfoDto:
+      required:
+        - chatModelId
+        - embeddingModelId
+      type: object
+      properties:
+        chatModelId:
+          type: string
+        embeddingModelId:
+          type: string
+    RuntimeSettingsResponse:
+      required:
+        - researchOrchestratorConfig
+        - learningSimilarityOptions
+        - models
+      type: object
+      properties:
+        researchOrchestratorConfig:
+          $ref: '#/components/schemas/ResearchOrchestratorConfig'
+        learningSimilarityOptions:
+          $ref: '#/components/schemas/LearningSimilarityOptions'
+        models:
+          $ref: '#/components/schemas/RuntimeModelInfoDto'
     SourceListItemDto:
       required:
         - sourceId
@@ -2050,6 +2256,16 @@ components:
           type:
             - 'null'
             - boolean
+    UpdateRuntimeSettingsRequest:
+      required:
+        - researchOrchestratorConfig
+        - learningSimilarityOptions
+      type: object
+      properties:
+        researchOrchestratorConfig:
+          $ref: '#/components/schemas/ResearchOrchestratorConfig'
+        learningSimilarityOptions:
+          $ref: '#/components/schemas/LearningSimilarityOptions'
     UpsertOverridesResponse:
       required:
         - synthesisId

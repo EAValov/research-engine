@@ -90,8 +90,11 @@ builder.Services.Configure<ChatConfig>(
 builder.Services.Configure<EmbeddingConfig>(
     builder.Configuration.GetSection(nameof(EmbeddingConfig)));
 
-builder.Services.Configure<ResearchOrchestratorConfig>(
-    builder.Configuration.GetSection(nameof(ResearchOrchestratorConfig)));
+builder.Services
+    .AddOptions<ResearchOrchestratorConfig>()
+    .Bind(builder.Configuration.GetSection(nameof(ResearchOrchestratorConfig)))
+    .ValidateDataAnnotations()
+    .ValidateOnStart();
 
 builder.Services
     .AddOptions<LearningSimilarityOptions>()
@@ -198,6 +201,7 @@ builder.Services.AddScoped<ILearningIntelService, LearningIntelService>();
 builder.Services.AddScoped<IQueryPlanningService, QueryPlanningService>();
 builder.Services.AddScoped<IReportSynthesisService, ReportSynthesisService>();
 builder.Services.AddSingleton<IJobSseTicketService, JobSseTicketService>();
+builder.Services.AddSingleton<AppSettingsJsonWriter>();
 
 builder.Services.AddScoped<IResearchJobStore, PostgresResearchJobStore>();
 builder.Services.AddScoped<IResearchJobRepository>(sp => sp.GetRequiredService<IResearchJobStore>());

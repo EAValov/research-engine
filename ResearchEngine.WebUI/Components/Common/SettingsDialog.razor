@@ -1,0 +1,317 @@
+<button type="button"
+        class="settings-toggle"
+        @onclick="OpenSettingsAsync"
+        aria-label="Open settings"
+        title="Open settings">
+    Settings
+</button>
+
+@if (_settingsOpen)
+{
+    <div class="settings-overlay" @onclick="CloseSettings">
+        <section class="settings-dialog"
+                 role="dialog"
+                 aria-modal="true"
+                 aria-labelledby="settingsTitle"
+                 @onclick:stopPropagation="true">
+            <div class="settings-head">
+                <div>
+                    <h2 id="settingsTitle">Settings</h2>
+                    <p class="settings-subtitle">API connection, live search settings, learning similarity, and active model ids.</p>
+                </div>
+                <button type="button" class="close-btn" @onclick="CloseSettings" aria-label="Close settings">×</button>
+            </div>
+
+            <div class="settings-body">
+                <section class="settings-group">
+                    <div class="settings-group-head">
+                        <h3>API</h3>
+                        <p>Connection details stored in this browser session.</p>
+                    </div>
+
+                    <div class="settings-grid">
+                        <label class="settings-field">
+                            <span class="settings-label-row">
+                                <span>API URL</span>
+                                <span class="settings-help" title="Absolute base URL for API requests.">Base API address</span>
+                            </span>
+                            <input class="@GetInputClass("Api.BaseUrl")"
+                                   value="@_draftApiBaseUrl"
+                                   @oninput="OnApiBaseUrlChanged"
+                                   placeholder="https://api.example.com" />
+                            @if (TryGetFieldError("Api.BaseUrl", out var apiUrlError))
+                            {
+                                <span class="settings-field-error">@apiUrlError</span>
+                            }
+                        </label>
+
+                        <label class="settings-switch">
+                            <input type="checkbox"
+                                   checked="@_draftApiAuthEnabled"
+                                   @onchange="OnApiAuthChanged" />
+                            <span title="Include the bearer token on API requests.">API Auth</span>
+                        </label>
+
+                        <label class="settings-field settings-field-full">
+                            <span class="settings-label-row">
+                                <span>Bearer token</span>
+                                <span class="settings-help" title="Bearer token used for authenticated API requests.">Authorization token</span>
+                            </span>
+                            <input class="settings-input"
+                                   value="@_draftBearerToken"
+                                   @oninput="OnBearerTokenChanged"
+                                   disabled="@(!_draftApiAuthEnabled)"
+                                   placeholder="Paste token" />
+                        </label>
+                    </div>
+                </section>
+
+                @if (HasPendingApiConnectionChange && _runtimeSettingsLoaded)
+                {
+                    <p class="settings-note">
+                        Search, learning, and model panels currently reflect the active API connection.
+                        Test or apply the drafted API settings to reload them for the new target.
+                    </p>
+                }
+
+                @if (_loadingRuntimeSettings)
+                {
+                    <p class="settings-note">Loading runtime settings from the API...</p>
+                }
+                else if (!_runtimeSettingsLoaded)
+                {
+                    <p class="settings-note">
+                        Search, learning, and model settings load from the active API connection after the API request succeeds.
+                    </p>
+                }
+
+                <section class="settings-group">
+                    <div class="settings-group-head">
+                        <h3>Search</h3>
+                        <p>Controls how many results and URLs each research query processes.</p>
+                    </div>
+
+                    <div class="settings-grid">
+                        <label class="settings-field">
+                            <span class="settings-label-row">
+                                <span>Limit searches</span>
+                                <span class="settings-help" title="Maximum number of search results requested for each SERP query.">Search results per query</span>
+                            </span>
+                            <input type="number" min="1" max="1000"
+                                   class="@GetInputClass("ResearchOrchestratorConfig.LimitSearches")"
+                                   @bind="_draftResearchOptions.LimitSearches"
+                                   disabled="@IsRuntimeSettingsDisabled" />
+                            @if (TryGetFieldError("ResearchOrchestratorConfig.LimitSearches", out var limitSearchesError))
+                            {
+                                <span class="settings-field-error">@limitSearchesError</span>
+                            }
+                        </label>
+
+                        <label class="settings-field">
+                            <span class="settings-label-row">
+                                <span>Max URL parallelism</span>
+                                <span class="settings-help" title="Maximum number of source URLs processed in parallel for one SERP query.">Concurrent URL fetches</span>
+                            </span>
+                            <input type="number" min="1" max="1000"
+                                   class="@GetInputClass("ResearchOrchestratorConfig.MaxUrlParallelism")"
+                                   @bind="_draftResearchOptions.MaxUrlParallelism"
+                                   disabled="@IsRuntimeSettingsDisabled" />
+                            @if (TryGetFieldError("ResearchOrchestratorConfig.MaxUrlParallelism", out var parallelismError))
+                            {
+                                <span class="settings-field-error">@parallelismError</span>
+                            }
+                        </label>
+
+                        <label class="settings-field">
+                            <span class="settings-label-row">
+                                <span>Max URLs per query</span>
+                                <span class="settings-help" title="Maximum number of unique URLs processed from a SERP query.">Unique URLs per query</span>
+                            </span>
+                            <input type="number" min="1" max="1000"
+                                   class="@GetInputClass("ResearchOrchestratorConfig.MaxUrlsPerSerpQuery")"
+                                   @bind="_draftResearchOptions.MaxUrlsPerSerpQuery"
+                                   disabled="@IsRuntimeSettingsDisabled" />
+                            @if (TryGetFieldError("ResearchOrchestratorConfig.MaxUrlsPerSerpQuery", out var maxUrlsError))
+                            {
+                                <span class="settings-field-error">@maxUrlsError</span>
+                            }
+                        </label>
+                    </div>
+                </section>
+
+                <section class="settings-group">
+                    <div class="settings-group-head">
+                        <h3>Learning Similarity</h3>
+                        <p>Controls filtering, grouping, and evidence capture for extracted learnings.</p>
+                    </div>
+
+                    <div class="settings-grid">
+                        <label class="settings-field">
+                            <span class="settings-label-row">
+                                <span>Min importance</span>
+                                <span class="settings-help" title="Minimum importance score required when searching for similar learnings in the current job.">Similarity search floor</span>
+                            </span>
+                            <input type="number" min="0" max="1" step="0.01"
+                                   class="@GetInputClass("LearningSimilarityOptions.MinImportance")"
+                                   @bind="_draftLearningOptions.MinImportance"
+                                   disabled="@IsRuntimeSettingsDisabled" />
+                            @if (TryGetFieldError("LearningSimilarityOptions.MinImportance", out var minImportanceError))
+                            {
+                                <span class="settings-field-error">@minImportanceError</span>
+                            }
+                        </label>
+
+                        <label class="settings-field">
+                            <span class="settings-label-row">
+                                <span>Diversity max per URL</span>
+                                <span class="settings-help" title="Maximum number of returned learnings that may come from the same source URL.">Results per source URL</span>
+                            </span>
+                            <input type="number" min="1" max="1000"
+                                   class="@GetInputClass("LearningSimilarityOptions.DiversityMaxPerUrl")"
+                                   @bind="_draftLearningOptions.DiversityMaxPerUrl"
+                                   disabled="@IsRuntimeSettingsDisabled" />
+                            @if (TryGetFieldError("LearningSimilarityOptions.DiversityMaxPerUrl", out var diversityUrlError))
+                            {
+                                <span class="settings-field-error">@diversityUrlError</span>
+                            }
+                        </label>
+
+                        <label class="settings-field">
+                            <span class="settings-label-row">
+                                <span>Diversity text similarity</span>
+                                <span class="settings-help" title="Maximum allowed Jaccard similarity between learning texts during diversity filtering.">Text overlap ceiling</span>
+                            </span>
+                            <input type="number" min="0" max="1" step="0.01"
+                                   class="@GetInputClass("LearningSimilarityOptions.DiversityMaxTextSimilarity")"
+                                   @bind="_draftLearningOptions.DiversityMaxTextSimilarity"
+                                   disabled="@IsRuntimeSettingsDisabled" />
+                            @if (TryGetFieldError("LearningSimilarityOptions.DiversityMaxTextSimilarity", out var diversityTextError))
+                            {
+                                <span class="settings-field-error">@diversityTextError</span>
+                            }
+                        </label>
+
+                        <label class="settings-field">
+                            <span class="settings-label-row">
+                                <span>Max learnings per segment</span>
+                                <span class="settings-help" title="Upper bound for the number of learnings extracted from a single content segment.">Extraction ceiling per segment</span>
+                            </span>
+                            <input type="number" min="1" max="1000"
+                                   class="@GetInputClass("LearningSimilarityOptions.MaxLearningsPerSegment")"
+                                   @bind="_draftLearningOptions.MaxLearningsPerSegment"
+                                   disabled="@IsRuntimeSettingsDisabled" />
+                            @if (TryGetFieldError("LearningSimilarityOptions.MaxLearningsPerSegment", out var maxSegmentError))
+                            {
+                                <span class="settings-field-error">@maxSegmentError</span>
+                            }
+                        </label>
+
+                        <label class="settings-field">
+                            <span class="settings-label-row">
+                                <span>Min learnings per segment</span>
+                                <span class="settings-help" title="Lower bound for the number of learnings extracted from a single content segment.">Extraction floor per segment</span>
+                            </span>
+                            <input type="number" min="1" max="1000"
+                                   class="@GetInputClass("LearningSimilarityOptions.MinLearningsPerSegment")"
+                                   @bind="_draftLearningOptions.MinLearningsPerSegment"
+                                   disabled="@IsRuntimeSettingsDisabled" />
+                            @if (TryGetFieldError("LearningSimilarityOptions.MinLearningsPerSegment", out var minSegmentError))
+                            {
+                                <span class="settings-field-error">@minSegmentError</span>
+                            }
+                        </label>
+
+                        <label class="settings-field">
+                            <span class="settings-label-row">
+                                <span>Group assign threshold</span>
+                                <span class="settings-help" title="Minimum cosine-similarity score required to auto-assign a learning to an existing group.">Auto-group similarity floor</span>
+                            </span>
+                            <input type="number" min="0" max="1" step="0.01"
+                                   class="@GetInputClass("LearningSimilarityOptions.GroupAssignSimilarityThreshold")"
+                                   @bind="_draftLearningOptions.GroupAssignSimilarityThreshold"
+                                   disabled="@IsRuntimeSettingsDisabled" />
+                            @if (TryGetFieldError("LearningSimilarityOptions.GroupAssignSimilarityThreshold", out var groupThresholdError))
+                            {
+                                <span class="settings-field-error">@groupThresholdError</span>
+                            }
+                        </label>
+
+                        <label class="settings-field">
+                            <span class="settings-label-row">
+                                <span>Group search top K</span>
+                                <span class="settings-help" title="Number of nearest learning groups to inspect when assigning a learning to a group.">Nearest groups to inspect</span>
+                            </span>
+                            <input type="number" min="1" max="50"
+                                   class="@GetInputClass("LearningSimilarityOptions.GroupSearchTopK")"
+                                   @bind="_draftLearningOptions.GroupSearchTopK"
+                                   disabled="@IsRuntimeSettingsDisabled" />
+                            @if (TryGetFieldError("LearningSimilarityOptions.GroupSearchTopK", out var groupTopKError))
+                            {
+                                <span class="settings-field-error">@groupTopKError</span>
+                            }
+                        </label>
+
+                        <label class="settings-field">
+                            <span class="settings-label-row">
+                                <span>Max evidence length</span>
+                                <span class="settings-help" title="Maximum number of characters stored as evidence text for a learning.">Stored evidence length</span>
+                            </span>
+                            <input type="number" min="1" max="1000000"
+                                   class="@GetInputClass("LearningSimilarityOptions.MaxEvidenceLength")"
+                                   @bind="_draftLearningOptions.MaxEvidenceLength"
+                                   disabled="@IsRuntimeSettingsDisabled" />
+                            @if (TryGetFieldError("LearningSimilarityOptions.MaxEvidenceLength", out var maxEvidenceError))
+                            {
+                                <span class="settings-field-error">@maxEvidenceError</span>
+                            }
+                        </label>
+                    </div>
+                </section>
+
+                <section class="settings-group">
+                    <div class="settings-group-head">
+                        <h3>Models</h3>
+                        <p>Read-only model ids currently configured on the connected API.</p>
+                    </div>
+
+                    <div class="settings-models">
+                        <div class="settings-model-card">
+                            <span class="settings-model-label">Chat model</span>
+                            <strong>@DisplayModelValue(_runtimeModels.ChatModelId)</strong>
+                        </div>
+                        <div class="settings-model-card">
+                            <span class="settings-model-label">Embedding model</span>
+                            <strong>@DisplayModelValue(_runtimeModels.EmbeddingModelId)</strong>
+                        </div>
+                    </div>
+                </section>
+
+                @if (!string.IsNullOrWhiteSpace(_settingsSuccess))
+                {
+                    <p class="settings-success">@_settingsSuccess</p>
+                }
+
+                @if (!string.IsNullOrWhiteSpace(_settingsError))
+                {
+                    <p class="settings-error">@_settingsError</p>
+                }
+            </div>
+
+            <div class="settings-actions">
+                <button type="button" class="secondarybtn" @onclick="CloseSettings">Close</button>
+                <button type="button"
+                        class="secondarybtn"
+                        @onclick="TestSettingsAsync"
+                        disabled="@(!CanTestSettings)">
+                    @(_testingSettings ? "Testing..." : "Test API")
+                </button>
+                <button type="button"
+                        class="@ApplyButtonClass"
+                        @onclick="SaveSettingsAsync"
+                        disabled="@(!CanApplySettings)">
+                    @ApplyButtonText
+                </button>
+            </div>
+        </section>
+    </div>
+}

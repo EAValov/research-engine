@@ -8,7 +8,7 @@ using Hangfire.States;
 namespace ResearchEngine.Application;
 
 public sealed class ResearchOrchestrator(
-    IOptions<ResearchOrchestratorConfig> options,
+    IOptionsMonitor<ResearchOrchestratorConfig> options,
     ISearchClient searchClient,
     ICrawlClient crawlClient,
     IResearchJobRepository jobRepository,
@@ -22,9 +22,7 @@ public sealed class ResearchOrchestrator(
     ILogger<ResearchOrchestrator> logger)
     : IResearchOrchestrator
 {
-    private readonly int _limitSearches       = options.Value?.LimitSearches ?? 5;
-    private readonly int _maxUrlParallelism   = options.Value?.MaxUrlParallelism ?? 1;
-    private readonly int _maxUrlsPerSerpQuery = options.Value?.MaxUrlsPerSerpQuery ?? 20;
+    private ResearchOrchestratorConfig CurrentOptions => options.CurrentValue;
 
     /// <summary>
     /// Creates a job row and immediately starts running it in the background.
@@ -184,9 +182,10 @@ public sealed class ResearchOrchestrator(
         ResearchProgressTracker progress,
         CancellationToken ct)
     {
+        var options = CurrentOptions;
         var searchResults = await searchClient.SearchAsync(
             serpQuery,
-            _limitSearches,
+            options.LimitSearches,
             location: job.Region,
             ct: ct);
 
@@ -208,8 +207,8 @@ public sealed class ResearchOrchestrator(
             return;
         }
 
-        if (urls.Count > _maxUrlsPerSerpQuery)
-            urls = urls.Take(_maxUrlsPerSerpQuery).ToList();
+        if (urls.Count > options.MaxUrlsPerSerpQuery)
+            urls = urls.Take(options.MaxUrlsPerSerpQuery).ToList();
 
         progress.UrlsQueued(urls.Count);
 
@@ -218,7 +217,7 @@ public sealed class ResearchOrchestrator(
             $"Starting learning extraction for SERP query '{serpQuery}' ({urls.Count} URLs queued).",
             ct);
 
-        var semaphore = new SemaphoreSlim(_maxUrlParallelism);
+        var semaphore = new SemaphoreSlim(options.MaxUrlParallelism);
 
         var tasks = urls.Select(async url =>
         {

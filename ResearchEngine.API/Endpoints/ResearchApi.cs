@@ -23,6 +23,18 @@ public static partial class ResearchApi
             .ProducesProblem(StatusCodes.Status401Unauthorized)
             .ProducesProblem(StatusCodes.Status403Forbidden);
 
+        api.MapGet("/settings/runtime", GetRuntimeSettings)
+            .Produces<RuntimeSettingsResponse>(StatusCodes.Status200OK)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status403Forbidden);
+
+        api.MapPut("/settings/runtime", UpdateRuntimeSettingsAsync)
+            .Accepts<UpdateRuntimeSettingsRequest>("application/json")
+            .Produces<RuntimeSettingsResponse>(StatusCodes.Status200OK)
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status403Forbidden);
+
         // Jobs
         api.MapGet("/jobs", ListJobsAsync)
             .Produces<ListResearchJobsResponse>(StatusCodes.Status200OK)
