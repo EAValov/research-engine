@@ -24,32 +24,6 @@ public sealed class LearningIntelService(
 {
     private readonly LearningSimilarityOptions _options = similarityOptions.Value;
 
-    private const int MaxLearningsPerSegment = 20;
-    private const int MinLearningsPerSegment = 5;
-
-    // Similarity threshold for *automatic* learning group assignment.
-    //
-    // This value is intentionally high (0.93) to ensure HIGH PRECISION grouping.
-    // At this threshold we only auto-merge near-duplicate learnings:
-    //   - identical or trivially rewritten sentences
-    //   - same claim repeated across multiple sources (SERP duplication)
-    //   - minor re-ordering or formatting changes
-    //
-    // IMPORTANT:
-    // - Semantically related or paraphrased learnings that are not near-duplicates
-    //   are EXPECTED to fall below this threshold and form separate groups.
-    // - This avoids over-merging distinct claims and preserves research nuance,
-    //   since only one representative learning per group is surfaced to synthesis.
-    //
-    // If broader semantic clustering is needed in the future, it should be
-    // implemented as a separate "related groups" or manual merge feature,
-    // NOT by lowering this threshold.
-    private const float GroupAssignSimilarityThreshold = 0.93f;
-    private const int GroupSearchTopK = 5;
-
-    // Evidence safety
-    private const int MaxEvidenceLen = 20_000;
-
     public async Task<IReadOnlyList<Learning>> ExtractAndSaveLearningsAsync(
         Guid jobId,
         Guid sourceId,
@@ -80,8 +54,8 @@ public sealed class LearningIntelService(
 
             var adaptiveMax = Math.Clamp(
                 ComputeAdaptiveMaxLearnings(segment.Length),
-                MinLearningsPerSegment,
-                MaxLearningsPerSegment);
+                _options.MinLearningsPerSegment,
+                _options.MaxLearningsPerSegment);
 
             var prompt = LearningExtractionPromptFactory.Build(
                 query,
@@ -154,7 +128,9 @@ public sealed class LearningIntelService(
                     LearningGroupId = Guid.Empty, // assigned later
                     Text = text,
                     ImportanceScore = it.Importance,
-                    EvidenceText = segment.Length > MaxEvidenceLen ? segment[..MaxEvidenceLen] : segment,
+                    EvidenceText = segment.Length > _options.MaxEvidenceLength
+                        ? segment[.._options.MaxEvidenceLength]
+                        : segment,
                     CreatedAt = now,
                     IsUserProvided = false
                 });
@@ -239,8 +215,8 @@ public sealed class LearningIntelService(
             LearningGroupId = Guid.Empty, // assigned below
             Text = trimmedText,
             ImportanceScore = score,
-            EvidenceText = (evidenceText ?? string.Empty).Length > MaxEvidenceLen
-                ? (evidenceText ?? string.Empty)[..MaxEvidenceLen]
+            EvidenceText = (evidenceText ?? string.Empty).Length > _options.MaxEvidenceLength
+                ? (evidenceText ?? string.Empty)[.._options.MaxEvidenceLength]
                 : (evidenceText ?? string.Empty),
             CreatedAt = now,
             IsUserProvided = true
@@ -346,7 +322,7 @@ public sealed class LearningIntelService(
             var hits = await learningGroupRepository.VectorSearchLearningGroupsWithDistanceAsync(
                 queryVector: l.Embedding.Vector,
                 jobId: jobId,
-                topK: GroupSearchTopK,
+                topK: _options.GroupSearchTopK,
                 ct: ct);
 
             var best = hits.FirstOrDefault();
@@ -354,7 +330,7 @@ public sealed class LearningIntelService(
 
             // logger.LogDebug("Group assign: bestDist={Dist} bestSim={Sim}", best?.CosineDistance, bestSim);
 
-            if (best is not null && bestSim >= GroupAssignSimilarityThreshold)
+            if (best is not null && bestSim >= _options.GroupAssignSimilarityThreshold)
             {
                 l.LearningGroupId = best.Group.Id;
 
@@ -557,12 +533,12 @@ public sealed class LearningIntelService(
         return selected;
     }
 
-    private static int ComputeAdaptiveMaxLearnings(int segmentLengthChars)
+    private int ComputeAdaptiveMaxLearnings(int segmentLengthChars)
     {
         if (segmentLengthChars <= 2000) return 5;
         if (segmentLengthChars <= 6000) return 8;
         if (segmentLengthChars <= 15000) return 12;
-        return MaxLearningsPerSegment;
+        return _options.MaxLearningsPerSegment;
     }
 
     private static (string left, string right) SplitSegmentOnBoundary(string segment)
