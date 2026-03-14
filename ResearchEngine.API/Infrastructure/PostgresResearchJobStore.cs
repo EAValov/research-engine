@@ -1,7 +1,9 @@
 using System.Text;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using Pgvector;
 using Pgvector.EntityFrameworkCore;
+using ResearchEngine.Configuration;
 using ResearchEngine.Domain;
 
 namespace ResearchEngine.Infrastructure;
@@ -9,6 +11,7 @@ namespace ResearchEngine.Infrastructure;
 public sealed partial class PostgresResearchJobStore(
     IDbContextFactory<ResearchDbContext> dbContextFactory,
     IResearchEventBus eventBus,
+    IOptionsMonitor<LearningSimilarityOptions> similarityOptions,
     ILogger<IResearchJobStore> logger
 ) : IResearchJobStore
 {
@@ -489,6 +492,7 @@ public sealed partial class PostgresResearchJobStore(
         if (list.Count == 0)
             return;
 
+        var maxEvidenceLen = similarityOptions.CurrentValue.MaxEvidenceLength;
         await using var db = await dbContextFactory.CreateDbContextAsync(ct);
 
         var sourceExists = await db.Sources.AnyAsync(s => s.Id == sourceId && s.JobId == jobId, ct);
@@ -496,8 +500,6 @@ public sealed partial class PostgresResearchJobStore(
             throw new InvalidOperationException($"Source {sourceId} does not exist for job {jobId}.");
 
         // Normalize required fields + enforce evidence limit
-        const int maxEvidenceLen = 20_000;
-
         foreach (var l in list)
         {
             // force ownership (avoid accidental mismatch)

@@ -43,7 +43,7 @@ public sealed record LearningSimilarityOptions
     /// <summary>
     /// Number of nearest learning groups to inspect when assigning a learning to a group.
     /// </summary>
-    [Range(1, 1000)]
+    [Range(1, 50)]
     public int GroupSearchTopK { get; init; } = 5;
 
     /// <summary>

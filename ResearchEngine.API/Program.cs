@@ -97,6 +97,9 @@ builder.Services
     .AddOptions<LearningSimilarityOptions>()
     .Bind(builder.Configuration.GetSection(nameof(LearningSimilarityOptions)))
     .ValidateDataAnnotations()
+    .Validate(
+        options => options.MinLearningsPerSegment <= options.MaxLearningsPerSegment,
+        $"{nameof(LearningSimilarityOptions.MinLearningsPerSegment)} must be less than or equal to {nameof(LearningSimilarityOptions.MaxLearningsPerSegment)}.")
     .ValidateOnStart();
 
 // ---------- Validation (Minimal APIs) ----------

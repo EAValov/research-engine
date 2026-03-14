@@ -18,11 +18,11 @@ public sealed class LearningIntelService(
     IResearchLearningRepository learningRepository,
     IResearchLearningGroupRepository learningGroupRepository,
     IResearchSynthesisOverridesRepository synthesisOverridesRepository,
-    IOptions<LearningSimilarityOptions> similarityOptions,
+    IOptionsMonitor<LearningSimilarityOptions> similarityOptions,
     ILogger<LearningIntelService> logger)
     : ILearningIntelService
 {
-    private readonly LearningSimilarityOptions _options = similarityOptions.Value;
+    private LearningSimilarityOptions CurrentOptions => similarityOptions.CurrentValue;
 
     public async Task<IReadOnlyList<Learning>> ExtractAndSaveLearningsAsync(
         Guid jobId,
@@ -38,6 +38,7 @@ public sealed class LearningIntelService(
         if (string.IsNullOrWhiteSpace(sourceContent))
             return Array.Empty<Learning>();
 
+        var options = CurrentOptions;
         var pending = new Queue<string>();
         pending.Enqueue(sourceContent);
 
@@ -54,8 +55,8 @@ public sealed class LearningIntelService(
 
             var adaptiveMax = Math.Clamp(
                 ComputeAdaptiveMaxLearnings(segment.Length),
-                _options.MinLearningsPerSegment,
-                _options.MaxLearningsPerSegment);
+                options.MinLearningsPerSegment,
+                options.MaxLearningsPerSegment);
 
             var prompt = LearningExtractionPromptFactory.Build(
                 query,
@@ -128,8 +129,8 @@ public sealed class LearningIntelService(
                     LearningGroupId = Guid.Empty, // assigned later
                     Text = text,
                     ImportanceScore = it.Importance,
-                    EvidenceText = segment.Length > _options.MaxEvidenceLength
-                        ? segment[.._options.MaxEvidenceLength]
+                    EvidenceText = segment.Length > options.MaxEvidenceLength
+                        ? segment[..options.MaxEvidenceLength]
                         : segment,
                     CreatedAt = now,
                     IsUserProvided = false
@@ -175,6 +176,7 @@ public sealed class LearningIntelService(
         if (string.IsNullOrWhiteSpace(text))
             throw new ArgumentException("Learning text is required.", nameof(text));
 
+        var options = CurrentOptions;
         var trimmedText = text.Trim();
         if (trimmedText.Length == 0)
             throw new ArgumentException("Learning text is required.", nameof(text));
@@ -215,8 +217,8 @@ public sealed class LearningIntelService(
             LearningGroupId = Guid.Empty, // assigned below
             Text = trimmedText,
             ImportanceScore = score,
-            EvidenceText = (evidenceText ?? string.Empty).Length > _options.MaxEvidenceLength
-                ? (evidenceText ?? string.Empty)[.._options.MaxEvidenceLength]
+            EvidenceText = (evidenceText ?? string.Empty).Length > options.MaxEvidenceLength
+                ? (evidenceText ?? string.Empty)[..options.MaxEvidenceLength]
                 : (evidenceText ?? string.Empty),
             CreatedAt = now,
             IsUserProvided = true
@@ -311,6 +313,8 @@ public sealed class LearningIntelService(
     /// </summary>
     private async Task AssignGroupsAsync(Guid jobId, IList<Learning> learnings, CancellationToken ct)
     {
+        var options = CurrentOptions;
+
         foreach (var l in learnings)
         {
             ct.ThrowIfCancellationRequested();
@@ -322,7 +326,7 @@ public sealed class LearningIntelService(
             var hits = await learningGroupRepository.VectorSearchLearningGroupsWithDistanceAsync(
                 queryVector: l.Embedding.Vector,
                 jobId: jobId,
-                topK: _options.GroupSearchTopK,
+                topK: options.GroupSearchTopK,
                 ct: ct);
 
             var best = hits.FirstOrDefault();
@@ -330,7 +334,7 @@ public sealed class LearningIntelService(
 
             // logger.LogDebug("Group assign: bestDist={Dist} bestSim={Sim}", best?.CosineDistance, bestSim);
 
-            if (best is not null && bestSim >= _options.GroupAssignSimilarityThreshold)
+            if (best is not null && bestSim >= options.GroupAssignSimilarityThreshold)
             {
                 l.LearningGroupId = best.Group.Id;
 
@@ -405,7 +409,7 @@ public sealed class LearningIntelService(
         var queryVector = new Pgvector.Vector(emb.Vector);
 
         var maxK = Math.Clamp(topK, 1, 200);
-        var localMinImportance = _options.MinImportance;
+        var localMinImportance = CurrentOptions.MinImportance;
 
         // Load overrides once
         var snapshot = await synthesisOverridesRepository.GetSynthesisOverridesAsync(synthesisId, ct);
@@ -499,8 +503,9 @@ public sealed class LearningIntelService(
         if (orderedCandidates.Count == 0)
             return orderedCandidates;
 
-        var maxPerRef = _options.DiversityMaxPerUrl; // keep option name for now
-        var maxTextSimilarity = _options.DiversityMaxTextSimilarity;
+        var options = CurrentOptions;
+        var maxPerRef = options.DiversityMaxPerUrl; // keep option name for now
+        var maxTextSimilarity = options.DiversityMaxTextSimilarity;
 
         var selected = new List<Learning>(capacity: topK);
         var perRef = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
@@ -538,7 +543,7 @@ public sealed class LearningIntelService(
         if (segmentLengthChars <= 2000) return 5;
         if (segmentLengthChars <= 6000) return 8;
         if (segmentLengthChars <= 15000) return 12;
-        return _options.MaxLearningsPerSegment;
+        return CurrentOptions.MaxLearningsPerSegment;
     }
 
     private static (string left, string right) SplitSegmentOnBoundary(string segment)
