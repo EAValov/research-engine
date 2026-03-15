@@ -6,5 +6,6 @@ namespace ResearchEngine.API;
 public sealed record UpdateRuntimeSettingsRequest(
     [Required] ResearchOrchestratorConfig ResearchOrchestratorConfig,
     [Required] LearningSimilarityOptions LearningSimilarityOptions,
-    [Required] UpdateChatConfigRequest ChatConfig
+    [Required] UpdateChatConfigRequest ChatConfig,
+    [Required] UpdateCrawlConfigRequest CrawlConfig
 );

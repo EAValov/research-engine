@@ -10,6 +10,13 @@ namespace ResearchEngine.WebUI.Components.Common;
 
 public partial class SettingsDialog : ComponentBase
 {
+    private enum ApiTestStatus
+    {
+        None,
+        Success,
+        Failure
+    }
+
     private sealed record RuntimeSettingsCallResult(
         RuntimeSettingsResponseModel? Data,
         string? Error = null,
@@ -17,6 +24,11 @@ public partial class SettingsDialog : ComponentBase
 
     private sealed record ChatModelCatalogCallResult(
         ChatModelCatalogResponseModel? Data,
+        string? Error = null,
+        Dictionary<string, string>? FieldErrors = null);
+
+    private sealed record CrawlApiProbeCallResult(
+        bool Success,
         string? Error = null,
         Dictionary<string, string>? FieldErrors = null);
 
@@ -30,7 +42,9 @@ public partial class SettingsDialog : ComponentBase
 
     private bool _settingsOpen;
     private bool _savingSettings;
-    private bool _testingSettings;
+    private bool _testingApiConnection;
+    private bool _testingChatApi;
+    private bool _testingCrawlApi;
     private bool _loadingRuntimeSettings;
     private bool _runtimeSettingsLoaded;
     private bool _applyCompleted;
@@ -41,25 +55,53 @@ public partial class SettingsDialog : ComponentBase
     private ResearchOrchestratorConfigModel _draftResearchOptions = new();
     private LearningSimilarityOptionsModel _draftLearningOptions = new();
     private RuntimeChatConfigModel _draftChatConfig = new();
+    private RuntimeCrawlConfigModel _draftCrawlConfig = new();
     private string _draftChatApiKey = string.Empty;
+    private string _draftCrawlApiKey = string.Empty;
+    private bool _draftChatAuthEnabled = true;
+    private bool _draftCrawlAuthEnabled = true;
     private readonly List<string> _chatModelOptions = new();
     private ResearchOrchestratorConfigModel _baselineResearchOptions = new();
     private LearningSimilarityOptionsModel _baselineLearningOptions = new();
     private RuntimeChatConfigModel _baselineChatConfig = new();
+    private RuntimeCrawlConfigModel _baselineCrawlConfig = new();
     private readonly Dictionary<string, string> _fieldErrors = new(StringComparer.Ordinal);
-    private CancellationTokenSource? _chatModelLoadCts;
     private bool _loadingChatModelOptions;
     private string? _chatModelOptionsError;
     private string? _settingsError;
     private string? _settingsSuccess;
+    private ApiTestStatus _apiConnectionTestStatus;
+    private ApiTestStatus _chatApiTestStatus;
+    private ApiTestStatus _crawlApiTestStatus;
+    private string? _apiConnectionTestMessage;
+    private string? _chatApiTestMessage;
+    private string? _crawlApiTestMessage;
     private string _baselineApiBaseUrl = string.Empty;
     private string _baselineApiKey = string.Empty;
     private bool _baselineApiAuthEnabled;
 
-    private bool CanTestSettings =>
+    private bool IsAnyTesting => _testingApiConnection || _testingChatApi || _testingCrawlApi;
+
+    private bool CanTestApiConnection =>
         ApiConnectionSettings.NormalizeBaseUrl(_draftApiBaseUrl) is not null
-        && !_testingSettings
+        && !_testingApiConnection
         && !_savingSettings;
+
+    private bool CanTestChatApi =>
+        _runtimeSettingsLoaded
+        && ApiConnectionSettings.NormalizeBaseUrl(_draftChatConfig.Endpoint) is not null
+        && !_testingChatApi
+        && !_savingSettings;
+
+    private bool CanTestCrawlApi =>
+        _runtimeSettingsLoaded
+        && ApiConnectionSettings.NormalizeBaseUrl(_draftCrawlConfig.Endpoint) is not null
+        && !_testingCrawlApi
+        && !_savingSettings;
+
+    private bool HasApiConnectionTestFeedback => _apiConnectionTestStatus != ApiTestStatus.None;
+    private bool HasChatApiTestFeedback => _chatApiTestStatus != ApiTestStatus.None;
+    private bool HasCrawlApiTestFeedback => _crawlApiTestStatus != ApiTestStatus.None;
 
     private bool IsRuntimeSettingsDisabled => !_runtimeSettingsLoaded || _loadingRuntimeSettings || _savingSettings;
     private bool IsChatModelSelectionDisabled => IsRuntimeSettingsDisabled || (_loadingChatModelOptions && ChatModelDropdownOptions.Count == 0);
@@ -78,13 +120,15 @@ public partial class SettingsDialog : ComponentBase
         && (!ResearchOptionsEqual(_draftResearchOptions, _baselineResearchOptions)
             || !LearningOptionsEqual(_draftLearningOptions, _baselineLearningOptions)
             || !ChatConfigEqual(_draftChatConfig, _baselineChatConfig)
-            || !string.IsNullOrWhiteSpace(_draftChatApiKey));
+            || !CrawlConfigEqual(_draftCrawlConfig, _baselineCrawlConfig)
+            || !string.IsNullOrWhiteSpace(_draftChatApiKey)
+            || !string.IsNullOrWhiteSpace(_draftCrawlApiKey));
 
     private bool HasAnyChanges
         => HasPendingApiConnectionChange || HasRuntimeSettingsChanges;
 
     private bool CanApplySettings
-        => HasAnyChanges && !_savingSettings && !_testingSettings && !_loadingRuntimeSettings;
+        => HasAnyChanges && !_savingSettings && !IsAnyTesting && !_loadingRuntimeSettings;
 
     private string ApplyButtonText
         => _savingSettings
@@ -102,6 +146,7 @@ public partial class SettingsDialog : ComponentBase
         LoadApiDraftFromRuntime();
         CaptureApiBaseline();
         ResetSettingsMessages();
+        ClearAllApiTestFeedback();
         ClearFieldErrors();
         _settingsOpen = true;
         await LoadRuntimeSettingsForDraftConnectionAsync(showFailureMessage: true);
@@ -110,9 +155,9 @@ public partial class SettingsDialog : ComponentBase
     private void CloseSettings()
     {
         ResetAppliedState();
-        CancelPendingChatModelLoad();
         _settingsOpen = false;
         ResetSettingsMessages();
+        ClearAllApiTestFeedback();
         ClearFieldErrors();
     }
 
@@ -161,7 +206,8 @@ public partial class SettingsDialog : ComponentBase
             {
                 ResearchOrchestratorConfig = CloneResearchOptions(_draftResearchOptions),
                 LearningSimilarityOptions = CloneLearningOptions(_draftLearningOptions),
-                ChatConfig = CloneChatConfigForUpdate(_draftChatConfig, _draftChatApiKey)
+                ChatConfig = CloneChatConfigForUpdate(_draftChatConfig, _draftChatApiKey, _draftChatAuthEnabled),
+                CrawlConfig = CloneCrawlConfigForUpdate(_draftCrawlConfig, _draftCrawlApiKey, _draftCrawlAuthEnabled)
             };
 
             var saveResult = await UpdateRuntimeSettingsDirectAsync(
@@ -188,7 +234,6 @@ public partial class SettingsDialog : ComponentBase
             if (saveResult.Data is not null)
             {
                 ApplyRuntimeSettings(saveResult.Data);
-                await LoadChatModelOptionsAsync(CancellationToken.None);
             }
 
             _settingsSuccess = null;
@@ -216,6 +261,7 @@ public partial class SettingsDialog : ComponentBase
     {
         _draftApiBaseUrl = e.Value?.ToString() ?? string.Empty;
         ResetSettingsMessages();
+        ClearAllApiTestFeedback();
         _fieldErrors.Remove("Api.BaseUrl");
     }
 
@@ -223,20 +269,23 @@ public partial class SettingsDialog : ComponentBase
     {
         _draftApiKey = e.Value?.ToString() ?? string.Empty;
         ResetSettingsMessages();
+        ClearAllApiTestFeedback();
     }
 
     private void OnApiAuthChanged(ChangeEventArgs e)
     {
         _draftApiAuthEnabled = e.Value is bool value && value;
         ResetSettingsMessages();
+        ClearAllApiTestFeedback();
     }
 
     private void OnChatEndpointChanged(ChangeEventArgs e)
     {
         _draftChatConfig.Endpoint = e.Value?.ToString() ?? string.Empty;
         ResetSettingsMessages();
+        ClearChatApiTestFeedback();
         _fieldErrors.Remove("ChatConfig.Endpoint");
-        QueueChatModelOptionsRefresh();
+        ResetChatModelOptionsState();
     }
 
     private void OnChatModelIdChanged(ChangeEventArgs e)
@@ -250,8 +299,40 @@ public partial class SettingsDialog : ComponentBase
     {
         _draftChatApiKey = e.Value?.ToString() ?? string.Empty;
         ResetSettingsMessages();
+        ClearChatApiTestFeedback();
         _fieldErrors.Remove("ChatConfig.ApiKey");
-        QueueChatModelOptionsRefresh();
+        ResetChatModelOptionsState();
+    }
+
+    private void OnChatAuthChanged(ChangeEventArgs e)
+    {
+        _draftChatAuthEnabled = e.Value is bool value && value;
+        ResetSettingsMessages();
+        ClearChatApiTestFeedback();
+        ResetChatModelOptionsState();
+    }
+
+    private void OnCrawlEndpointChanged(ChangeEventArgs e)
+    {
+        _draftCrawlConfig.Endpoint = e.Value?.ToString() ?? string.Empty;
+        ResetSettingsMessages();
+        ClearCrawlApiTestFeedback();
+        _fieldErrors.Remove("CrawlConfig.Endpoint");
+    }
+
+    private void OnCrawlApiKeyChanged(ChangeEventArgs e)
+    {
+        _draftCrawlApiKey = e.Value?.ToString() ?? string.Empty;
+        ResetSettingsMessages();
+        ClearCrawlApiTestFeedback();
+        _fieldErrors.Remove("CrawlConfig.ApiKey");
+    }
+
+    private void OnCrawlAuthChanged(ChangeEventArgs e)
+    {
+        _draftCrawlAuthEnabled = e.Value is bool value && value;
+        ResetSettingsMessages();
+        ClearCrawlApiTestFeedback();
     }
 
     private void OnChatMaxContextLengthChanged(ChangeEventArgs e)
@@ -270,15 +351,16 @@ public partial class SettingsDialog : ComponentBase
         _fieldErrors.Remove("ChatConfig.MaxContextLength");
     }
 
-    private async Task TestSettingsAsync()
+    private async Task TestApiConnectionAsync()
     {
         ResetSettingsMessages();
+        ClearApiConnectionTestFeedback();
         ClearFieldErrors();
         ValidateApiDraft();
 
         if (_fieldErrors.Count > 0)
         {
-            _settingsError = "Review the highlighted settings and try again.";
+            SetApiConnectionTestFeedback(false, "Review the highlighted API settings and try again.");
             return;
         }
 
@@ -286,11 +368,11 @@ public partial class SettingsDialog : ComponentBase
         if (normalizedBaseUrl is null)
         {
             SetFieldError("Api.BaseUrl", "Enter a valid absolute API URL that starts with http:// or https://.");
-            _settingsError = "Review the highlighted settings and try again.";
+            SetApiConnectionTestFeedback(false, "Review the highlighted API settings and try again.");
             return;
         }
 
-        _testingSettings = true;
+        _testingApiConnection = true;
         try
         {
             var probe = await ProbeEndpointDirectAsync(
@@ -302,20 +384,118 @@ public partial class SettingsDialog : ComponentBase
 
             if (probe.Status != HttpStatusCode.OK)
             {
-                _settingsError = probe.Status is { } status
+                SetApiConnectionTestFeedback(false, probe.Status is { } status
                     ? $"API request failed with HTTP {(int)status}."
-                    : "API request failed. Check URL, API key, CORS, and API availability.";
+                    : probe.Error ?? "API request failed. Check URL, API key, CORS, and API availability.");
                 return;
             }
 
             var loaded = await LoadRuntimeSettingsForDraftConnectionAsync(showFailureMessage: true);
-            _settingsSuccess = loaded
-                ? "API request succeeded and runtime settings loaded."
-                : "API request succeeded.";
+            if (!loaded)
+            {
+                var message = _settingsError
+                    ?? "API request succeeded, but runtime settings could not be loaded.";
+                _settingsError = null;
+                SetApiConnectionTestFeedback(false, message);
+                return;
+            }
+
+            SetApiConnectionTestFeedback(true, "ResearchEngine API request succeeded and runtime settings loaded.");
         }
         finally
         {
-            _testingSettings = false;
+            _testingApiConnection = false;
+        }
+    }
+
+    private async Task TestChatApiAsync()
+    {
+        ResetSettingsMessages();
+        ClearChatApiTestFeedback();
+        _fieldErrors.Remove("ChatConfig.Endpoint");
+        _fieldErrors.Remove("ChatConfig.ApiKey");
+
+        ValidateApiDraft();
+        if (_fieldErrors.Count > 0)
+        {
+            SetChatApiTestFeedback(false, "Review the highlighted API settings and try again.");
+            return;
+        }
+
+        if (ApiConnectionSettings.NormalizeBaseUrl(_draftChatConfig.Endpoint) is null)
+        {
+            SetFieldError("ChatConfig.Endpoint", "Enter a valid absolute URL that starts with http:// or https://.");
+            SetChatApiTestFeedback(false, "Review the highlighted chat settings and try again.");
+            return;
+        }
+
+        _testingChatApi = true;
+        try
+        {
+            var result = await LoadChatModelOptionsAsync(CancellationToken.None);
+            if (!result)
+            {
+                SetChatApiTestFeedback(false, _chatModelOptionsError ?? "Chat LLM API test failed.");
+                return;
+            }
+
+            SetChatApiTestFeedback(true, "Chat LLM API test succeeded.");
+        }
+        finally
+        {
+            _testingChatApi = false;
+        }
+    }
+
+    private async Task TestCrawlApiAsync()
+    {
+        ResetSettingsMessages();
+        ClearCrawlApiTestFeedback();
+        _fieldErrors.Remove("CrawlConfig.Endpoint");
+        _fieldErrors.Remove("CrawlConfig.ApiKey");
+
+        ValidateApiDraft();
+        if (_fieldErrors.Count > 0)
+        {
+            SetCrawlApiTestFeedback(false, "Review the highlighted API settings and try again.");
+            return;
+        }
+
+        var normalizedEndpoint = ApiConnectionSettings.NormalizeBaseUrl(_draftCrawlConfig.Endpoint);
+        if (normalizedEndpoint is null)
+        {
+            SetFieldError("CrawlConfig.Endpoint", "Enter a valid absolute URL that starts with http:// or https://.");
+            SetCrawlApiTestFeedback(false, "Review the highlighted crawl settings and try again.");
+            return;
+        }
+
+        _testingCrawlApi = true;
+        try
+        {
+            var result = await ProbeCrawlApiDirectAsync(
+                _draftApiBaseUrl,
+                _draftApiAuthEnabled,
+                _draftApiKey,
+                new CrawlApiProbeRequestModel
+                {
+                    Endpoint = normalizedEndpoint,
+                    ApiKey = _draftCrawlAuthEnabled ? _draftCrawlApiKey : string.Empty,
+                    UseStoredApiKey = _draftCrawlAuthEnabled && string.IsNullOrWhiteSpace(_draftCrawlApiKey)
+                },
+                CancellationToken.None);
+
+            if (!result.Success)
+            {
+                ApplyServerValidationErrors(NormalizeCrawlProbeFieldErrors(result.FieldErrors));
+                SetCrawlApiTestFeedback(false, result.Error ?? "Crawl API test failed.");
+                return;
+            }
+
+            SetCrawlApiTestFeedback(true, "Crawl API test succeeded.");
+        }
+        finally
+        {
+            _testingCrawlApi = false;
         }
     }
 
@@ -333,7 +513,6 @@ public partial class SettingsDialog : ComponentBase
             if (result.Data is not null)
             {
                 ApplyRuntimeSettings(result.Data);
-                await LoadChatModelOptionsAsync(CancellationToken.None);
                 return true;
             }
 
@@ -357,12 +536,19 @@ public partial class SettingsDialog : ComponentBase
         _draftResearchOptions = CloneResearchOptions(response.ResearchOrchestratorConfig);
         _draftLearningOptions = CloneLearningOptions(response.LearningSimilarityOptions);
         _draftChatConfig = CloneRuntimeChatConfig(response.ChatConfig);
+        _draftCrawlConfig = CloneRuntimeCrawlConfig(response.CrawlConfig);
         _draftChatApiKey = string.Empty;
+        _draftCrawlApiKey = string.Empty;
+        _draftChatAuthEnabled = response.ChatConfig.HasApiKey;
+        _draftCrawlAuthEnabled = response.CrawlConfig.HasApiKey;
         _baselineResearchOptions = CloneResearchOptions(response.ResearchOrchestratorConfig);
         _baselineLearningOptions = CloneLearningOptions(response.LearningSimilarityOptions);
         _baselineChatConfig = CloneRuntimeChatConfig(response.ChatConfig);
+        _baselineCrawlConfig = CloneRuntimeCrawlConfig(response.CrawlConfig);
         _runtimeSettingsLoaded = true;
-        _chatModelOptionsError = null;
+        ResetChatModelOptionsState();
+        ClearChatApiTestFeedback();
+        ClearCrawlApiTestFeedback();
     }
 
     private void ValidateApiDraft()
@@ -398,8 +584,11 @@ public partial class SettingsDialog : ComponentBase
             SetFieldError("ChatConfig.MaxContextLength", "Value must be at least 10000.");
         }
 
-        if (!_draftChatConfig.HasApiKey && string.IsNullOrWhiteSpace(_draftChatApiKey))
+        if (_draftChatAuthEnabled && !_draftChatConfig.HasApiKey && string.IsNullOrWhiteSpace(_draftChatApiKey))
             SetFieldError("ChatConfig.ApiKey", "Enter the chat backend API key.");
+
+        if (ApiConnectionSettings.NormalizeBaseUrl(_draftCrawlConfig.Endpoint) is null)
+            SetFieldError("CrawlConfig.Endpoint", "Enter a valid absolute URL that starts with http:// or https://.");
 
         if (_draftLearningOptions.MinLearningsPerSegment > _draftLearningOptions.MaxLearningsPerSegment)
         {
@@ -439,6 +628,32 @@ public partial class SettingsDialog : ComponentBase
 
         foreach (var pair in serverErrors)
             _fieldErrors[pair.Key] = pair.Value;
+    }
+
+    private static Dictionary<string, string>? NormalizeCrawlProbeFieldErrors(Dictionary<string, string>? serverErrors)
+    {
+        if (serverErrors is null || serverErrors.Count == 0)
+            return serverErrors;
+
+        var mapped = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var (key, value) in serverErrors)
+        {
+            if (key.EndsWith(".Endpoint", StringComparison.Ordinal) || string.Equals(key, "Endpoint", StringComparison.Ordinal))
+            {
+                mapped["CrawlConfig.Endpoint"] = value;
+                continue;
+            }
+
+            if (key.EndsWith(".ApiKey", StringComparison.Ordinal) || string.Equals(key, "ApiKey", StringComparison.Ordinal))
+            {
+                mapped["CrawlConfig.ApiKey"] = value;
+                continue;
+            }
+
+            mapped[key] = value;
+        }
+
+        return mapped;
     }
 
     private bool TryGetFieldError(string key, out string message)
@@ -511,6 +726,12 @@ public partial class SettingsDialog : ComponentBase
         => string.Equals(left.Endpoint, right.Endpoint, StringComparison.Ordinal)
             && string.Equals(left.ModelId, right.ModelId, StringComparison.Ordinal)
             && left.MaxContextLength == right.MaxContextLength
+            && left.HasApiKey == right.HasApiKey;
+
+    private static bool CrawlConfigEqual(
+        RuntimeCrawlConfigModel left,
+        RuntimeCrawlConfigModel right)
+        => string.Equals(left.Endpoint, right.Endpoint, StringComparison.Ordinal)
             && left.HasApiKey == right.HasApiKey;
 
     private static async Task<(HttpStatusCode? Status, string? Error)> ProbeEndpointDirectAsync(
@@ -678,6 +899,54 @@ public partial class SettingsDialog : ComponentBase
         }
     }
 
+    private static async Task<CrawlApiProbeCallResult> ProbeCrawlApiDirectAsync(
+        string baseUrl,
+        bool authEnabled,
+        string apiKey,
+        CrawlApiProbeRequestModel requestModel,
+        CancellationToken ct)
+    {
+        var normalizedBaseUrl = ApiConnectionSettings.NormalizeBaseUrl(baseUrl);
+        if (normalizedBaseUrl is null)
+            return new CrawlApiProbeCallResult(false, "Enter a valid absolute API URL that starts with http:// or https://.");
+
+        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        linkedCts.CancelAfter(TimeSpan.FromSeconds(8));
+
+        try
+        {
+            using var client = new HttpClient
+            {
+                BaseAddress = new Uri(normalizedBaseUrl, UriKind.Absolute)
+            };
+
+            var json = JsonSerializer.Serialize(requestModel, RuntimeSettingsJsonOptions);
+            using var request = CreateAuthorizedRequest(HttpMethod.Post, "api/settings/runtime/crawl-probe", authEnabled, apiKey);
+            request.Content = new StringContent(json, Encoding.UTF8, "application/json");
+
+            using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, linkedCts.Token);
+            var body = await response.Content.ReadAsStringAsync(linkedCts.Token);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                return new CrawlApiProbeCallResult(
+                    false,
+                    BuildCrawlProbeErrorMessage(response.StatusCode),
+                    ParseValidationErrors(body));
+            }
+
+            return new CrawlApiProbeCallResult(true);
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            return new CrawlApiProbeCallResult(false, "Timed out while testing crawl API.");
+        }
+        catch (HttpRequestException)
+        {
+            return new CrawlApiProbeCallResult(false, "Could not reach the API while testing crawl API.");
+        }
+    }
+
     private static HttpRequestMessage CreateAuthorizedRequest(
         HttpMethod method,
         string relativePath,
@@ -716,6 +985,18 @@ public partial class SettingsDialog : ComponentBase
             HttpStatusCode.NotFound
                 => "This API does not expose chat model lookup.",
             _ => $"Chat model lookup failed with HTTP {(int)statusCode}."
+        };
+
+    private static string BuildCrawlProbeErrorMessage(HttpStatusCode statusCode)
+        => statusCode switch
+        {
+            HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden
+                => "Authentication failed while testing crawl API.",
+            HttpStatusCode.BadRequest or HttpStatusCode.UnprocessableEntity
+                => "The API rejected the crawl API test request.",
+            HttpStatusCode.NotFound
+                => "This API does not expose crawl API testing.",
+            _ => $"Crawl API test failed with HTTP {(int)statusCode}."
         };
 
     private static Dictionary<string, string>? ParseValidationErrors(string? body)
@@ -784,13 +1065,27 @@ public partial class SettingsDialog : ComponentBase
             HasApiKey = source.HasApiKey
         };
 
-    private static UpdateChatConfigModel CloneChatConfigForUpdate(RuntimeChatConfigModel source, string apiKey)
+    private static RuntimeCrawlConfigModel CloneRuntimeCrawlConfig(RuntimeCrawlConfigModel source)
+        => new()
+        {
+            Endpoint = source.Endpoint,
+            HasApiKey = source.HasApiKey
+        };
+
+    private static UpdateChatConfigModel CloneChatConfigForUpdate(RuntimeChatConfigModel source, string apiKey, bool authEnabled)
         => new()
         {
             Endpoint = source.Endpoint,
             ModelId = source.ModelId,
             MaxContextLength = source.MaxContextLength,
-            ApiKey = apiKey
+            ApiKey = authEnabled ? apiKey : string.Empty
+        };
+
+    private static UpdateCrawlConfigModel CloneCrawlConfigForUpdate(RuntimeCrawlConfigModel source, string apiKey, bool authEnabled)
+        => new()
+        {
+            Endpoint = source.Endpoint,
+            ApiKey = authEnabled ? apiKey : string.Empty
         };
 
     private IReadOnlyList<string> BuildChatModelDropdownOptions()
@@ -813,47 +1108,16 @@ public partial class SettingsDialog : ComponentBase
         return values;
     }
 
-    private void QueueChatModelOptionsRefresh()
-    {
-        CancelPendingChatModelLoad();
-
-        if (!_runtimeSettingsLoaded)
-            return;
-
-        if (ApiConnectionSettings.NormalizeBaseUrl(_draftChatConfig.Endpoint) is null)
-        {
-            ResetChatModelOptionsState();
-            return;
-        }
-
-        var cts = new CancellationTokenSource();
-        _chatModelLoadCts = cts;
-        _ = RefreshChatModelOptionsAsync(cts.Token);
-    }
-
-    private async Task RefreshChatModelOptionsAsync(CancellationToken ct)
-    {
-        try
-        {
-            await Task.Delay(TimeSpan.FromMilliseconds(400), ct);
-            await LoadChatModelOptionsAsync(ct);
-        }
-        catch (OperationCanceledException)
-        {
-            // Expected when a newer request supersedes this one.
-        }
-    }
-
-    private async Task LoadChatModelOptionsAsync(CancellationToken ct)
+    private async Task<bool> LoadChatModelOptionsAsync(CancellationToken ct)
     {
         if (!_runtimeSettingsLoaded)
-            return;
+            return false;
 
         var normalizedEndpoint = ApiConnectionSettings.NormalizeBaseUrl(_draftChatConfig.Endpoint);
         if (normalizedEndpoint is null)
         {
             ResetChatModelOptionsState();
-            return;
+            return false;
         }
 
         _loadingChatModelOptions = true;
@@ -869,12 +1133,10 @@ public partial class SettingsDialog : ComponentBase
                 new ChatModelCatalogRequestModel
                 {
                     Endpoint = normalizedEndpoint,
-                    ApiKey = _draftChatApiKey
+                    ApiKey = _draftChatAuthEnabled ? _draftChatApiKey : string.Empty,
+                    UseStoredApiKey = _draftChatAuthEnabled && string.IsNullOrWhiteSpace(_draftChatApiKey)
                 },
                 ct);
-
-            if (ct.IsCancellationRequested)
-                return;
 
             _chatModelOptions.Clear();
 
@@ -887,13 +1149,14 @@ public partial class SettingsDialog : ComponentBase
 
                 if (string.IsNullOrWhiteSpace(_draftChatConfig.ModelId) && _chatModelOptions.Count > 0)
                     _draftChatConfig.ModelId = _chatModelOptions[0];
+
+                return true;
             }
-            else
-            {
-                _chatModelOptionsError = result.FieldErrors?.Values.FirstOrDefault(x => !string.IsNullOrWhiteSpace(x))
-                    ?? result.Error
-                    ?? "No chat models were returned by the backend.";
-            }
+
+            _chatModelOptionsError = result.FieldErrors?.Values.FirstOrDefault(x => !string.IsNullOrWhiteSpace(x))
+                ?? result.Error
+                ?? "No chat models were returned by the backend.";
+            return false;
         }
         finally
         {
@@ -904,23 +1167,82 @@ public partial class SettingsDialog : ComponentBase
 
     private void ResetChatModelOptionsState()
     {
-        CancelPendingChatModelLoad();
         _loadingChatModelOptions = false;
         _chatModelOptionsError = null;
         _chatModelOptions.Clear();
-    }
-
-    private void CancelPendingChatModelLoad()
-    {
-        try { _chatModelLoadCts?.Cancel(); } catch { }
-        try { _chatModelLoadCts?.Dispose(); } catch { }
-        _chatModelLoadCts = null;
     }
 
     private void ResetAppliedState()
     {
         _applyCompleted = false;
         _applyFeedbackVersion++;
+    }
+
+    private static string GetTestBadgeClass(ApiTestStatus status)
+        => status switch
+        {
+            ApiTestStatus.Success => "settings-test-badge is-success",
+            ApiTestStatus.Failure => "settings-test-badge is-failure",
+            _ => "settings-test-badge"
+        };
+
+    private static string GetTestFeedbackClass(ApiTestStatus status)
+        => status switch
+        {
+            ApiTestStatus.Success => "settings-test-feedback is-success",
+            ApiTestStatus.Failure => "settings-test-feedback is-failure",
+            _ => "settings-test-feedback"
+        };
+
+    private static string GetTestBadgeLabel(ApiTestStatus status)
+        => status switch
+        {
+            ApiTestStatus.Success => "Passed",
+            ApiTestStatus.Failure => "Failed",
+            _ => string.Empty
+        };
+
+    private void SetApiConnectionTestFeedback(bool success, string message)
+    {
+        _apiConnectionTestStatus = success ? ApiTestStatus.Success : ApiTestStatus.Failure;
+        _apiConnectionTestMessage = message;
+    }
+
+    private void SetChatApiTestFeedback(bool success, string message)
+    {
+        _chatApiTestStatus = success ? ApiTestStatus.Success : ApiTestStatus.Failure;
+        _chatApiTestMessage = message;
+    }
+
+    private void SetCrawlApiTestFeedback(bool success, string message)
+    {
+        _crawlApiTestStatus = success ? ApiTestStatus.Success : ApiTestStatus.Failure;
+        _crawlApiTestMessage = message;
+    }
+
+    private void ClearApiConnectionTestFeedback()
+    {
+        _apiConnectionTestStatus = ApiTestStatus.None;
+        _apiConnectionTestMessage = null;
+    }
+
+    private void ClearChatApiTestFeedback()
+    {
+        _chatApiTestStatus = ApiTestStatus.None;
+        _chatApiTestMessage = null;
+    }
+
+    private void ClearCrawlApiTestFeedback()
+    {
+        _crawlApiTestStatus = ApiTestStatus.None;
+        _crawlApiTestMessage = null;
+    }
+
+    private void ClearAllApiTestFeedback()
+    {
+        ClearApiConnectionTestFeedback();
+        ClearChatApiTestFeedback();
+        ClearCrawlApiTestFeedback();
     }
 
     private void ResetSettingsMessages()

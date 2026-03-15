@@ -23,8 +23,11 @@ public sealed class ChatBackendHealthCheck(
                 HttpMethod.Get,
                 OpenAiEndpointUri.AppendV1Path(settings.ChatConfig.Endpoint, "models"));
 
-            request.Headers.Authorization =
-                new AuthenticationHeaderValue("Bearer", settings.ChatConfig.ApiKey);
+            if (!string.IsNullOrWhiteSpace(settings.ChatConfig.ApiKey))
+            {
+                request.Headers.Authorization =
+                    new AuthenticationHeaderValue("Bearer", settings.ChatConfig.ApiKey);
+            }
 
             using var response = await client.SendAsync(request, cancellationToken);
             if (response.IsSuccessStatusCode)

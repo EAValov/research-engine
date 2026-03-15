@@ -42,6 +42,13 @@ public static partial class ResearchApi
             .ProducesProblem(StatusCodes.Status401Unauthorized)
             .ProducesProblem(StatusCodes.Status403Forbidden);
 
+        api.MapPost("/settings/runtime/crawl-probe", GetRuntimeCrawlProbeAsync)
+            .Accepts<CrawlApiProbeRequest>("application/json")
+            .Produces(StatusCodes.Status200OK)
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status403Forbidden);
+
         // Jobs
         api.MapGet("/jobs", ListJobsAsync)
             .Produces<ListResearchJobsResponse>(StatusCodes.Status200OK)

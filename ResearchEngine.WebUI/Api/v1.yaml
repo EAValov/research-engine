@@ -136,6 +136,37 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
+  /api/settings/runtime/crawl-probe:
+    post:
+      tags:
+        - Research API
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CrawlApiProbeRequest'
+        required: true
+      responses:
+        '200':
+          description: OK
+        '400':
+          description: Bad Request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/HttpValidationProblemDetails'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
   /api/jobs:
     get:
       tags:
@@ -1244,6 +1275,9 @@ components:
           type:
             - 'null'
             - string
+        useStoredApiKey:
+          type: boolean
+          default: true
     ChatModelCatalogResponse:
       required:
         - modelIds
@@ -1274,6 +1308,21 @@ components:
           type: string
         answer:
           type: string
+    CrawlApiProbeRequest:
+      required:
+        - endpoint
+        - apiKey
+      type: object
+      properties:
+        endpoint:
+          type: string
+        apiKey:
+          type:
+            - 'null'
+            - string
+        useStoredApiKey:
+          type: boolean
+          default: true
     CreateResearchJobRequest:
       required:
         - query
@@ -2069,6 +2118,16 @@ components:
           format: int32
         hasApiKey:
           type: boolean
+    RuntimeCrawlConfigDto:
+      required:
+        - endpoint
+        - hasApiKey
+      type: object
+      properties:
+        endpoint:
+          type: string
+        hasApiKey:
+          type: boolean
     RuntimeModelInfoDto:
       required:
         - chatModelId
@@ -2084,6 +2143,7 @@ components:
         - researchOrchestratorConfig
         - learningSimilarityOptions
         - chatConfig
+        - crawlConfig
         - models
       type: object
       properties:
@@ -2093,6 +2153,8 @@ components:
           $ref: '#/components/schemas/LearningSimilarityOptions'
         chatConfig:
           $ref: '#/components/schemas/RuntimeChatConfigDto'
+        crawlConfig:
+          $ref: '#/components/schemas/RuntimeCrawlConfigDto'
         models:
           $ref: '#/components/schemas/RuntimeModelInfoDto'
     SourceListItemDto:
@@ -2389,11 +2451,24 @@ components:
             - integer
             - string
           format: int32
+    UpdateCrawlConfigRequest:
+      required:
+        - endpoint
+        - apiKey
+      type: object
+      properties:
+        endpoint:
+          type: string
+        apiKey:
+          type:
+            - 'null'
+            - string
     UpdateRuntimeSettingsRequest:
       required:
         - researchOrchestratorConfig
         - learningSimilarityOptions
         - chatConfig
+        - crawlConfig
       type: object
       properties:
         researchOrchestratorConfig:
@@ -2402,6 +2477,8 @@ components:
           $ref: '#/components/schemas/LearningSimilarityOptions'
         chatConfig:
           $ref: '#/components/schemas/UpdateChatConfigRequest'
+        crawlConfig:
+          $ref: '#/components/schemas/UpdateCrawlConfigRequest'
     UpsertOverridesResponse:
       required:
         - synthesisId

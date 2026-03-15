@@ -11,7 +11,8 @@ public static class RuntimeSettingsBootstrap
         var snapshot = new RuntimeSettingsSnapshot(
             GetRequiredSection<ResearchOrchestratorConfig>(configuration, nameof(ResearchOrchestratorConfig)),
             GetRequiredSection<LearningSimilarityOptions>(configuration, nameof(LearningSimilarityOptions)),
-            GetRequiredSection<ChatConfig>(configuration, nameof(ChatConfig)));
+            GetRequiredSection<ChatConfig>(configuration, nameof(ChatConfig)),
+            GetRequiredSection<FirecrawlOptions>(configuration, nameof(FirecrawlOptions)));
 
         ValidateObject(snapshot.ResearchOrchestratorConfig, nameof(ResearchOrchestratorConfig));
         ValidateObject(snapshot.LearningSimilarityOptions, nameof(LearningSimilarityOptions));
@@ -41,6 +42,15 @@ public static class RuntimeSettingsBootstrap
             throw new InvalidOperationException(
                 $"{nameof(ChatConfig.MaxContextLength)} must be at least {TokenizerBase.MinimumContextLength} when provided.");
         }
+
+        if (!Uri.TryCreate(snapshot.CrawlConfig.BaseUrl, UriKind.Absolute, out var crawlEndpointUri) ||
+            crawlEndpointUri.Scheme is not ("http" or "https"))
+        {
+            throw new InvalidOperationException($"{nameof(FirecrawlOptions.BaseUrl)} must be an absolute http:// or https:// URL.");
+        }
+
+        if (snapshot.CrawlConfig.HttpClientTimeoutSeconds <= 0)
+            throw new InvalidOperationException($"{nameof(FirecrawlOptions.HttpClientTimeoutSeconds)} must be greater than zero.");
 
         return snapshot;
     }

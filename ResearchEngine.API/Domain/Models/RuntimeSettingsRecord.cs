@@ -25,6 +25,9 @@ public sealed class RuntimeSettingsRecord
     public string ChatApiKey { get; set; } = null!;
     public string ChatModelId { get; set; } = null!;
     public int? ChatMaxContextLength { get; set; }
+    public string CrawlEndpoint { get; set; } = null!;
+    public string? CrawlApiKey { get; set; }
+    public int CrawlHttpClientTimeoutSeconds { get; set; }
 
     public DateTimeOffset UpdatedAt { get; set; }
 
@@ -53,6 +56,12 @@ public sealed class RuntimeSettingsRecord
                 ApiKey = ChatApiKey,
                 ModelId = ChatModelId,
                 MaxContextLength = ChatMaxContextLength
+            },
+            new FirecrawlOptions
+            {
+                BaseUrl = CrawlEndpoint,
+                ApiKey = CrawlApiKey,
+                HttpClientTimeoutSeconds = CrawlHttpClientTimeoutSeconds
             });
 
     public static RuntimeSettingsRecord FromSnapshot(RuntimeSettingsSnapshot snapshot)
@@ -74,6 +83,9 @@ public sealed class RuntimeSettingsRecord
             ChatApiKey = snapshot.ChatConfig.ApiKey,
             ChatModelId = snapshot.ChatConfig.ModelId,
             ChatMaxContextLength = snapshot.ChatConfig.MaxContextLength,
+            CrawlEndpoint = snapshot.CrawlConfig.BaseUrl,
+            CrawlApiKey = snapshot.CrawlConfig.ApiKey,
+            CrawlHttpClientTimeoutSeconds = snapshot.CrawlConfig.HttpClientTimeoutSeconds,
             UpdatedAt = DateTimeOffset.UtcNow
         };
 
@@ -96,6 +108,9 @@ public sealed class RuntimeSettingsRecord
         ChatApiKey = snapshot.ChatConfig.ApiKey;
         ChatModelId = snapshot.ChatConfig.ModelId;
         ChatMaxContextLength = snapshot.ChatConfig.MaxContextLength;
+        CrawlEndpoint = snapshot.CrawlConfig.BaseUrl;
+        CrawlApiKey = snapshot.CrawlConfig.ApiKey;
+        CrawlHttpClientTimeoutSeconds = snapshot.CrawlConfig.HttpClientTimeoutSeconds;
         UpdatedAt = DateTimeOffset.UtcNow;
     }
 }

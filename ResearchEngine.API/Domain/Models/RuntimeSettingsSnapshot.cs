@@ -5,5 +5,6 @@ namespace ResearchEngine.Domain;
 public sealed record RuntimeSettingsSnapshot(
     ResearchOrchestratorConfig ResearchOrchestratorConfig,
     LearningSimilarityOptions LearningSimilarityOptions,
-    ChatConfig ChatConfig
+    ChatConfig ChatConfig,
+    FirecrawlOptions CrawlConfig
 );

@@ -20,6 +20,20 @@ data:
 
 ---
 apiVersion: v1
+kind: Secret
+metadata:
+  name: research-crawl-secrets
+type: Opaque
+stringData:
+  CRAWL_POSTGRES_DB: "firecrawl"
+  CRAWL_POSTGRES_USER: "firecrawl"
+  CRAWL_POSTGRES_PASSWORD: "firecrawl-password"
+  CRAWL_DATABASE_URL: "postgresql://firecrawl:firecrawl-password@127.0.0.1:5432/firecrawl?sslmode=disable"
+  BULL_AUTH_KEY: "28d4f12a03a9476ba93e59e3fa752623e090f9798ff94d1089dd5f706ae8213f"
+  SEARXNG_SECRET: "fc57350014683f0e6e5938408f9742ccc584ceb561476e682af398e5d807dc78"
+
+---
+apiVersion: v1
 kind: Pod
 metadata:
   name: research-crawl
@@ -34,17 +48,17 @@ spec:
         - name: POSTGRES_DB
           valueFrom:
             secretKeyRef:
-              name: research-single-host-secrets
+              name: research-crawl-secrets
               key: CRAWL_POSTGRES_DB
         - name: POSTGRES_USER
           valueFrom:
             secretKeyRef:
-              name: research-single-host-secrets
+              name: research-crawl-secrets
               key: CRAWL_POSTGRES_USER
         - name: POSTGRES_PASSWORD
           valueFrom:
             secretKeyRef:
-              name: research-single-host-secrets
+              name: research-crawl-secrets
               key: CRAWL_POSTGRES_PASSWORD
       ports:
         - containerPort: 5432
@@ -75,7 +89,7 @@ spec:
         - name: SEARXNG_SECRET
           valueFrom:
             secretKeyRef:
-              name: research-single-host-secrets
+              name: research-crawl-secrets
               key: SEARXNG_SECRET
         - name: GRANIAN_HOST
           value: "0.0.0.0"
@@ -102,22 +116,22 @@ spec:
         - name: POSTGRES_DB
           valueFrom:
             secretKeyRef:
-              name: research-single-host-secrets
+              name: research-crawl-secrets
               key: CRAWL_POSTGRES_DB
         - name: POSTGRES_USER
           valueFrom:
             secretKeyRef:
-              name: research-single-host-secrets
+              name: research-crawl-secrets
               key: CRAWL_POSTGRES_USER
         - name: POSTGRES_PASSWORD
           valueFrom:
             secretKeyRef:
-              name: research-single-host-secrets
+              name: research-crawl-secrets
               key: CRAWL_POSTGRES_PASSWORD
         - name: BULL_AUTH_KEY
           valueFrom:
             secretKeyRef:
-              name: research-single-host-secrets
+              name: research-crawl-secrets
               key: BULL_AUTH_KEY
         - name: REDIS_URL
           value: "redis://127.0.0.1:6379"
@@ -130,12 +144,12 @@ spec:
         - name: NUQ_DATABASE_URL
           valueFrom:
             secretKeyRef:
-              name: research-single-host-secrets
+              name: research-crawl-secrets
               key: CRAWL_DATABASE_URL
         - name: DATABASE_URL
           valueFrom:
             secretKeyRef:
-              name: research-single-host-secrets
+              name: research-crawl-secrets
               key: CRAWL_DATABASE_URL
         - name: BLOCK_MEDIA
           value: "true"

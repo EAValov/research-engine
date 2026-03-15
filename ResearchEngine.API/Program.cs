@@ -208,11 +208,11 @@ builder.Services.AddHealthChecks()
     .AddCheck("self", () => HealthCheckResult.Healthy(), tags: ["ready"])
     .AddCheck<ChatBackendHealthCheck>(
         "chat",
-        tags: ["ready", "llm", "chat"])
+        tags: ["llm", "chat"])
     .AddUrlGroup(
         new Uri($"{builder.Configuration["EmbeddingConfig:Endpoint"]!.TrimEnd('/')}/models"),
         "embedding",
-        tags: ["ready", "llm", "embedding"])
+        tags: ["llm", "embedding"])
     .AddNpgSql(
         builder.Configuration.GetConnectionString("ResearchDb")!,
         name: "postgres",

@@ -560,6 +560,13 @@ public sealed class ResearchDbContext : DbContext
             .IsRequired()
             .HasMaxLength(500);
 
+        entity.Property(x => x.CrawlEndpoint)
+            .IsRequired()
+            .HasMaxLength(2000);
+
+        entity.Property(x => x.CrawlApiKey)
+            .HasMaxLength(2000);
+
         entity.Property(x => x.UpdatedAt)
             .HasDefaultValueSql("now() at time zone 'utc'");
     }

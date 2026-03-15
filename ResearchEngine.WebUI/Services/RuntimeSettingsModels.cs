@@ -5,6 +5,7 @@ public sealed class RuntimeSettingsResponseModel
     public ResearchOrchestratorConfigModel ResearchOrchestratorConfig { get; set; } = new();
     public LearningSimilarityOptionsModel LearningSimilarityOptions { get; set; } = new();
     public RuntimeChatConfigModel ChatConfig { get; set; } = new();
+    public RuntimeCrawlConfigModel CrawlConfig { get; set; } = new();
     public RuntimeModelInfoModel Models { get; set; } = new();
 }
 
@@ -13,12 +14,14 @@ public sealed class UpdateRuntimeSettingsRequestModel
     public ResearchOrchestratorConfigModel ResearchOrchestratorConfig { get; set; } = new();
     public LearningSimilarityOptionsModel LearningSimilarityOptions { get; set; } = new();
     public UpdateChatConfigModel ChatConfig { get; set; } = new();
+    public UpdateCrawlConfigModel CrawlConfig { get; set; } = new();
 }
 
 public sealed class ChatModelCatalogRequestModel
 {
     public string Endpoint { get; set; } = string.Empty;
     public string ApiKey { get; set; } = string.Empty;
+    public bool UseStoredApiKey { get; set; } = true;
 }
 
 public sealed class ChatModelCatalogResponseModel
@@ -65,4 +68,23 @@ public sealed class UpdateChatConfigModel
     public string ModelId { get; set; } = string.Empty;
     public string ApiKey { get; set; } = string.Empty;
     public int? MaxContextLength { get; set; }
+}
+
+public sealed class RuntimeCrawlConfigModel
+{
+    public string Endpoint { get; set; } = string.Empty;
+    public bool HasApiKey { get; set; }
+}
+
+public sealed class UpdateCrawlConfigModel
+{
+    public string Endpoint { get; set; } = string.Empty;
+    public string ApiKey { get; set; } = string.Empty;
+}
+
+public sealed class CrawlApiProbeRequestModel
+{
+    public string Endpoint { get; set; } = string.Empty;
+    public string ApiKey { get; set; } = string.Empty;
+    public bool UseStoredApiKey { get; set; } = true;
 }

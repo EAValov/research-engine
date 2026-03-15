@@ -638,7 +638,7 @@ Treat these values as secrets and inject them outside source control:
 - `EmbeddingConfig__ApiKey`
 - `AuthenticationOptions__ApiKeys__*`
 
-The single-host example stores them in `Deploy/single-host/00-common.yaml` as a Kubernetes-style `Secret` manifest for local deployment.
+The single-host example stores them as Kubernetes-style `Secret` manifests in `Deploy/single-host/20-app.yaml` and `Deploy/single-host/30-crawl.yaml`.
 
 ## Minimal Environment Variable Example
 

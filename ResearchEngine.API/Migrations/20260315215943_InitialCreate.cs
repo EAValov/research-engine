@@ -63,6 +63,9 @@ namespace ResearchEngine.API.Migrations
                     ChatApiKey = table.Column<string>(type: "character varying(2000)", maxLength: 2000, nullable: false),
                     ChatModelId = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: false),
                     ChatMaxContextLength = table.Column<int>(type: "integer", nullable: true),
+                    CrawlEndpoint = table.Column<string>(type: "character varying(2000)", maxLength: 2000, nullable: false),
+                    CrawlApiKey = table.Column<string>(type: "character varying(2000)", maxLength: 2000, nullable: true),
+                    CrawlHttpClientTimeoutSeconds = table.Column<int>(type: "integer", nullable: false),
                     UpdatedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false, defaultValueSql: "now() at time zone 'utc'")
                 },
                 constraints: table =>

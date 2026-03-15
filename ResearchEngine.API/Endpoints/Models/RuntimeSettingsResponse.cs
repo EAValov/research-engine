@@ -6,5 +6,6 @@ public sealed record RuntimeSettingsResponse(
     ResearchOrchestratorConfig ResearchOrchestratorConfig,
     LearningSimilarityOptions LearningSimilarityOptions,
     RuntimeChatConfigDto ChatConfig,
+    RuntimeCrawlConfigDto CrawlConfig,
     RuntimeModelInfoDto Models
 );

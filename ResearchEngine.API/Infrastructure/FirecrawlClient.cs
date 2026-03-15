@@ -2,7 +2,6 @@ using System.Net.Http.Json;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
-using Microsoft.Extensions.Options;
 using ResearchEngine.Configuration;
 using ResearchEngine.Domain;
 
@@ -11,17 +10,17 @@ namespace ResearchEngine.Infrastructure;
 public class FirecrawlClient : ISearchClient, ICrawlClient
 {
     private readonly HttpClient _httpClient;
-    private readonly FirecrawlOptions _options;
+    private readonly IRuntimeSettingsAccessor _runtimeSettings;
     private readonly ILogger<FirecrawlClient> _logger;
     private readonly JsonSerializerOptions _jsonOptions;
 
     public FirecrawlClient(
         HttpClient httpClient,
-        IOptions<FirecrawlOptions> options,
+        IRuntimeSettingsAccessor runtimeSettings,
         ILogger<FirecrawlClient> logger)
     {
         _httpClient = httpClient;
-        _options = options.Value;
+        _runtimeSettings = runtimeSettings;
         _logger = logger;
 
         _jsonOptions = new JsonSerializerOptions(JsonSerializerDefaults.Web)
@@ -42,7 +41,15 @@ public class FirecrawlClient : ISearchClient, ICrawlClient
         // Firecrawl rejects limit <= 0
         limit = Math.Max(1, limit);
 
-        var url = $"{_options.BaseUrl}/v1/search";
+        var crawlConfig = await _runtimeSettings.GetCurrentAsync(ct);
+        var baseUrl = crawlConfig.CrawlConfig.BaseUrl?.Trim();
+        if (string.IsNullOrWhiteSpace(baseUrl))
+        {
+            _logger.LogWarning("CrawlConfig.BaseUrl is not configured.");
+            return Array.Empty<SearchResult>();
+        }
+
+        var url = $"{baseUrl.TrimEnd('/')}/v1/search";
 
         object payload = string.IsNullOrWhiteSpace(location) ?
             new { query, limit } : 
@@ -58,7 +65,7 @@ public class FirecrawlClient : ISearchClient, ICrawlClient
         {
             Content = new StringContent(jsonPayload, Encoding.UTF8, "application/json")
         };
-        AddApiKeyHeaders(request);
+        AddApiKeyHeaders(request, crawlConfig.CrawlConfig.ApiKey);
 
         _logger.LogDebug(
             "Firecrawl search: query='{Query}', limit={Limit}, location='{Location}'",
@@ -146,7 +153,15 @@ public class FirecrawlClient : ISearchClient, ICrawlClient
         if (string.IsNullOrWhiteSpace(url))
             return string.Empty;
 
-        var endpoint = $"{_options.BaseUrl}/v1/scrape";
+        var crawlConfig = await _runtimeSettings.GetCurrentAsync(ct);
+        var baseUrl = crawlConfig.CrawlConfig.BaseUrl?.Trim();
+        if (string.IsNullOrWhiteSpace(baseUrl))
+        {
+            _logger.LogWarning("CrawlConfig.BaseUrl is not configured.");
+            return string.Empty;
+        }
+
+        var endpoint = $"{baseUrl.TrimEnd('/')}/v1/scrape";
 
         var payload = new
         {
@@ -161,7 +176,7 @@ public class FirecrawlClient : ISearchClient, ICrawlClient
         {
             Content = new StringContent(jsonPayload, Encoding.UTF8, "application/json")
         };
-        AddApiKeyHeaders(request);
+        AddApiKeyHeaders(request, crawlConfig.CrawlConfig.ApiKey);
 
         _logger.LogDebug("Firecrawl scrape: url={Url}", url);
 
@@ -253,22 +268,22 @@ public class FirecrawlClient : ISearchClient, ICrawlClient
         public string? markdown { get; set; }
     }
 
-    private void AddApiKeyHeaders(HttpRequestMessage request)
+    private static void AddApiKeyHeaders(HttpRequestMessage request, string? apiKey)
     {
-        var apiKey = _options.ApiKey?.Trim();
-        if (string.IsNullOrWhiteSpace(apiKey))
+        var normalizedApiKey = apiKey?.Trim();
+        if (string.IsNullOrWhiteSpace(normalizedApiKey))
             return;
 
         // Firecrawl API commonly uses bearer auth; also send x-api-key for compatibility.
-        if (apiKey.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+        if (normalizedApiKey.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
         {
-            request.Headers.TryAddWithoutValidation("Authorization", apiKey);
+            request.Headers.TryAddWithoutValidation("Authorization", normalizedApiKey);
         }
         else
         {
-            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", normalizedApiKey);
         }
 
-        request.Headers.TryAddWithoutValidation("x-api-key", apiKey);
+        request.Headers.TryAddWithoutValidation("x-api-key", normalizedApiKey);
     }
 }

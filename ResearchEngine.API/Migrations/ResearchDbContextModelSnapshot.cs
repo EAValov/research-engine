@@ -354,6 +354,18 @@ namespace ResearchEngine.API.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
 
+                    b.Property<string>("CrawlApiKey")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<string>("CrawlEndpoint")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<int>("CrawlHttpClientTimeoutSeconds")
+                        .HasColumnType("integer");
+
                     b.Property<int>("DiversityMaxPerUrl")
                         .HasColumnType("integer");
 

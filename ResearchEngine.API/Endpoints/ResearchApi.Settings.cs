@@ -28,6 +28,7 @@ public static partial class ResearchApi
             settings.ResearchOrchestratorConfig,
             settings.LearningSimilarityOptions,
             ToRuntimeChatConfigDto(settings.ChatConfig),
+            ToRuntimeCrawlConfigDto(settings.CrawlConfig),
             new RuntimeModelInfoDto(
                 settings.ChatConfig.ModelId,
                 embeddingOptions.CurrentValue.ModelId)));
@@ -54,15 +55,10 @@ public static partial class ResearchApi
         }
 
         var settings = await runtimeSettingsRepository.GetCurrentAsync(ct);
-        var effectiveApiKey = string.IsNullOrWhiteSpace(request.ApiKey)
+        var useStoredApiKey = request.UseStoredApiKey && string.IsNullOrWhiteSpace(request.ApiKey);
+        var effectiveApiKey = useStoredApiKey
             ? settings.ChatConfig.ApiKey
-            : request.ApiKey.Trim();
-
-        if (string.IsNullOrWhiteSpace(effectiveApiKey))
-        {
-            errors[$"{nameof(ChatModelCatalogRequest)}.{nameof(ChatModelCatalogRequest.ApiKey)}"] =
-            ["API key is required to load model ids."];
-        }
+            : request.ApiKey?.Trim();
 
         if (errors.Count > 0)
             return Results.ValidationProblem(errors);
@@ -104,6 +100,7 @@ public static partial class ResearchApi
         ValidateObject(request.ResearchOrchestratorConfig, nameof(request.ResearchOrchestratorConfig), errors);
         ValidateObject(request.LearningSimilarityOptions, nameof(request.LearningSimilarityOptions), errors);
         ValidateObject(request.ChatConfig, nameof(request.ChatConfig), errors);
+        ValidateObject(request.CrawlConfig, nameof(request.CrawlConfig), errors);
 
         if (request.LearningSimilarityOptions.MinLearningsPerSegment >
             request.LearningSimilarityOptions.MaxLearningsPerSegment)
@@ -119,8 +116,13 @@ public static partial class ResearchApi
         var effectiveChatApiKey = string.IsNullOrWhiteSpace(request.ChatConfig.ApiKey)
             ? existingChatConfig.ApiKey
             : request.ChatConfig.ApiKey.Trim();
+        var existingCrawlConfig = existingSettings.CrawlConfig;
+        var effectiveCrawlApiKey = string.IsNullOrWhiteSpace(request.CrawlConfig.ApiKey)
+            ? existingCrawlConfig.ApiKey
+            : request.CrawlConfig.ApiKey.Trim();
 
-        ValidateChatConfigRequest(request.ChatConfig, effectiveChatApiKey, errors);
+        ValidateChatConfigRequest(request.ChatConfig, errors);
+        ValidateCrawlConfigRequest(request.CrawlConfig, errors);
 
         if (errors.Count == 0)
         {
@@ -147,6 +149,12 @@ public static partial class ResearchApi
                     ApiKey = effectiveChatApiKey,
                     ModelId = request.ChatConfig.ModelId.Trim(),
                     MaxContextLength = request.ChatConfig.MaxContextLength
+                },
+                new FirecrawlOptions
+                {
+                    BaseUrl = request.CrawlConfig.Endpoint.Trim(),
+                    ApiKey = effectiveCrawlApiKey,
+                    HttpClientTimeoutSeconds = existingCrawlConfig.HttpClientTimeoutSeconds
                 }),
             ct);
 
@@ -154,6 +162,7 @@ public static partial class ResearchApi
             updatedSettings.ResearchOrchestratorConfig,
             updatedSettings.LearningSimilarityOptions,
             ToRuntimeChatConfigDto(updatedSettings.ChatConfig),
+            ToRuntimeCrawlConfigDto(updatedSettings.CrawlConfig),
             new RuntimeModelInfoDto(
                 updatedSettings.ChatConfig.ModelId,
                 embeddingOptions.CurrentValue.ModelId)));
@@ -166,9 +175,13 @@ public static partial class ResearchApi
             config.MaxContextLength,
             !string.IsNullOrWhiteSpace(config.ApiKey));
 
+    private static RuntimeCrawlConfigDto ToRuntimeCrawlConfigDto(FirecrawlOptions config)
+        => new(
+            config.BaseUrl,
+            !string.IsNullOrWhiteSpace(config.ApiKey));
+
     private static void ValidateChatConfigRequest(
         UpdateChatConfigRequest request,
-        string effectiveApiKey,
         IDictionary<string, string[]> errors)
     {
         if (!Uri.TryCreate(request.Endpoint, UriKind.Absolute, out var endpointUri) ||
@@ -191,16 +204,23 @@ public static partial class ResearchApi
             [$"MaxContextLength must be at least {TokenizerBase.MinimumContextLength}."];
         }
 
-        if (string.IsNullOrWhiteSpace(effectiveApiKey))
+    }
+
+    private static void ValidateCrawlConfigRequest(
+        UpdateCrawlConfigRequest request,
+        IDictionary<string, string[]> errors)
+    {
+        if (!Uri.TryCreate(request.Endpoint, UriKind.Absolute, out var endpointUri) ||
+            endpointUri.Scheme is not ("http" or "https"))
         {
-            errors[$"{nameof(UpdateRuntimeSettingsRequest.ChatConfig)}.{nameof(UpdateChatConfigRequest.ApiKey)}"] =
-            ["API key is required. Enter a new key or keep an existing configured key."];
+            errors[$"{nameof(UpdateRuntimeSettingsRequest.CrawlConfig)}.{nameof(UpdateCrawlConfigRequest.Endpoint)}"] =
+            ["Endpoint must be an absolute http:// or https:// URL."];
         }
     }
 
     private static async Task<Dictionary<string, string[]>> ValidateChatBackendAsync(
         UpdateChatConfigRequest request,
-        string effectiveApiKey,
+        string? effectiveApiKey,
         IHttpClientFactory httpClientFactory,
         CancellationToken ct)
     {
@@ -232,7 +252,8 @@ public static partial class ResearchApi
         using var tokenizeRequest = new HttpRequestMessage(
             HttpMethod.Post,
             OpenAiEndpointUri.AppendServerPath(endpointUri, "tokenize"));
-        tokenizeRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", effectiveApiKey);
+        if (!string.IsNullOrWhiteSpace(effectiveApiKey))
+            tokenizeRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", effectiveApiKey);
         tokenizeRequest.Content = JsonContent.Create(new
         {
             model = request.ModelId.Trim(),
@@ -265,7 +286,7 @@ public static partial class ResearchApi
 
     private static async Task<ChatModelCatalogFetchResult> TryLoadChatModelIdsAsync(
         Uri endpointUri,
-        string apiKey,
+        string? apiKey,
         IHttpClientFactory httpClientFactory,
         CancellationToken ct)
     {
@@ -277,7 +298,8 @@ public static partial class ResearchApi
         using var modelsRequest = new HttpRequestMessage(
             HttpMethod.Get,
             OpenAiEndpointUri.AppendV1Path(endpointUri, "models"));
-        modelsRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
+        if (!string.IsNullOrWhiteSpace(apiKey))
+            modelsRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
 
         HttpResponseMessage modelsResponse;
         string modelsBody;
@@ -308,6 +330,107 @@ public static partial class ResearchApi
         }
 
         return new ChatModelCatalogFetchResult(modelIds, errors);
+    }
+
+    /// <summary>
+    /// POST /api/research/settings/runtime/crawl-probe
+    /// Probes the configured crawl backend using a minimal /v1/search request.
+    /// </summary>
+    private static async Task<IResult> GetRuntimeCrawlProbeAsync(
+        [FromBody] CrawlApiProbeRequest request,
+        IHttpClientFactory httpClientFactory,
+        IRuntimeSettingsRepository runtimeSettingsRepository,
+        CancellationToken ct)
+    {
+        var errors = new Dictionary<string, string[]>(StringComparer.Ordinal);
+        ValidateObject(request, nameof(CrawlApiProbeRequest), errors);
+
+        if (!Uri.TryCreate(request.Endpoint, UriKind.Absolute, out var endpointUri) ||
+            endpointUri.Scheme is not ("http" or "https"))
+        {
+            errors[$"{nameof(CrawlApiProbeRequest)}.{nameof(CrawlApiProbeRequest.Endpoint)}"] =
+            ["Endpoint must be an absolute http:// or https:// URL."];
+        }
+
+        if (errors.Count > 0)
+            return Results.ValidationProblem(errors);
+
+        var settings = await runtimeSettingsRepository.GetCurrentAsync(ct);
+        var useStoredApiKey = request.UseStoredApiKey && string.IsNullOrWhiteSpace(request.ApiKey);
+        var effectiveApiKey = useStoredApiKey
+            ? settings.CrawlConfig.ApiKey
+            : request.ApiKey?.Trim();
+
+        var probeErrors = await TryProbeCrawlApiAsync(
+            endpointUri!,
+            effectiveApiKey,
+            httpClientFactory,
+            ct);
+
+        if (probeErrors.Count > 0)
+            return Results.ValidationProblem(probeErrors);
+
+        return Results.Ok(new { status = "ok" });
+    }
+
+    private static async Task<IDictionary<string, string[]>> TryProbeCrawlApiAsync(
+        Uri endpointUri,
+        string? apiKey,
+        IHttpClientFactory httpClientFactory,
+        CancellationToken ct)
+    {
+        var errors = new Dictionary<string, string[]>(StringComparer.Ordinal);
+
+        using var client = httpClientFactory.CreateClient();
+        client.Timeout = TimeSpan.FromSeconds(8);
+
+        using var request = new HttpRequestMessage(
+            HttpMethod.Post,
+            $"{endpointUri.ToString().TrimEnd('/')}/v1/search");
+
+        AddApiKeyHeaders(request, apiKey);
+        request.Content = JsonContent.Create(new
+        {
+            query = "research engine health check",
+            limit = 1
+        });
+
+        HttpResponseMessage response;
+        try
+        {
+            response = await client.SendAsync(request, ct);
+        }
+        catch (Exception)
+        {
+            errors["Endpoint"] = ["Could not reach the crawl backend /v1/search endpoint."];
+            return errors;
+        }
+
+        if (response.IsSuccessStatusCode)
+            return errors;
+
+        errors["Endpoint"] =
+        [$"Crawl backend /v1/search request failed with HTTP {(int)response.StatusCode} {response.StatusCode}."];
+
+        return errors;
+    }
+
+    private static void AddApiKeyHeaders(HttpRequestMessage request, string? apiKey)
+    {
+        var normalizedApiKey = apiKey?.Trim();
+        if (string.IsNullOrWhiteSpace(normalizedApiKey))
+            return;
+
+        if (normalizedApiKey.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+        {
+            request.Headers.TryAddWithoutValidation("Authorization", normalizedApiKey);
+        }
+        else
+        {
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", normalizedApiKey);
+        }
+
+        request.Headers.TryAddWithoutValidation("x-api-key", normalizedApiKey);
     }
 
     private static IReadOnlyList<string> ExtractModelIdsFromModelsPayload(string json)
