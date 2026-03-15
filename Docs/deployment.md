@@ -11,7 +11,7 @@ My PC specs for reference:
 - RAM: 32 GB DDR5 5200
 - GPU: Nvidia RTX 5090 Founders Edition
 
-If you have the similar PC, you can jump into `Recommended User Flow` section and just follow the steps there - otherwise, you'd need to configure LLM server for your hardware. Research quality and speed mainly depend on the LLM. See `Picking the right model` section for details.
+If you have the similar PC, you can jump into `Recommended User Flow` section and just follow the steps there - otherwise, you'd need to configure LLM server for your hardware. Research quality and speed mainly depend on the LLM. See `LLM Server configuration` section for details.
 
 The recommended single-host layout is four pods with clear responsibility boundaries:
 
@@ -86,8 +86,24 @@ For a local deployment, follow the vLLM docs:
 
 Any OpenAI-compatible web service can be used instead of `vllm`. The current sample setup is tuned for a single RTX 5090. A non-containerized Ollama or LM Studio setup can also be used instead.
 
-### Picking the right model
-The most important part of the configuration is choosing the right model. The goal is to find the best balance between quality and speed. The app supports both thinking and non-thinking models, but the model must support tool calling because it is used by the research pipeline. Speed matters too: the slower the model, the slower the research.
+### LLM Server configuration
+The most important part of the configuration is choosing the right model and LLM backend. The goal is to find the best balance between quality and speed. The app supports both thinking and non-thinking models, but there are the specific requirements for the backend that are rutual for the normal functionality of the app. 
+1. The model and the backend must support tool calling with 'tool_choice: required', because it is used by the research pipeline. 
+2. The model and the backend must support 'structured output' - the json template for the model response.
+3. The app using /tokenize endpoint in the internal RAG pipeline to split chunks - it's optional, but without it the app must rely on the MaxContextLength and use heuristic method to calculate context lenght with 20% safe buffer, which is not ideal
+
+vLLM is preferable backend as it supports all the related features. Ollama, for example, also works but missing the /tokenize endpoint. Below is the compatability chart:
+
+#### Chat Backend Compatibility
+
+| Backend | `/v1/models` | Structured output | Tool calling | `/tokenize` | Result with current app |
+| --- | --- | --- | --- | --- | --- |
+| `vLLM` | Yes | Yes | Yes, including named-function and `required` tool choice | Yes | Preferred local option. It supports all required features for the current app and is the recommended self-hosted backend. |
+| `Ollama` | Yes | Yes | Yes | No documented OpenAI-compatible `/tokenize` endpoint | Works with the current app if `ChatConfig__MaxContextLength` is set. This is usable, but still less ideal than `vLLM` because token counting becomes heuristic. |
+| `SGLang` | Yes | Yes | Yes, including specific-function tool choice when using the default `xgrammar` grammar backend | No documented OpenAI-compatible `/tokenize` endpoint in the standard OpenAI-compatible server docs | Likely compatible if launched with the default `xgrammar` backend and `ChatConfig__MaxContextLength` is set. This is an inference from the docs; it is not tested by this project. |
+| `LM Studio` | Yes | No | Current docs only document string `tool_choice` values for the OpenAI-like REST API, and local testing showed compatibility gaps with this app | No documented OpenAI-compatible `/tokenize` endpoint | Not recommended for the current app. |
+
+Speed matters too: the slower the model, the slower the research.
 
 As a rule of thumb, the model should process at least 50 tokens per second if you want to generate a mid-size report in around 10 minutes.
 

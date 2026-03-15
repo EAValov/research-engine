@@ -170,6 +170,7 @@ Important:
 - if `MaxContextLength` is not provided, the app uses the chat backend's `/tokenize` endpoint
 - `MaxContextLength` must be at least `10000`; smaller context windows degrade quality a lot
 - `MaxContextLength` is validated on startup when provided; other bad `ChatConfig` values may still fail when first used
+- the current implementation requires a non-empty `ApiKey` value even for local backends that ignore authentication; use a dummy value such as `ollama` if needed
 - the current sample setup is tuned for a single RTX 5090 and using the `nvidia/Qwen3-30B-A3B-NVFP4` model.
 
 Single-host deployment example:
@@ -194,6 +195,25 @@ env:
   - name: ChatConfig__MaxContextLength
     value: "32768"
 ```
+
+#### Chat Backend Requirements
+
+The current chat backend must support these features for full compatibility:
+
+- `POST /v1/chat/completions`
+- `GET /v1/models`
+- OpenAI-style structured output using `response_format` with a JSON schema
+- OpenAI-style tool calling for synthesis section generation, including specific-function tool choice
+- either:
+  - a `/tokenize` endpoint, or
+  - `ChatConfig__MaxContextLength` set to a realistic context window value
+
+These requirements come from the current code paths:
+
+- structured outputs are used in `ResearchProtocolService`, `QueryPlanningService`, `LearningIntelService`, and section planning in `ReportSynthesisService`
+- tool calling is used during section writing in `ReportSynthesisService`, and the current implementation requires a specific named tool
+- `/models` is used by health checks and the runtime settings UI
+- `/tokenize` is used by the tokenizer unless `MaxContextLength` is configured
 
 ### `EmbeddingConfig`
 
@@ -221,7 +241,7 @@ Usage:
 Important:
 
 - if `Dimension` does not match the actual vector length, persistence and vector search will break
-- The examle config uses `Qwen/Qwen3-Embedding-0.6B` embedding model. 
+- The example config uses the `Qwen/Qwen3-Embedding-0.6B` embedding model.
 
 Single-host deployment example:
 
@@ -503,7 +523,8 @@ It currently supports:
 
 - `ResearchOrchestratorConfig`
 - `LearningSimilarityOptions`
-- read-only model information from `ChatConfig` and `EmbeddingConfig`
+- `ChatConfig`
+- read-only model information from `EmbeddingConfig`
 
 Behavior:
 
@@ -515,7 +536,7 @@ Current live-update behavior:
 
 - `ResearchOrchestratorConfig`: live
 - `LearningSimilarityOptions`: live
-- `ChatConfig`: displayed, not updated by the endpoint
+- `ChatConfig`: live
 - `EmbeddingConfig`: displayed, not updated by the endpoint
 
 Important:
@@ -654,6 +675,6 @@ AuthenticationOptions__ApiKeys__0=replace-with-a-real-api-key
 
 ## Notes
 
-- `ChatConfig` and `EmbeddingConfig` are currently runtime-readable but not runtime-editable through the Web UI
-- `ResearchOrchestratorConfig` and `LearningSimilarityOptions` are the only settings groups currently updated by the runtime settings editor
+- `ChatConfig` is runtime-editable through the Web UI
+- `EmbeddingConfig` is currently runtime-readable but not runtime-editable through the Web UI
 - the settings dialog reflects the effective API connection selected in the browser, not just the deployment defaults
