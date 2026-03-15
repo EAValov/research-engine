@@ -1,51 +1,44 @@
-# Local Deployment Guide
+# Deployment Guide
 
-This guide describes the recommended way to run Research Engine on a single host.
+Welcome to the deployment guide for Research Engine. This guide is focused on a single-host deployment because it is the simplest option.
 
-The focus here is a modular local deployment:
+If you're planning to deploy it to Kubernetes, that is very much possible. Use this document and the YAML files in `Deploy/single-host` as a base.
 
-- one machine
-- several small pods
-- clear separation between app services, crawl services, and model services
-- the ability to replace parts of the stack later without redesigning everything
+Podman is the recommended platform because it is secure and open source. The example setup was tested on Windows 11 with WSL and Podman, and it works well there.
 
-This is the deployment shape I recommend for real local use.
+My PC specs for reference:
+- CPU: AMD Ryzen 7940HX (16 cores)
+- RAM: 32 GB DDR5 5200
+- GPU: Nvidia RTX 5090 Founders Edition
 
-## What This Guide Optimizes For
+If you have the similar PC, you can jump into `Recommended User Flow` section and just follow the steps there - otherwise, you'd need to configure LLM server for your hardware. Research quality and speed mainly depend on the LLM. See `Picking the right model` section for details.
 
-The goal is to give users a setup that is still easy to run, but easier to understand and maintain than one giant pod.
+The recommended single-host layout is four pods with clear responsibility boundaries:
 
-This approach is designed to make these things simpler:
+- Edge Pod
+- App Pod
+- Crawl Pod
+- Model Pod
 
-- upgrading one subsystem without touching the others
-- using an external LLM later
-- using an external crawl stack later
-- keeping Research Engine data separate from Firecrawl data
-- understanding what each part of the system is responsible for
+This alignment keeps the stack easy to replace and scale without turning it into one large pod. If you prefer, you can also run a single PostgreSQL container and a single Redis container for the whole stack.
 
-## Recommended Pod Layout
-
-For a local single-host install, split the system into four logical units.
-
-### Edge Pod
+## Edge Pod
 
 Services:
 
 - `caddy`
 
-Responsibility:
+Purpose:
 
-- receives browser traffic
-- terminates HTTPS when HTTPS is enabled
-- routes UI requests to `research-webui`
-- routes API requests such as `/api/*` to `research-api`
+- provide HTTPS
+- provide the friendly local address `https://research-webui.llm.local:8443/`
+- route UI traffic to `research-webui`
+- route API traffic to `research-api`
+- optionally load-balance multiple `research-api` instances later
 
-Why this should be separate:
+`http://localhost:8080/` still works and can be used as a fallback, but the friendly HTTPS address is the recommended path.
 
-- it is the public entrypoint
-- certificate and hostname concerns belong here, not inside the app pod
-
-### App Pod
+## App Pod
 
 Services:
 
@@ -53,23 +46,15 @@ Services:
 - `research-api`
 - `research-postgres`
 - `research-redis`
-- optional `ollama` for local embeddings
+- `ollama`
 
-Responsibility:
+Build `research-webui` and `research-api` from source for now. Container images will be published to GitHub Container Registry later and the example configuration will be updated with those image URLs.
 
-- serves the UI
-- runs the API
-- stores Research Engine application data
-- stores the Redis-backed event bus and rate-limit state
-- optionally hosts the local embeddings model
+`ollama` is not optional and is used to generate embeddings. You can replace it with any OpenAI-compatible embeddings service. Ollama is used here because it is easy to deploy. In the example setup, it uses the CPU to compute embeddings and keep some load off the GPU.
 
-Why these belong together:
+`research-api` supports horizontal scaling and rate limiting. See `Docs/configuration.md`.
 
-- they are the core application
-- they are versioned together
-- they usually change together
-
-### Crawl Pod
+## Crawl Pod
 
 Services:
 
@@ -79,225 +64,96 @@ Services:
 - `crawl-postgres`
 - `crawl-redis`
 
-Responsibility:
+For a self-hosted deployment, follow the Firecrawl docs:
 
-- search
-- scraping
-- Playwright-based browser automation
-- Firecrawl-specific persistence and queueing
+- https://docs.firecrawl.dev/contributing/self-host
 
-Why these belong together:
+You can also use the Firecrawl API and a Firecrawl service subscription instead of deploying this pod.
 
-- they support one subsystem
-- many users may want to replace this whole block later
-- Research Engine should not share Firecrawl's database and Redis by default
+This project is not sponsored by or affiliated with Firecrawl. It is used here because switching between the self-hosted and cloud versions is easy. Support for Crawl4AI is coming soon:
 
-### Model Pod
+- https://github.com/unclecode/crawl4ai
+
+## Model Pod
 
 Services:
 
 - `vllm`
 
-Responsibility:
+For a local deployment, follow the vLLM docs:
 
-- serves the main OpenAI-compatible chat model
+- https://docs.vllm.ai/en/latest/serving/openai_compatible_server.html
 
-Why this should be separate:
+Any OpenAI-compatible web service can be used instead of `vllm`. The current sample setup is tuned for a single RTX 5090. A non-containerized Ollama or LM Studio setup can also be used instead.
 
-- it is often the heaviest service
-- it may need different hardware tuning
-- many users will want to replace it with a cloud or external OpenAI-compatible endpoint
+### Picking the right model
+The most important part of the configuration is choosing the right model. The goal is to find the best balance between quality and speed. The app supports both thinking and non-thinking models, but the model must support tool calling because it is used by the research pipeline. Speed matters too: the slower the model, the slower the research.
 
-## Why This Layout Works Well Locally
+As a rule of thumb, the model should process at least 50 tokens per second if you want to generate a mid-size report in around 10 minutes.
 
-This layout is a good fit for a single machine because it keeps the system understandable without overcomplicating it.
+Ollama and LM Studio are good options for testing models on your hardware because both can expose an OpenAI-compatible API.
 
-You are not managing dozens of tiny deployment units. At the same time, you avoid one all-in-one pod where every service shares one lifecycle and one giant manifest.
+If you want the App Pod to use a local Ollama or LM Studio instance running on the host, update `Deploy/single-host/20-app.yaml` in the `research-api` container:
 
-In practice, this gives you a clean mental model:
+- set `ChatConfig__Endpoint` to the chat endpoint exposed by your local server
+- set `ChatConfig__ModelId` to the exact model name served by that endpoint
+- keep `ChatConfig__ApiKey` in `Deploy/single-host/00-common.yaml` set to a non-empty value expected by that backend
 
-- edge handles traffic
-- app handles Research Engine
-- crawl handles web collection
-- model handles text generation
+Typical endpoint examples:
 
-## Local Hostnames and HTTPS
+- Ollama: `http://host.containers.internal:11434/v1`
+- LM Studio: `http://host.containers.internal:1234/v1`
 
-For local deployment, there are two reasonable user-facing options.
+If you also want to use that local server for embeddings, update these values in `Deploy/single-host/20-app.yaml`:
 
-### Easiest Local Setup
+- `EmbeddingConfig__Endpoint`
+- `EmbeddingConfig__ModelId`
+- `EmbeddingConfig__Dimension`
 
-Use `localhost` and avoid custom local domains.
+and keep `EmbeddingConfig__ApiKey` in `Deploy/single-host/00-common.yaml` set to a non-empty value.
 
-This is the lowest-friction option because it avoids:
+If you switch both chat and embeddings to host-run services, you can stop using the local `vllm` pod. The app still requires embeddings, so if you stop using the bundled `ollama` container, make sure `EmbeddingConfig` points to another working embeddings backend.
 
-- editing the hosts file
-- trusting a custom local CA
-
-This is the best default for users who just want the app running quickly on one machine.
-
-### Polished Local Setup
-
-Use a friendly hostname such as:
-
-```text
-research-webui.llm.local
-```
-
-and terminate HTTPS in Caddy.
-
-If you choose this route, the guide should assume:
-
-- the hostname must resolve locally
-- the certificate must be trusted by the host browser
-
-For a user-friendly setup, I recommend documenting host-generated local certificates instead of relying on Caddy's internal CA as the primary path.
-
-That keeps certificate trust explicit and easier to explain.
-
-## Data Ownership
-
-For this modular local deployment, Research Engine and Firecrawl should not share the same PostgreSQL and Redis services by default.
-
-Recommended ownership:
-
-- Research Engine owns `research-postgres`
-- Research Engine owns `research-redis`
-- Firecrawl owns `crawl-postgres`
-- Firecrawl owns `crawl-redis`
-
-This separation makes local deployment healthier in the long run because it improves:
-
-- backup boundaries
-- upgrades
-- troubleshooting
-- service replacement
-
-It also avoids confusing situations where one service starts as an internal dependency of another and later becomes a shared platform by accident.
-
-## Optional Services
-
-This modular approach is especially useful because not every user needs the full stack.
-
-The guide should clearly explain that these parts are replaceable:
-
-- `vllm`
-  - can be replaced with another OpenAI-compatible chat endpoint
-
-- `ollama`
-  - can be replaced with another embeddings endpoint
-
-- `firecrawl` stack
-  - can be replaced with an external Firecrawl deployment if the API is reachable
-
-- `caddy`
-  - can be skipped for very simple localhost-only setups
-
-This is one of the main benefits of the modular layout. Users can start local-first and later move only one subsystem out of the box.
-
-## Before You Start
-
-This local deployment assumes the following images already exist on the machine:
-
-- `localhost/research-api:latest`
-- `localhost/research-webui:latest`
-- `localhost/nuq-postgres:latest`
-
-The first two are your application images.
-
-The third image is required by the crawl pod. Firecrawl expects the NuQ database schema and jobs to already exist, so a plain `postgres:17` image is not enough.
-
-## Building `nuq-postgres`
-
-The crawl pod uses:
-
-```text
-localhost/nuq-postgres:latest
-```
-
-That image is built from:
-
-```text
-C:\LLM\nuc\Dockerfile
-```
-
-Build it with:
-
-```powershell
-podman build -t localhost/nuq-postgres:latest C:\LLM\nuc
-```
-
-Why this image is needed:
-
-- it installs the PostgreSQL extensions required by the NuQ stack
-- it runs the SQL initialization files during database creation
-- it prepares the schema Firecrawl workers expect at startup
-
-If this image is missing and you use a plain PostgreSQL container instead, the Firecrawl workers will start and then fail when they try to read NuQ queue tables.
-
-If you already started an older version of the crawl pod with a plain PostgreSQL image, keep in mind that PostgreSQL init scripts only run when the data directory is empty.
-
-That means:
-
-- changing the image later is not enough by itself
-- the crawl database must use a fresh volume, or the old volume must be removed intentionally
-
-The modular manifests in this repository use a dedicated crawl volume name for the NuQ-backed database so a fresh local deployment initializes correctly.
-
-## Repository Layout
-
-This repository now includes the modular single-host layout under `deploy/`.
-
-Current structure:
-
-```text
-deploy/
-  single-host/
-    00-common.yaml
-    10-edge.yaml
-    20-app.yaml
-    30-crawl.yaml
-    40-model-vllm.yaml
-  single-host.ps1
-```
-
-This keeps both sides happy:
-
-- maintainers get smaller, clearer manifests
-- users still get one command to start or stop the local stack
+Important: the current tokenizer implementation expects the chat backend to provide a compatible `/tokenize` endpoint. See `Docs/configuration.md`. If your Ollama or LM Studio setup does not provide that endpoint, keep `vllm` as the chat backend and use Ollama or LM Studio only for model testing, or place a compatible proxy in front of it.
 
 ## Recommended User Flow
 
-For a local user, the experience should feel like this:
+This is the recommended setup flow for a clean Windows installation with current NVIDIA drivers:
 
-1. Install Podman and make sure the machine can run the required containers.
-2. Build `localhost/nuq-postgres:latest` from `C:\LLM\nuc`.
-3. Choose whether to use `localhost` or a custom local hostname.
-4. Choose whether to run local models and local crawl services or point to external ones.
-5. Start the required pods with `deploy/single-host.ps1`.
-6. Open the Web UI through Caddy or directly through `localhost`, depending on the chosen profile.
+1. Install Podman.
+2. If you want to run the local `vllm` pod, configure GPU passthrough for Podman:
+   https://podman-desktop.io/docs/podman/gpu
+3. Build the application images from source:
 
-That flow is simple enough for local use while still leaving room for more advanced setups.
+   ```powershell
+   podman build -t research-webui:latest ./ResearchEngine.WebUI/
+   podman build -t research-api:latest ./ResearchEngine.API/
+   ```
 
-## Recommended Default
+4. Configure the crawl and model services you want to use.
+   If you use Firecrawl Cloud or another OpenAI-compatible model service, update the endpoints and keys in `Deploy/single-host`.
+   Follow the Firecrawl and vLLM documentation if you plan to run them locally.
+5. Deploy the stack:
 
-If this repository presents one local deployment strategy as the main path, I recommend this one:
+   ```powershell
+   .\Deploy\single-host.ps1 up
+   ```
 
-- modular single-host deployment
-- split into edge, app, crawl, and model pods
-- separate PostgreSQL and Redis for Research Engine and Firecrawl
-- `localhost` as the easiest default
-- optional friendly hostname and HTTPS for users who want a cleaner local URL
+6. Add this entry to `C:\Windows\System32\drivers\etc\hosts`:
 
-This gives users a setup that is still approachable, but much easier to evolve than a single giant pod.
+   ```text
+   127.0.0.1 research-webui.llm.local
+   ```
 
-## What This Means for the Current Repository
+7. Install the local Caddy certificate:
 
-Today the repository has both:
+   ```powershell
+   .\Deploy\trust-caddy-local-ca.ps1
+   ```
 
-- the older all-in-one example in [deploy/llm-stack.yaml](/c:/LLM/ResearchApi/deploy/llm-stack.yaml#L1)
-- the modular single-host deployment files under [deploy/single-host/00-common.yaml](/c:/LLM/ResearchApi/Deploy/single-host/00-common.yaml#L1)
+8. Open the app:
 
-This guide treats the modular layout as the preferred local deployment path.
-
-The wrapper script for this deployment is [deploy/single-host.ps1](/c:/LLM/ResearchApi/Deploy/single-host.ps1#L1).
+   ```text
+   https://research-webui.llm.local:8443/
+   ```
+9. You're ready to go. Good luck with your research!

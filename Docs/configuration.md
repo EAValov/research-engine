@@ -166,6 +166,7 @@ Important:
 
 - the current tokenizer implementation expects a compatible `/tokenize` endpoint on the chat backend host
 - `ChatConfig` is not validated on startup by data annotations, so bad values may fail when first used
+- the current sample setup is tuned for a single RTX 5090 and using the `nvidia/Qwen3-30B-A3B-NVFP4` model.
 
 Single-host deployment example:
 
@@ -208,6 +209,7 @@ Usage:
 Important:
 
 - if `Dimension` does not match the actual vector length, persistence and vector search will break
+- The examle config uses `Qwen/Qwen3-Embedding-0.6B` embedding model. 
 
 Single-host deployment example:
 
