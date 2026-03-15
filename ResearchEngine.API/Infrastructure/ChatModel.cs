@@ -11,31 +11,16 @@ namespace ResearchEngine.Infrastructure;
 
 public sealed class OpenAiChatModel : IChatModel
 {
-    private readonly ChatClient _rawChatClient;
-    private readonly IChatClient _chatClient;
+    private readonly IOptionsMonitor<ChatConfig> _chatOptions;
+    private readonly object _sync = new();
+    private ChatClientState? _state;
 
-    public string ModelId { get; }
-
-    public OpenAiChatModel(IOptions<ChatConfig> options)
+    public OpenAiChatModel(IOptionsMonitor<ChatConfig> options)
     {
-        var cfg = options.Value ?? throw new ArgumentNullException(nameof(options));
-
-        ModelId = cfg.ModelId;
-
-        var clientOptions = new OpenAIClientOptions
-        {
-            Endpoint = new Uri(cfg.Endpoint)
-        };
-
-        if (string.IsNullOrWhiteSpace(cfg.ApiKey))
-            throw new InvalidOperationException("Missing required configuration: ChatConfig:ApiKey");
-
-        _rawChatClient = new ChatClient(cfg.ModelId, new ApiKeyCredential(cfg.ApiKey), clientOptions);
-
-        _chatClient = new ChatClientBuilder(_rawChatClient.AsIChatClient())
-            .UseFunctionInvocation()
-            .Build();
+        _chatOptions = options ?? throw new ArgumentNullException(nameof(options));
     }
+
+    public string ModelId => GetOrCreateState().Config.ModelId;
 
     public Task<ChatResponse> ChatAsync(
         Prompt prompt,
@@ -49,6 +34,7 @@ public sealed class OpenAiChatModel : IChatModel
         if (prompt.userPrompt is null)
             throw new ArgumentNullException(nameof(prompt.userPrompt));
 
+        var state = GetOrCreateState();
         var options = new ChatOptions();
 
         if (tools != null)
@@ -75,7 +61,7 @@ public sealed class OpenAiChatModel : IChatModel
             new(ChatRole.User, prompt.userPrompt)
         };
 
-        return _chatClient.GetResponseAsync(history, options, cancellationToken);
+        return state.ChatClient.GetResponseAsync(history, options, cancellationToken);
     }
 
     public string StripThinkBlock(string text)
@@ -100,7 +86,6 @@ public sealed class OpenAiChatModel : IChatModel
     {
         if (function is null) throw new ArgumentNullException(nameof(function));
 
-        // If name is not provided, use method name as default
         name ??= function.Method.Name;
         description ??= string.Empty;
 
@@ -109,5 +94,49 @@ public sealed class OpenAiChatModel : IChatModel
             name: name,
             description: description);
     }
-}
 
+    private ChatClientState GetOrCreateState()
+    {
+        var config = _chatOptions.CurrentValue ?? throw new InvalidOperationException("ChatConfig is not configured.");
+
+        lock (_sync)
+        {
+            if (_state is not null &&
+                string.Equals(_state.Config.Endpoint, config.Endpoint, StringComparison.Ordinal) &&
+                string.Equals(_state.Config.ApiKey, config.ApiKey, StringComparison.Ordinal) &&
+                string.Equals(_state.Config.ModelId, config.ModelId, StringComparison.Ordinal))
+            {
+                return _state;
+            }
+
+            if (string.IsNullOrWhiteSpace(config.ApiKey))
+                throw new InvalidOperationException("Missing required configuration: ChatConfig:ApiKey");
+
+            var clientOptions = new OpenAIClientOptions
+            {
+                Endpoint = new Uri(config.Endpoint, UriKind.Absolute)
+            };
+
+            var rawChatClient = new ChatClient(
+                config.ModelId,
+                new ApiKeyCredential(config.ApiKey),
+                clientOptions);
+
+            _state = new ChatClientState(
+                new ChatConfig
+                {
+                    Endpoint = config.Endpoint,
+                    ApiKey = config.ApiKey,
+                    ModelId = config.ModelId,
+                    MaxContextLength = config.MaxContextLength
+                },
+                new ChatClientBuilder(rawChatClient.AsIChatClient())
+                    .UseFunctionInvocation()
+                    .Build());
+
+            return _state;
+        }
+    }
+
+    private sealed record ChatClientState(ChatConfig Config, IChatClient ChatClient);
+}

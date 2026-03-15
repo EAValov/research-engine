@@ -7,6 +7,8 @@ public sealed class ResearchJob
     public Guid Id { get; set; }
 
     public string Query { get; set; } = null!;
+    public string ChatModelName { get; set; } = null!;
+    public string EmbeddingModelName { get; set; } = null!;
     public int Breadth { get; set; }
     public int Depth { get; set; }
     public ResearchJobStatus Status { get; set; }

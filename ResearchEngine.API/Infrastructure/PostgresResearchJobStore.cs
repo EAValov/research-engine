@@ -12,6 +12,8 @@ public sealed partial class PostgresResearchJobStore(
     IDbContextFactory<ResearchDbContext> dbContextFactory,
     IResearchEventBus eventBus,
     IOptionsMonitor<LearningSimilarityOptions> similarityOptions,
+    IOptionsMonitor<ChatConfig> chatOptions,
+    IOptions<EmbeddingConfig> embeddingOptions,
     ILogger<IResearchJobStore> logger
 ) : IResearchJobStore
 {
@@ -30,6 +32,8 @@ public sealed partial class PostgresResearchJobStore(
         {
             Id = Guid.NewGuid(),
             Query = query,
+            ChatModelName = NormalizeModelName(chatOptions.CurrentValue.ModelId, nameof(ChatConfig.ModelId)),
+            EmbeddingModelName = NormalizeModelName(embeddingOptions.Value.ModelId, nameof(EmbeddingConfig.ModelId)),
             Breadth = breadth,
             Depth = depth,
             Status = ResearchJobStatus.Pending,
@@ -309,6 +313,8 @@ public sealed partial class PostgresResearchJobStore(
             Id = Guid.NewGuid(),
             JobId = jobId,
             ParentSynthesisId = parentSynthesisId,
+            ChatModelName = NormalizeModelName(chatOptions.CurrentValue.ModelId, nameof(ChatConfig.ModelId)),
+            EmbeddingModelName = NormalizeModelName(embeddingOptions.Value.ModelId, nameof(EmbeddingConfig.ModelId)),
             Status = SynthesisStatus.Created,
             Outline = outline,
             Instructions = instructions,
@@ -455,6 +461,8 @@ public sealed partial class PostgresResearchJobStore(
                 s.JobId,
                 s.ParentSynthesisId,
                 s.Status.ToString(),
+                s.ChatModelName,
+                s.EmbeddingModelName,
                 s.CreatedAt,
                 s.CompletedAt,
                 s.ErrorMessage,
@@ -1137,5 +1145,14 @@ public sealed partial class PostgresResearchJobStore(
         var bytes = Encoding.UTF8.GetBytes(input ?? string.Empty);
         var hash = sha.ComputeHash(bytes);
         return Convert.ToHexString(hash);
+    }
+
+    private static string NormalizeModelName(string? value, string settingName)
+    {
+        var trimmed = value?.Trim();
+        if (string.IsNullOrWhiteSpace(trimmed))
+            throw new InvalidOperationException($"{settingName} must be configured before creating jobs or syntheses.");
+
+        return trimmed;
     }
 }

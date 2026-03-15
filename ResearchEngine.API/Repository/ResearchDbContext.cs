@@ -59,6 +59,14 @@ public sealed class ResearchDbContext : DbContext
             .IsRequired()
             .HasMaxLength(4000);
 
+        entity.Property(j => j.ChatModelName)
+            .IsRequired()
+            .HasMaxLength(500);
+
+        entity.Property(j => j.EmbeddingModelName)
+            .IsRequired()
+            .HasMaxLength(500);
+
         entity.Property(j => j.Status)
             .HasConversion<string>()
             .IsRequired();
@@ -309,6 +317,14 @@ public sealed class ResearchDbContext : DbContext
             .HasConversion<string>()
             .IsRequired()
             .HasMaxLength(50);
+
+        entity.Property(s => s.ChatModelName)
+            .IsRequired()
+            .HasMaxLength(500);
+
+        entity.Property(s => s.EmbeddingModelName)
+            .IsRequired()
+            .HasMaxLength(500);
 
         entity.Property(s => s.Outline);
         entity.Property(s => s.Instructions);

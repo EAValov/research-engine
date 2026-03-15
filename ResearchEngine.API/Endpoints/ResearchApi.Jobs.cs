@@ -60,6 +60,8 @@ public static partial class ResearchApi
         var items = jobs.Select(j => new ResearchJobListItemDto(
             Id: j.Id,
             Query: j.Query,
+            ChatModelName: j.ChatModelName,
+            EmbeddingModelName: j.EmbeddingModelName,
             Breadth: j.Breadth,
             Depth: j.Depth,
             Status: j.Status.ToString(),
@@ -92,6 +94,8 @@ public static partial class ResearchApi
         return Results.Ok(new GetResearchJobResponse(
             Id: job.Id,
             Query: job.Query,
+            ChatModelName: job.ChatModelName,
+            EmbeddingModelName: job.EmbeddingModelName,
             Breadth: job.Breadth,
             Depth: job.Depth,
             Status: job.Status.ToString(),
@@ -109,6 +113,8 @@ public static partial class ResearchApi
                 : new LatestSynthesisSummaryDto(
                     latest.Id,
                     latest.Status.ToString(),
+                    latest.ChatModelName,
+                    latest.EmbeddingModelName,
                     latest.CreatedAt,
                     latest.CompletedAt)
             ));

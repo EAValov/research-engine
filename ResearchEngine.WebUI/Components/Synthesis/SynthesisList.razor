@@ -50,6 +50,11 @@
                             <span class="dot">•</span>
                             <span>@s.SectionCount sections</span>
                         </div>
+                        <div class="meta">
+                            <span>Chat: @DisplayModelName(s.ChatModelName)</span>
+                            <span class="dot">•</span>
+                            <span>Embeddings: @DisplayModelName(s.EmbeddingModelName)</span>
+                        </div>
 
                         @if (!string.IsNullOrWhiteSpace(s.ErrorMessage))
                         {
@@ -174,6 +179,9 @@
 
     private static string ShortId(Guid id) => id.ToString("N")[..8];
     private static string Fmt(DateTimeOffset dto) => dto.ToLocalTime().ToString("yyyy-MM-dd HH:mm");
+
+    private static string DisplayModelName(string? value)
+        => string.IsNullOrWhiteSpace(value) ? "Not recorded" : value.Trim();
 
     private static bool CanDeleteFromUi(SynthesisListItemDto s)
         => string.Equals(s.Status?.Trim(), "Failed", StringComparison.OrdinalIgnoreCase);

@@ -4,6 +4,7 @@ public sealed class RuntimeSettingsResponseModel
 {
     public ResearchOrchestratorConfigModel ResearchOrchestratorConfig { get; set; } = new();
     public LearningSimilarityOptionsModel LearningSimilarityOptions { get; set; } = new();
+    public RuntimeChatConfigModel ChatConfig { get; set; } = new();
     public RuntimeModelInfoModel Models { get; set; } = new();
 }
 
@@ -11,6 +12,18 @@ public sealed class UpdateRuntimeSettingsRequestModel
 {
     public ResearchOrchestratorConfigModel ResearchOrchestratorConfig { get; set; } = new();
     public LearningSimilarityOptionsModel LearningSimilarityOptions { get; set; } = new();
+    public UpdateChatConfigModel ChatConfig { get; set; } = new();
+}
+
+public sealed class ChatModelCatalogRequestModel
+{
+    public string Endpoint { get; set; } = string.Empty;
+    public string ApiKey { get; set; } = string.Empty;
+}
+
+public sealed class ChatModelCatalogResponseModel
+{
+    public List<string> ModelIds { get; set; } = new();
 }
 
 public sealed class ResearchOrchestratorConfigModel
@@ -36,4 +49,20 @@ public sealed class RuntimeModelInfoModel
 {
     public string ChatModelId { get; set; } = string.Empty;
     public string EmbeddingModelId { get; set; } = string.Empty;
+}
+
+public sealed class RuntimeChatConfigModel
+{
+    public string Endpoint { get; set; } = string.Empty;
+    public string ModelId { get; set; } = string.Empty;
+    public int? MaxContextLength { get; set; }
+    public bool HasApiKey { get; set; }
+}
+
+public sealed class UpdateChatConfigModel
+{
+    public string Endpoint { get; set; } = string.Empty;
+    public string ModelId { get; set; } = string.Empty;
+    public string ApiKey { get; set; } = string.Empty;
+    public int? MaxContextLength { get; set; }
 }

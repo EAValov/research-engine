@@ -5,6 +5,8 @@ public sealed record SynthesisDto(
     Guid JobId,
     Guid? ParentSynthesisId,
     string Status,
+    string ChatModelName,
+    string EmbeddingModelName,
     string? Outline,
     string? Instructions,
     DateTimeOffset CreatedAt,

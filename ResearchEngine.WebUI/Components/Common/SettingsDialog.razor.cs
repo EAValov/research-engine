@@ -15,6 +15,11 @@ public partial class SettingsDialog : ComponentBase
         string? Error = null,
         Dictionary<string, string>? FieldErrors = null);
 
+    private sealed record ChatModelCatalogCallResult(
+        ChatModelCatalogResponseModel? Data,
+        string? Error = null,
+        Dictionary<string, string>? FieldErrors = null);
+
     private static readonly JsonSerializerOptions RuntimeSettingsJsonOptions = new()
     {
         PropertyNameCaseInsensitive = true
@@ -35,10 +40,16 @@ public partial class SettingsDialog : ComponentBase
     private bool _draftApiAuthEnabled = true;
     private ResearchOrchestratorConfigModel _draftResearchOptions = new();
     private LearningSimilarityOptionsModel _draftLearningOptions = new();
+    private RuntimeChatConfigModel _draftChatConfig = new();
+    private string _draftChatApiKey = string.Empty;
+    private readonly List<string> _chatModelOptions = new();
     private ResearchOrchestratorConfigModel _baselineResearchOptions = new();
     private LearningSimilarityOptionsModel _baselineLearningOptions = new();
-    private RuntimeModelInfoModel _runtimeModels = new();
+    private RuntimeChatConfigModel _baselineChatConfig = new();
     private readonly Dictionary<string, string> _fieldErrors = new(StringComparer.Ordinal);
+    private CancellationTokenSource? _chatModelLoadCts;
+    private bool _loadingChatModelOptions;
+    private string? _chatModelOptionsError;
     private string? _settingsError;
     private string? _settingsSuccess;
     private string _baselineApiBaseUrl = string.Empty;
@@ -51,6 +62,8 @@ public partial class SettingsDialog : ComponentBase
         && !_savingSettings;
 
     private bool IsRuntimeSettingsDisabled => !_runtimeSettingsLoaded || _loadingRuntimeSettings || _savingSettings;
+    private bool IsChatModelSelectionDisabled => IsRuntimeSettingsDisabled || (_loadingChatModelOptions && ChatModelDropdownOptions.Count == 0);
+    private IReadOnlyList<string> ChatModelDropdownOptions => BuildChatModelDropdownOptions();
 
     private bool HasPendingApiConnectionChange =>
         !string.Equals(
@@ -63,7 +76,9 @@ public partial class SettingsDialog : ComponentBase
     private bool HasRuntimeSettingsChanges =>
         _runtimeSettingsLoaded
         && (!ResearchOptionsEqual(_draftResearchOptions, _baselineResearchOptions)
-            || !LearningOptionsEqual(_draftLearningOptions, _baselineLearningOptions));
+            || !LearningOptionsEqual(_draftLearningOptions, _baselineLearningOptions)
+            || !ChatConfigEqual(_draftChatConfig, _baselineChatConfig)
+            || !string.IsNullOrWhiteSpace(_draftChatApiKey));
 
     private bool HasAnyChanges
         => HasPendingApiConnectionChange || HasRuntimeSettingsChanges;
@@ -95,6 +110,7 @@ public partial class SettingsDialog : ComponentBase
     private void CloseSettings()
     {
         ResetAppliedState();
+        CancelPendingChatModelLoad();
         _settingsOpen = false;
         ResetSettingsMessages();
         ClearFieldErrors();
@@ -144,7 +160,8 @@ public partial class SettingsDialog : ComponentBase
             var request = new UpdateRuntimeSettingsRequestModel
             {
                 ResearchOrchestratorConfig = CloneResearchOptions(_draftResearchOptions),
-                LearningSimilarityOptions = CloneLearningOptions(_draftLearningOptions)
+                LearningSimilarityOptions = CloneLearningOptions(_draftLearningOptions),
+                ChatConfig = CloneChatConfigForUpdate(_draftChatConfig, _draftChatApiKey)
             };
 
             var saveResult = await UpdateRuntimeSettingsDirectAsync(
@@ -169,7 +186,10 @@ public partial class SettingsDialog : ComponentBase
             }
 
             if (saveResult.Data is not null)
+            {
                 ApplyRuntimeSettings(saveResult.Data);
+                await LoadChatModelOptionsAsync(CancellationToken.None);
+            }
 
             _settingsSuccess = null;
             StartAppliedState();
@@ -209,6 +229,45 @@ public partial class SettingsDialog : ComponentBase
     {
         _draftApiAuthEnabled = e.Value is bool value && value;
         ResetSettingsMessages();
+    }
+
+    private void OnChatEndpointChanged(ChangeEventArgs e)
+    {
+        _draftChatConfig.Endpoint = e.Value?.ToString() ?? string.Empty;
+        ResetSettingsMessages();
+        _fieldErrors.Remove("ChatConfig.Endpoint");
+        QueueChatModelOptionsRefresh();
+    }
+
+    private void OnChatModelIdChanged(ChangeEventArgs e)
+    {
+        _draftChatConfig.ModelId = e.Value?.ToString() ?? string.Empty;
+        ResetSettingsMessages();
+        _fieldErrors.Remove("ChatConfig.ModelId");
+    }
+
+    private void OnChatApiKeyChanged(ChangeEventArgs e)
+    {
+        _draftChatApiKey = e.Value?.ToString() ?? string.Empty;
+        ResetSettingsMessages();
+        _fieldErrors.Remove("ChatConfig.ApiKey");
+        QueueChatModelOptionsRefresh();
+    }
+
+    private void OnChatMaxContextLengthChanged(ChangeEventArgs e)
+    {
+        var value = e.Value?.ToString();
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            _draftChatConfig.MaxContextLength = null;
+        }
+        else if (int.TryParse(value, out var parsed))
+        {
+            _draftChatConfig.MaxContextLength = parsed;
+        }
+
+        ResetSettingsMessages();
+        _fieldErrors.Remove("ChatConfig.MaxContextLength");
     }
 
     private async Task TestSettingsAsync()
@@ -274,11 +333,12 @@ public partial class SettingsDialog : ComponentBase
             if (result.Data is not null)
             {
                 ApplyRuntimeSettings(result.Data);
+                await LoadChatModelOptionsAsync(CancellationToken.None);
                 return true;
             }
 
             _runtimeSettingsLoaded = false;
-            _runtimeModels = new RuntimeModelInfoModel();
+            ResetChatModelOptionsState();
 
             if (showFailureMessage && !string.IsNullOrWhiteSpace(result.Error))
                 _settingsError = result.Error;
@@ -296,14 +356,13 @@ public partial class SettingsDialog : ComponentBase
     {
         _draftResearchOptions = CloneResearchOptions(response.ResearchOrchestratorConfig);
         _draftLearningOptions = CloneLearningOptions(response.LearningSimilarityOptions);
+        _draftChatConfig = CloneRuntimeChatConfig(response.ChatConfig);
+        _draftChatApiKey = string.Empty;
         _baselineResearchOptions = CloneResearchOptions(response.ResearchOrchestratorConfig);
         _baselineLearningOptions = CloneLearningOptions(response.LearningSimilarityOptions);
-        _runtimeModels = new RuntimeModelInfoModel
-        {
-            ChatModelId = response.Models.ChatModelId ?? string.Empty,
-            EmbeddingModelId = response.Models.EmbeddingModelId ?? string.Empty
-        };
+        _baselineChatConfig = CloneRuntimeChatConfig(response.ChatConfig);
         _runtimeSettingsLoaded = true;
+        _chatModelOptionsError = null;
     }
 
     private void ValidateApiDraft()
@@ -326,6 +385,21 @@ public partial class SettingsDialog : ComponentBase
         ValidateRange("LearningSimilarityOptions.GroupAssignSimilarityThreshold", _draftLearningOptions.GroupAssignSimilarityThreshold, 0f, 1f);
         ValidateRange("LearningSimilarityOptions.GroupSearchTopK", _draftLearningOptions.GroupSearchTopK, 1, 50);
         ValidateRange("LearningSimilarityOptions.MaxEvidenceLength", _draftLearningOptions.MaxEvidenceLength, 1, 1_000_000);
+
+        if (ApiConnectionSettings.NormalizeBaseUrl(_draftChatConfig.Endpoint) is null)
+            SetFieldError("ChatConfig.Endpoint", "Enter a valid absolute URL that starts with http:// or https://.");
+
+        if (string.IsNullOrWhiteSpace(_draftChatConfig.ModelId))
+            SetFieldError("ChatConfig.ModelId", "Model id is required.");
+
+        if (_draftChatConfig.MaxContextLength is int maxContextLength &&
+            maxContextLength < 10_000)
+        {
+            SetFieldError("ChatConfig.MaxContextLength", "Value must be at least 10000.");
+        }
+
+        if (!_draftChatConfig.HasApiKey && string.IsNullOrWhiteSpace(_draftChatApiKey))
+            SetFieldError("ChatConfig.ApiKey", "Enter the chat backend API key.");
 
         if (_draftLearningOptions.MinLearningsPerSegment > _draftLearningOptions.MaxLearningsPerSegment)
         {
@@ -430,6 +504,14 @@ public partial class SettingsDialog : ComponentBase
             && left.GroupAssignSimilarityThreshold == right.GroupAssignSimilarityThreshold
             && left.GroupSearchTopK == right.GroupSearchTopK
             && left.MaxEvidenceLength == right.MaxEvidenceLength;
+
+    private static bool ChatConfigEqual(
+        RuntimeChatConfigModel left,
+        RuntimeChatConfigModel right)
+        => string.Equals(left.Endpoint, right.Endpoint, StringComparison.Ordinal)
+            && string.Equals(left.ModelId, right.ModelId, StringComparison.Ordinal)
+            && left.MaxContextLength == right.MaxContextLength
+            && left.HasApiKey == right.HasApiKey;
 
     private static async Task<(HttpStatusCode? Status, string? Error)> ProbeEndpointDirectAsync(
         string baseUrl,
@@ -550,6 +632,52 @@ public partial class SettingsDialog : ComponentBase
         }
     }
 
+    private static async Task<ChatModelCatalogCallResult> GetChatModelCatalogDirectAsync(
+        string baseUrl,
+        bool authEnabled,
+        string apiKey,
+        ChatModelCatalogRequestModel requestModel,
+        CancellationToken ct)
+    {
+        var normalizedBaseUrl = ApiConnectionSettings.NormalizeBaseUrl(baseUrl);
+        if (normalizedBaseUrl is null)
+            return new ChatModelCatalogCallResult(null, "Enter a valid absolute API URL that starts with http:// or https://.");
+
+        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        linkedCts.CancelAfter(TimeSpan.FromSeconds(8));
+
+        try
+        {
+            using var client = new HttpClient
+            {
+                BaseAddress = new Uri(normalizedBaseUrl, UriKind.Absolute)
+            };
+
+            var json = JsonSerializer.Serialize(requestModel, RuntimeSettingsJsonOptions);
+            using var request = CreateAuthorizedRequest(HttpMethod.Post, "api/settings/runtime/chat-models", authEnabled, apiKey);
+            request.Content = new StringContent(json, Encoding.UTF8, "application/json");
+
+            using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, linkedCts.Token);
+            var body = await response.Content.ReadAsStringAsync(linkedCts.Token);
+
+            if (!response.IsSuccessStatusCode)
+                return new ChatModelCatalogCallResult(null, BuildChatModelCatalogErrorMessage(response.StatusCode), ParseValidationErrors(body));
+
+            var data = JsonSerializer.Deserialize<ChatModelCatalogResponseModel>(body, RuntimeSettingsJsonOptions);
+            return data is null
+                ? new ChatModelCatalogCallResult(null, "The API returned an empty chat model catalog.")
+                : new ChatModelCatalogCallResult(data);
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            return new ChatModelCatalogCallResult(null, "Timed out while loading chat models.");
+        }
+        catch (HttpRequestException)
+        {
+            return new ChatModelCatalogCallResult(null, "Could not reach the API while loading chat models.");
+        }
+    }
+
     private static HttpRequestMessage CreateAuthorizedRequest(
         HttpMethod method,
         string relativePath,
@@ -571,9 +699,23 @@ public partial class SettingsDialog : ComponentBase
                 => "Authentication failed while accessing runtime settings.",
             HttpStatusCode.BadRequest or HttpStatusCode.UnprocessableEntity
                 => "The API rejected one or more settings values.",
+            HttpStatusCode.Conflict
+                => "Runtime settings cannot be changed while a research job or synthesis is running.",
             HttpStatusCode.NotFound
                 => "This API does not expose runtime settings.",
             _ => $"Runtime settings request failed with HTTP {(int)statusCode}."
+        };
+
+    private static string BuildChatModelCatalogErrorMessage(HttpStatusCode statusCode)
+        => statusCode switch
+        {
+            HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden
+                => "Authentication failed while loading chat models.",
+            HttpStatusCode.BadRequest or HttpStatusCode.UnprocessableEntity
+                => "The API rejected the chat backend model lookup request.",
+            HttpStatusCode.NotFound
+                => "This API does not expose chat model lookup.",
+            _ => $"Chat model lookup failed with HTTP {(int)statusCode}."
         };
 
     private static Dictionary<string, string>? ParseValidationErrors(string? body)
@@ -633,8 +775,147 @@ public partial class SettingsDialog : ComponentBase
             MaxEvidenceLength = source.MaxEvidenceLength
         };
 
-    private static string DisplayModelValue(string? value)
-        => string.IsNullOrWhiteSpace(value) ? "Not available" : value;
+    private static RuntimeChatConfigModel CloneRuntimeChatConfig(RuntimeChatConfigModel source)
+        => new()
+        {
+            Endpoint = source.Endpoint,
+            ModelId = source.ModelId,
+            MaxContextLength = source.MaxContextLength,
+            HasApiKey = source.HasApiKey
+        };
+
+    private static UpdateChatConfigModel CloneChatConfigForUpdate(RuntimeChatConfigModel source, string apiKey)
+        => new()
+        {
+            Endpoint = source.Endpoint,
+            ModelId = source.ModelId,
+            MaxContextLength = source.MaxContextLength,
+            ApiKey = apiKey
+        };
+
+    private IReadOnlyList<string> BuildChatModelDropdownOptions()
+    {
+        var values = new List<string>();
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+
+        var selectedModelId = (_draftChatConfig.ModelId ?? string.Empty).Trim();
+        if (!string.IsNullOrWhiteSpace(selectedModelId) && seen.Add(selectedModelId))
+            values.Add(selectedModelId);
+
+        foreach (var modelId in _chatModelOptions)
+        {
+            if (string.IsNullOrWhiteSpace(modelId) || !seen.Add(modelId))
+                continue;
+
+            values.Add(modelId);
+        }
+
+        return values;
+    }
+
+    private void QueueChatModelOptionsRefresh()
+    {
+        CancelPendingChatModelLoad();
+
+        if (!_runtimeSettingsLoaded)
+            return;
+
+        if (ApiConnectionSettings.NormalizeBaseUrl(_draftChatConfig.Endpoint) is null)
+        {
+            ResetChatModelOptionsState();
+            return;
+        }
+
+        var cts = new CancellationTokenSource();
+        _chatModelLoadCts = cts;
+        _ = RefreshChatModelOptionsAsync(cts.Token);
+    }
+
+    private async Task RefreshChatModelOptionsAsync(CancellationToken ct)
+    {
+        try
+        {
+            await Task.Delay(TimeSpan.FromMilliseconds(400), ct);
+            await LoadChatModelOptionsAsync(ct);
+        }
+        catch (OperationCanceledException)
+        {
+            // Expected when a newer request supersedes this one.
+        }
+    }
+
+    private async Task LoadChatModelOptionsAsync(CancellationToken ct)
+    {
+        if (!_runtimeSettingsLoaded)
+            return;
+
+        var normalizedEndpoint = ApiConnectionSettings.NormalizeBaseUrl(_draftChatConfig.Endpoint);
+        if (normalizedEndpoint is null)
+        {
+            ResetChatModelOptionsState();
+            return;
+        }
+
+        _loadingChatModelOptions = true;
+        _chatModelOptionsError = null;
+        await InvokeAsync(StateHasChanged);
+
+        try
+        {
+            var result = await GetChatModelCatalogDirectAsync(
+                _draftApiBaseUrl,
+                _draftApiAuthEnabled,
+                _draftApiKey,
+                new ChatModelCatalogRequestModel
+                {
+                    Endpoint = normalizedEndpoint,
+                    ApiKey = _draftChatApiKey
+                },
+                ct);
+
+            if (ct.IsCancellationRequested)
+                return;
+
+            _chatModelOptions.Clear();
+
+            if (result.Data?.ModelIds is { Count: > 0 } modelIds)
+            {
+                _chatModelOptions.AddRange(modelIds
+                    .Where(x => !string.IsNullOrWhiteSpace(x))
+                    .Distinct(StringComparer.Ordinal));
+                _chatModelOptionsError = null;
+
+                if (string.IsNullOrWhiteSpace(_draftChatConfig.ModelId) && _chatModelOptions.Count > 0)
+                    _draftChatConfig.ModelId = _chatModelOptions[0];
+            }
+            else
+            {
+                _chatModelOptionsError = result.FieldErrors?.Values.FirstOrDefault(x => !string.IsNullOrWhiteSpace(x))
+                    ?? result.Error
+                    ?? "No chat models were returned by the backend.";
+            }
+        }
+        finally
+        {
+            _loadingChatModelOptions = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private void ResetChatModelOptionsState()
+    {
+        CancelPendingChatModelLoad();
+        _loadingChatModelOptions = false;
+        _chatModelOptionsError = null;
+        _chatModelOptions.Clear();
+    }
+
+    private void CancelPendingChatModelLoad()
+    {
+        try { _chatModelLoadCts?.Cancel(); } catch { }
+        try { _chatModelLoadCts?.Dispose(); } catch { }
+        _chatModelLoadCts = null;
+    }
 
     private void ResetAppliedState()
     {

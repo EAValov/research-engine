@@ -148,13 +148,15 @@ env:
 "ChatConfig": {
   "Endpoint": "http://vllm:8000/v1",
   "ApiKey": "...",
-  "ModelId": "nvidia/Qwen3-30B-A3B-NVFP4"
+  "ModelId": "nvidia/Qwen3-30B-A3B-NVFP4",
+  "MaxContextLength": 32768
 }
 ```
 
 - `Endpoint` is the OpenAI-compatible chat backend
 - `ApiKey` is required by the current implementation
 - `ModelId` is required
+- `MaxContextLength` is optional
 
 Usage:
 
@@ -164,8 +166,10 @@ Usage:
 
 Important:
 
-- the current tokenizer implementation expects a compatible `/tokenize` endpoint on the chat backend host
-- `ChatConfig` is not validated on startup by data annotations, so bad values may fail when first used
+- if `MaxContextLength` is provided, the app uses a heuristic token estimate with a 20% safety buffer and does not require a `/tokenize` endpoint
+- if `MaxContextLength` is not provided, the app uses the chat backend's `/tokenize` endpoint
+- `MaxContextLength` must be at least `10000`; smaller context windows degrade quality a lot
+- `MaxContextLength` is validated on startup when provided; other bad `ChatConfig` values may still fail when first used
 - the current sample setup is tuned for a single RTX 5090 and using the `nvidia/Qwen3-30B-A3B-NVFP4` model.
 
 Single-host deployment example:
@@ -181,6 +185,14 @@ env:
       secretKeyRef:
         name: research-single-host-secrets
         key: ChatConfig__ApiKey
+```
+
+Optional override for backends that do not expose `/tokenize`:
+
+```yaml
+env:
+  - name: ChatConfig__MaxContextLength
+    value: "32768"
 ```
 
 ### `EmbeddingConfig`
@@ -609,6 +621,7 @@ FirecrawlOptions__HttpClientTimeoutSeconds=600
 ChatConfig__Endpoint=http://localhost:8000/v1
 ChatConfig__ApiKey=your-chat-key
 ChatConfig__ModelId=your-chat-model
+ChatConfig__MaxContextLength=32768
 EmbeddingConfig__Endpoint=http://localhost:11434/v1
 EmbeddingConfig__ApiKey=your-embedding-key
 EmbeddingConfig__ModelId=your-embedding-model

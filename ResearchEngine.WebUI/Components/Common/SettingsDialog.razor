@@ -13,11 +13,11 @@
                  role="dialog"
                  aria-modal="true"
                  aria-labelledby="settingsTitle"
-                 @onclick:stopPropagation="true">
+                @onclick:stopPropagation="true">
             <div class="settings-head">
                 <div>
                     <h2 id="settingsTitle">Settings</h2>
-                    <p class="settings-subtitle">API connection, live search settings, learning similarity, and active model ids.</p>
+                    <p class="settings-subtitle">API connection, chat backend, live search settings, and learning similarity.</p>
                 </div>
                 <button type="button" class="close-btn" @onclick="CloseSettings" aria-label="Close settings">×</button>
             </div>
@@ -66,10 +66,100 @@
                     </div>
                 </section>
 
+                <section class="settings-group">
+                    <div class="settings-group-head">
+                        <h3>Chat Backend</h3>
+                        <p>Runtime chat model settings for the connected API. Leave the chat backend API key blank to keep the current secret.</p>
+                    </div>
+
+                    <div class="settings-grid">
+                        <label class="settings-field settings-field-full">
+                            <span class="settings-label-row">
+                                <span>Endpoint</span>
+                                <span class="settings-help" title="Absolute OpenAI-compatible chat endpoint, usually ending with /v1.">Chat API URL</span>
+                            </span>
+                            <input class="@GetInputClass("ChatConfig.Endpoint")"
+                                   value="@_draftChatConfig.Endpoint"
+                                   @oninput="OnChatEndpointChanged"
+                                   disabled="@IsRuntimeSettingsDisabled"
+                                   placeholder="https://chat.example.com/v1" />
+                            @if (TryGetFieldError("ChatConfig.Endpoint", out var chatEndpointError))
+                            {
+                                <span class="settings-field-error">@chatEndpointError</span>
+                            }
+                        </label>
+
+                        <label class="settings-field">
+                            <span class="settings-label-row">
+                                <span>Model id</span>
+                                <span class="settings-help" title="Exact model id returned by the chat backend /models endpoint.">Backend model name</span>
+                            </span>
+                            <select class="@GetInputClass("ChatConfig.ModelId")"
+                                    value="@_draftChatConfig.ModelId"
+                                    @onchange="OnChatModelIdChanged"
+                                    disabled="@IsChatModelSelectionDisabled">
+                                @if (string.IsNullOrWhiteSpace(_draftChatConfig.ModelId))
+                                {
+                                    <option value="">Select a model</option>
+                                }
+                                @foreach (var modelId in ChatModelDropdownOptions)
+                                {
+                                    <option value="@modelId">@modelId</option>
+                                }
+                            </select>
+                            @if (TryGetFieldError("ChatConfig.ModelId", out var chatModelError))
+                            {
+                                <span class="settings-field-error">@chatModelError</span>
+                            }
+                            else if (_loadingChatModelOptions)
+                            {
+                                <span class="settings-help-inline">Loading models from `/models`...</span>
+                            }
+                            else if (!string.IsNullOrWhiteSpace(_chatModelOptionsError))
+                            {
+                                <span class="settings-field-error">@_chatModelOptionsError</span>
+                            }
+                        </label>
+
+                        <label class="settings-field">
+                            <span class="settings-label-row">
+                                <span>Max context length</span>
+                                <span class="settings-help" title="Optional. Set this when the backend does not expose /tokenize. Minimum 10000.">Optional context window</span>
+                            </span>
+                            <input type="number" min="10000"
+                                   class="@GetInputClass("ChatConfig.MaxContextLength")"
+                                   value="@BindConverter.FormatValue(_draftChatConfig.MaxContextLength)"
+                                   @oninput="OnChatMaxContextLengthChanged"
+                                   disabled="@IsRuntimeSettingsDisabled"
+                                   placeholder="32768" />
+                            @if (TryGetFieldError("ChatConfig.MaxContextLength", out var chatContextError))
+                            {
+                                <span class="settings-field-error">@chatContextError</span>
+                            }
+                        </label>
+
+                        <label class="settings-field settings-field-full">
+                            <span class="settings-label-row">
+                                <span>Chat backend API key</span>
+                                <span class="settings-help" title="Optional if the connected API already has a chat backend API key configured.">Write-only secret</span>
+                            </span>
+                            <input class="@GetInputClass("ChatConfig.ApiKey")"
+                                   value="@_draftChatApiKey"
+                                   @oninput="OnChatApiKeyChanged"
+                                   disabled="@IsRuntimeSettingsDisabled"
+                                   placeholder="@(_draftChatConfig.HasApiKey ? "Leave blank to keep current key" : "Enter backend API key")" />
+                            @if (TryGetFieldError("ChatConfig.ApiKey", out var chatApiKeyError))
+                            {
+                                <span class="settings-field-error">@chatApiKeyError</span>
+                            }
+                        </label>
+                    </div>
+                </section>
+
                 @if (HasPendingApiConnectionChange && _runtimeSettingsLoaded)
                 {
                     <p class="settings-note">
-                        Search, learning, and model panels currently reflect the active API connection.
+                        The runtime settings below currently reflect the active API connection.
                         Test or apply the drafted API settings to reload them for the new target.
                     </p>
                 }
@@ -81,7 +171,7 @@
                 else if (!_runtimeSettingsLoaded)
                 {
                     <p class="settings-note">
-                        Search, learning, and model settings load from the active API connection after the API request succeeds.
+                        The runtime settings below load from the active API connection after the API request succeeds.
                     </p>
                 }
 
@@ -265,24 +355,6 @@
                                 <span class="settings-field-error">@maxEvidenceError</span>
                             }
                         </label>
-                    </div>
-                </section>
-
-                <section class="settings-group">
-                    <div class="settings-group-head">
-                        <h3>Models</h3>
-                        <p>Read-only model ids currently configured on the connected API.</p>
-                    </div>
-
-                    <div class="settings-models">
-                        <div class="settings-model-card">
-                            <span class="settings-model-label">Chat model</span>
-                            <strong>@DisplayModelValue(_runtimeModels.ChatModelId)</strong>
-                        </div>
-                        <div class="settings-model-card">
-                            <span class="settings-model-label">Embedding model</span>
-                            <strong>@DisplayModelValue(_runtimeModels.EmbeddingModelId)</strong>
-                        </div>
                     </div>
                 </section>
 

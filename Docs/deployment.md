@@ -93,10 +93,13 @@ As a rule of thumb, the model should process at least 50 tokens per second if yo
 
 Ollama and LM Studio are good options for testing models on your hardware because both can expose an OpenAI-compatible API.
 
+The chat model should have a context window of at least `10000`. Smaller context windows degrade quality a lot because the planner, section writer, and learning extraction prompts need room to work.
+
 If you want the App Pod to use a local Ollama or LM Studio instance running on the host, update `Deploy/single-host/20-app.yaml` in the `research-api` container:
 
 - set `ChatConfig__Endpoint` to the chat endpoint exposed by your local server
 - set `ChatConfig__ModelId` to the exact model name served by that endpoint
+- set `ChatConfig__MaxContextLength` to the real context window of that model
 - keep `ChatConfig__ApiKey` in `Deploy/single-host/00-common.yaml` set to a non-empty value expected by that backend
 
 Typical endpoint examples:
@@ -114,7 +117,7 @@ and keep `EmbeddingConfig__ApiKey` in `Deploy/single-host/00-common.yaml` set to
 
 If you switch both chat and embeddings to host-run services, you can stop using the local `vllm` pod. The app still requires embeddings, so if you stop using the bundled `ollama` container, make sure `EmbeddingConfig` points to another working embeddings backend.
 
-Important: the current tokenizer implementation expects the chat backend to provide a compatible `/tokenize` endpoint. See `Docs/configuration.md`. If your Ollama or LM Studio setup does not provide that endpoint, keep `vllm` as the chat backend and use Ollama or LM Studio only for model testing, or place a compatible proxy in front of it.
+When `ChatConfig__MaxContextLength` is set, the app uses a heuristic token estimate with a 20% safety buffer and does not require a `/tokenize` endpoint. If you do not set it, the existing `vllm` behavior is used and the chat backend must provide `/tokenize`. See `Docs/configuration.md`.
 
 ## Recommended User Flow
 

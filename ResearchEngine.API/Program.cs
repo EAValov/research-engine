@@ -17,6 +17,9 @@ using StackExchange.Redis;
 using Microsoft.AspNetCore.HttpOverrides;
 
 var builder = WebApplication.CreateBuilder(args);
+var runtimeOverrideSource = new RuntimeSettingsOverrideSource();
+builder.Configuration.Sources.Add(runtimeOverrideSource);
+builder.Services.AddSingleton(runtimeOverrideSource.Provider);
 
 // ---------- Logging ----------
 Log.Logger = new LoggerConfiguration()
@@ -84,11 +87,25 @@ if (enableHangfireServer && !builder.Environment.IsEnvironment("Testing"))
 builder.Services.AddHttpClient();
 
 // ---------- Options ----------
-builder.Services.Configure<ChatConfig>(
-    builder.Configuration.GetSection(nameof(ChatConfig)));
+builder.Services
+    .AddOptions<ChatConfig>()
+    .Bind(builder.Configuration.GetSection(nameof(ChatConfig)))
+    .Validate(
+        config => !string.IsNullOrWhiteSpace(config.ModelId),
+        $"{nameof(ChatConfig.ModelId)} must be configured.")
+    .Validate(
+        config => config.MaxContextLength is null ||
+                  config.MaxContextLength >= TokenizerBase.MinimumContextLength,
+        $"{nameof(ChatConfig.MaxContextLength)} must be at least {TokenizerBase.MinimumContextLength} when provided.")
+    .ValidateOnStart();
 
-builder.Services.Configure<EmbeddingConfig>(
-    builder.Configuration.GetSection(nameof(EmbeddingConfig)));
+builder.Services
+    .AddOptions<EmbeddingConfig>()
+    .Bind(builder.Configuration.GetSection(nameof(EmbeddingConfig)))
+    .Validate(
+        config => !string.IsNullOrWhiteSpace(config.ModelId),
+        $"{nameof(EmbeddingConfig.ModelId)} must be configured.")
+    .ValidateOnStart();
 
 builder.Services
     .AddOptions<ResearchOrchestratorConfig>()

@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using ResearchEngine.Configuration;
@@ -7,6 +8,7 @@ namespace ResearchEngine.Infrastructure;
 public sealed class AppSettingsJsonWriter(
     IHostEnvironment hostEnvironment,
     IConfiguration configuration,
+    RuntimeSettingsOverrideProvider runtimeOverrides,
     ILogger<AppSettingsJsonWriter> logger)
 {
     private static readonly JsonSerializerOptions SerializerOptions = new()
@@ -20,6 +22,7 @@ public sealed class AppSettingsJsonWriter(
     public async Task WriteRuntimeSettingsAsync(
         ResearchOrchestratorConfig researchOrchestratorConfig,
         LearningSimilarityOptions learningSimilarityOptions,
+        ChatConfig chatConfig,
         CancellationToken ct = default)
     {
         await _writeLock.WaitAsync(ct);
@@ -36,6 +39,8 @@ public sealed class AppSettingsJsonWriter(
                 JsonSerializer.SerializeToNode(researchOrchestratorConfig, SerializerOptions);
             root[nameof(LearningSimilarityOptions)] =
                 JsonSerializer.SerializeToNode(learningSimilarityOptions, SerializerOptions);
+            root[nameof(ChatConfig)] =
+                JsonSerializer.SerializeToNode(chatConfig, SerializerOptions);
 
             var updated = root.ToJsonString(SerializerOptions);
             var tempPath = _appSettingsPath + ".tmp";
@@ -45,6 +50,11 @@ public sealed class AppSettingsJsonWriter(
 
             if (configuration is IConfigurationRoot configurationRoot)
                 configurationRoot.Reload();
+
+            runtimeOverrides.SetValues(BuildOverrides(
+                researchOrchestratorConfig,
+                learningSimilarityOptions,
+                chatConfig));
         }
         catch
         {
@@ -58,4 +68,44 @@ public sealed class AppSettingsJsonWriter(
             _writeLock.Release();
         }
     }
+
+    private static IEnumerable<KeyValuePair<string, string?>> BuildOverrides(
+        ResearchOrchestratorConfig researchOrchestratorConfig,
+        LearningSimilarityOptions learningSimilarityOptions,
+        ChatConfig chatConfig)
+    {
+        return
+        [
+            Pair("ResearchOrchestratorConfig:LimitSearches", researchOrchestratorConfig.LimitSearches),
+            Pair("ResearchOrchestratorConfig:MaxUrlParallelism", researchOrchestratorConfig.MaxUrlParallelism),
+            Pair("ResearchOrchestratorConfig:MaxUrlsPerSerpQuery", researchOrchestratorConfig.MaxUrlsPerSerpQuery),
+            Pair("LearningSimilarityOptions:MinImportance", learningSimilarityOptions.MinImportance),
+            Pair("LearningSimilarityOptions:DiversityMaxPerUrl", learningSimilarityOptions.DiversityMaxPerUrl),
+            Pair("LearningSimilarityOptions:DiversityMaxTextSimilarity", learningSimilarityOptions.DiversityMaxTextSimilarity),
+            Pair("LearningSimilarityOptions:MaxLearningsPerSegment", learningSimilarityOptions.MaxLearningsPerSegment),
+            Pair("LearningSimilarityOptions:MinLearningsPerSegment", learningSimilarityOptions.MinLearningsPerSegment),
+            Pair("LearningSimilarityOptions:GroupAssignSimilarityThreshold", learningSimilarityOptions.GroupAssignSimilarityThreshold),
+            Pair("LearningSimilarityOptions:GroupSearchTopK", learningSimilarityOptions.GroupSearchTopK),
+            Pair("LearningSimilarityOptions:MaxEvidenceLength", learningSimilarityOptions.MaxEvidenceLength),
+            Pair("ChatConfig:Endpoint", chatConfig.Endpoint),
+            Pair("ChatConfig:ApiKey", chatConfig.ApiKey),
+            Pair("ChatConfig:ModelId", chatConfig.ModelId),
+            Pair("ChatConfig:MaxContextLength", chatConfig.MaxContextLength)
+        ];
+    }
+
+    private static KeyValuePair<string, string?> Pair(string key, string? value)
+        => new(key, value);
+
+    private static KeyValuePair<string, string?> Pair(string key, int value)
+        => new(key, value.ToString(CultureInfo.InvariantCulture));
+
+    private static KeyValuePair<string, string?> Pair(string key, int? value)
+        => new(key, value?.ToString(CultureInfo.InvariantCulture));
+
+    private static KeyValuePair<string, string?> Pair(string key, float value)
+        => new(key, value.ToString(CultureInfo.InvariantCulture));
+
+    private static KeyValuePair<string, string?> Pair(string key, double value)
+        => new(key, value.ToString(CultureInfo.InvariantCulture));
 }

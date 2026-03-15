@@ -65,6 +65,16 @@ else
             <div class="value">@FormatTime(_job.CreatedAt)</div>
         </div>
 
+        <div class="row">
+            <div class="label">Chat model</div>
+            <div class="value">@DisplayModelName(_job.ChatModelName)</div>
+        </div>
+
+        <div class="row">
+            <div class="label">Embedding model</div>
+            <div class="value">@DisplayModelName(_job.EmbeddingModelName)</div>
+        </div>
+
         <div class="toolbar" role="toolbar" aria-label="Job actions">
             <button class="toolbtn" type="button" @onclick="ToggleEvidence" aria-haspopup="dialog">
                 Evidence
@@ -108,37 +118,50 @@ else
     <!-- MAIN CENTER: REPORT -->
     <section class="report" aria-label="Report">
         <div class="report-head">
-            <h2 class="h2">Report</h2>
+            <div class="report-title-row">
+                <h2 class="h2 report-title">Report</h2>
+                @if (CurrentReportId is Guid reportId)
+                {
+                    <span class="mono report-id">@ShortId(reportId)</span>
+                }
+                @if (ActiveSynthesis is not null && !string.IsNullOrWhiteSpace(ActiveSynthesis.Status))
+                {
+                    <span class="pill">@ActiveSynthesis.Status</span>
+                    @if (IsSynthesisActiveStatus(ActiveSynthesis.Status))
+                    {
+                        <span class="spinner status-spinner" aria-hidden="true"></span>
+                    }
+                }
+            </div>
 
             <div class="report-meta" aria-live="polite">
+                @if (ActiveSynthesis is not null)
+                {
+                    <div class="report-meta-line">
+                        <span>Created: @FormatTime(ActiveSynthesis.CreatedAt)</span>
+                    </div>
+                    <div class="report-meta-line">
+                        <span>Chat: @DisplayModelName(ActiveSynthesis.ChatModelName)</span>
+                    </div>
+                    <div class="report-meta-line">
+                        <span>Embeddings: @DisplayModelName(ActiveSynthesis.EmbeddingModelName)</span>
+                    </div>
+                }
+
                 @if (_selectedSynthesisId is not null)
                 {
-                    <span class="mono">Viewing: @ShortId(_selectedSynthesisId.Value)</span>
-                    <span class="dot">•</span>
-                    <button class="secondarybtn" type="button" @onclick="BackToLatestAsync">
-                        Back to latest
-                    </button>
-                }
-                else if (_latestSynthesis is not null)
-                {
-                    <span class="mono">@ShortId(_latestSynthesis.Id)</span>
-                    <span class="dot">•</span>
-                    <span>Created: @FormatTime(_latestSynthesis.CreatedAt)</span>
-                    @if (!string.IsNullOrWhiteSpace(_latestSynthesis.Status))
-                    {
-                        <span class="dot">•</span>
-                        <span class="pill">@_latestSynthesis.Status</span>
-                        @if (IsSynthesisActiveStatus(_latestSynthesis.Status))
-                        {
-                            <span class="spinner status-spinner" aria-hidden="true"></span>
-                        }
-                    }
+                    <div class="report-meta-line">
+                        <button class="secondarybtn" type="button" @onclick="BackToLatestAsync">
+                            Back to latest
+                        </button>
+                    </div>
                 }
 
                 @if (_reportUpdatedAt is not null)
                 {
-                    <span class="dot">•</span>
-                    <span class="toast">Report updated</span>
+                    <div class="report-meta-line">
+                        <span class="toast">Report updated</span>
+                    </div>
                 }
             </div>
         </div>
@@ -345,6 +368,7 @@ else
     private ApiError? _synthesisError;
     private bool _synthesisEmpty;
     private SynthesisDto? _latestSynthesis;
+    private SynthesisDto? _selectedSynthesis;
     private string _synthesisMarkdown = string.Empty;
     private bool _synthesisLoadedOnce;
 
@@ -397,6 +421,8 @@ else
         => IsCompleted || IsCanceled || (_latestSynthesis is not null) || (_synthesisLoadedOnce && !_synthesisEmpty);
 
     private Guid? CurrentSynthesisIdForDrawer => _selectedSynthesisId ?? _latestSynthesis?.Id;
+    private SynthesisDto? ActiveSynthesis => _selectedSynthesisId is not null ? _selectedSynthesis : _latestSynthesis;
+    private Guid? CurrentReportId => _selectedSynthesisId ?? _latestSynthesis?.Id;
 
     protected override async Task OnParametersSetAsync()
     {
@@ -415,6 +441,7 @@ else
         _synthesisError = null;
         _synthesisEmpty = false;
         _latestSynthesis = null;
+        _selectedSynthesis = null;
         _synthesisMarkdown = string.Empty;
         _synthesisLoadedOnce = false;
 
@@ -669,6 +696,7 @@ else
         _selectedSynthesisId = synthesisId;
         _retryOpenId = synthesisId;
         _selectedSynthesisError = null;
+        _selectedSynthesis = null;
 
         _selectedLoading = true;
         try
@@ -680,7 +708,8 @@ else
                 return;
             }
 
-            _synthesisMarkdown = ComposeMarkdown(res.Data!);
+            _selectedSynthesis = res.Data!;
+            _synthesisMarkdown = ComposeMarkdown(_selectedSynthesis);
         }
         finally
         {
@@ -698,6 +727,7 @@ else
     private async Task BackToLatestAsync()
     {
         _selectedSynthesisId = null;
+        _selectedSynthesis = null;
         _selectedSynthesisError = null;
         _retryOpenId = null;
 
@@ -715,6 +745,7 @@ else
         if (_selectedSynthesisId == synthesisId)
         {
             _selectedSynthesisId = null;
+            _selectedSynthesis = null;
             _selectedSynthesisError = null;
             _retryOpenId = null;
         }
@@ -820,6 +851,7 @@ else
             _synthesisLoading = false;
 
             _selectedSynthesisId = null;
+            _selectedSynthesis = null;
             _selectedSynthesisError = null;
             _retryOpenId = null;
 
@@ -1219,6 +1251,9 @@ else
 
     private static string ShortId(Guid id) => id.ToString("N")[..8];
 
+    private static string DisplayModelName(string? value)
+        => string.IsNullOrWhiteSpace(value) ? "Not recorded" : value.Trim();
+
     private static bool IsHttpUrl(string text)
     {
         if (!Uri.TryCreate(text, UriKind.Absolute, out var uri))
@@ -1391,18 +1426,35 @@ else
 }
 
 .report-head {
-    display: flex;
-    justify-content: space-between;
-    align-items: baseline;
-    gap: 12px;
-    flex-wrap: wrap;
+    display: grid;
+    gap: 8px;
     margin-bottom: 10px;
+}
+
+.report-title-row {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.report-title {
+    margin: 0;
+}
+
+.report-id {
+    font-size: 0.9rem;
 }
 
 .report-meta {
     color: var(--muted);
     font-size: 0.9rem;
-    display: flex;
+    display: grid;
+    gap: 6px;
+}
+
+.report-meta-line {
+    display: inline-flex;
     gap: 8px;
     align-items: center;
     flex-wrap: wrap;

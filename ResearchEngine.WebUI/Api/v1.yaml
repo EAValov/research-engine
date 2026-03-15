@@ -101,6 +101,41 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
+  /api/settings/runtime/chat-models:
+    post:
+      tags:
+        - Research API
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChatModelCatalogRequest'
+        required: true
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatModelCatalogResponse'
+        '400':
+          description: Bad Request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/HttpValidationProblemDetails'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
   /api/jobs:
     get:
       tags:
@@ -1197,6 +1232,27 @@ components:
           type: string
         content:
           type: string
+    ChatModelCatalogRequest:
+      required:
+        - endpoint
+        - apiKey
+      type: object
+      properties:
+        endpoint:
+          type: string
+        apiKey:
+          type:
+            - 'null'
+            - string
+    ChatModelCatalogResponse:
+      required:
+        - modelIds
+      type: object
+      properties:
+        modelIds:
+          type: array
+          items:
+            type: string
     ChatRequest:
       type: object
       properties:
@@ -1315,6 +1371,8 @@ components:
       required:
         - id
         - query
+        - chatModelName
+        - embeddingModelName
         - breadth
         - depth
         - status
@@ -1332,6 +1390,10 @@ components:
           type: string
           format: uuid
         query:
+          type: string
+        chatModelName:
+          type: string
+        embeddingModelName:
           type: string
         breadth:
           pattern: '^-?(?:0|[1-9]\d*)$'
@@ -1457,6 +1519,8 @@ components:
       required:
         - id
         - status
+        - chatModelName
+        - embeddingModelName
         - createdAt
         - completedAt
       type: object
@@ -1465,6 +1529,10 @@ components:
           type: string
           format: uuid
         status:
+          type: string
+        chatModelName:
+          type: string
+        embeddingModelName:
           type: string
         createdAt:
           type: string
@@ -1844,6 +1912,8 @@ components:
       required:
         - id
         - query
+        - chatModelName
+        - embeddingModelName
         - breadth
         - depth
         - status
@@ -1857,6 +1927,10 @@ components:
           type: string
           format: uuid
         query:
+          type: string
+        chatModelName:
+          type: string
+        embeddingModelName:
           type: string
         breadth:
           pattern: '^-?(?:0|[1-9]\d*)$'
@@ -1974,6 +2048,27 @@ components:
           format: date-time
         message:
           type: string
+    RuntimeChatConfigDto:
+      required:
+        - endpoint
+        - modelId
+        - maxContextLength
+        - hasApiKey
+      type: object
+      properties:
+        endpoint:
+          type: string
+        modelId:
+          type: string
+        maxContextLength:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - 'null'
+            - integer
+            - string
+          format: int32
+        hasApiKey:
+          type: boolean
     RuntimeModelInfoDto:
       required:
         - chatModelId
@@ -1988,6 +2083,7 @@ components:
       required:
         - researchOrchestratorConfig
         - learningSimilarityOptions
+        - chatConfig
         - models
       type: object
       properties:
@@ -1995,6 +2091,8 @@ components:
           $ref: '#/components/schemas/ResearchOrchestratorConfig'
         learningSimilarityOptions:
           $ref: '#/components/schemas/LearningSimilarityOptions'
+        chatConfig:
+          $ref: '#/components/schemas/RuntimeChatConfigDto'
         models:
           $ref: '#/components/schemas/RuntimeModelInfoDto'
     SourceListItemDto:
@@ -2076,6 +2174,8 @@ components:
         - jobId
         - parentSynthesisId
         - status
+        - chatModelName
+        - embeddingModelName
         - outline
         - instructions
         - createdAt
@@ -2096,6 +2196,10 @@ components:
             - string
           format: uuid
         status:
+          type: string
+        chatModelName:
+          type: string
+        embeddingModelName:
           type: string
         outline:
           type:
@@ -2153,6 +2257,8 @@ components:
         - jobId
         - parentSynthesisId
         - status
+        - chatModelName
+        - embeddingModelName
         - createdAt
         - completedAt
         - errorMessage
@@ -2171,6 +2277,10 @@ components:
             - string
           format: uuid
         status:
+          type: string
+        chatModelName:
+          type: string
+        embeddingModelName:
           type: string
         createdAt:
           type: string
@@ -2256,16 +2366,42 @@ components:
           type:
             - 'null'
             - boolean
+    UpdateChatConfigRequest:
+      required:
+        - endpoint
+        - modelId
+        - apiKey
+        - maxContextLength
+      type: object
+      properties:
+        endpoint:
+          type: string
+        modelId:
+          type: string
+        apiKey:
+          type:
+            - 'null'
+            - string
+        maxContextLength:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - 'null'
+            - integer
+            - string
+          format: int32
     UpdateRuntimeSettingsRequest:
       required:
         - researchOrchestratorConfig
         - learningSimilarityOptions
+        - chatConfig
       type: object
       properties:
         researchOrchestratorConfig:
           $ref: '#/components/schemas/ResearchOrchestratorConfig'
         learningSimilarityOptions:
           $ref: '#/components/schemas/LearningSimilarityOptions'
+        chatConfig:
+          $ref: '#/components/schemas/UpdateChatConfigRequest'
     UpsertOverridesResponse:
       required:
         - synthesisId

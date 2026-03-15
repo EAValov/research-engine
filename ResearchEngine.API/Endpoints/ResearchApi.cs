@@ -35,6 +35,13 @@ public static partial class ResearchApi
             .ProducesProblem(StatusCodes.Status401Unauthorized)
             .ProducesProblem(StatusCodes.Status403Forbidden);
 
+        api.MapPost("/settings/runtime/chat-models", GetRuntimeChatModelsAsync)
+            .Accepts<ChatModelCatalogRequest>("application/json")
+            .Produces<ChatModelCatalogResponse>(StatusCodes.Status200OK)
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status403Forbidden);
+
         // Jobs
         api.MapGet("/jobs", ListJobsAsync)
             .Produces<ListResearchJobsResponse>(StatusCodes.Status200OK)

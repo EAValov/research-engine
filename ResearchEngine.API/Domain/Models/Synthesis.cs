@@ -13,6 +13,8 @@ public sealed class Synthesis
 
     public Guid JobId { get; set; }
     public ResearchJob Job { get; set; } = null!;
+    public string ChatModelName { get; set; } = null!;
+    public string EmbeddingModelName { get; set; } = null!;
 
     // Lineage/versioning
     public Guid? ParentSynthesisId { get; set; }
@@ -82,6 +84,8 @@ public sealed record SynthesisListItemDto(
     Guid JobId,
     Guid? ParentSynthesisId,
     string Status,
+    string ChatModelName,
+    string EmbeddingModelName,
     DateTimeOffset CreatedAt,
     DateTimeOffset? CompletedAt,
     string? ErrorMessage,

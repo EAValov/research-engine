@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using Microsoft.EntityFrameworkCore.Migrations;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using Pgvector;
@@ -22,6 +22,8 @@ namespace ResearchEngine.API.Migrations
                 {
                     Id = table.Column<Guid>(type: "uuid", nullable: false),
                     Query = table.Column<string>(type: "character varying(4000)", maxLength: 4000, nullable: false),
+                    ChatModelName = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: false),
+                    EmbeddingModelName = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: false),
                     Breadth = table.Column<int>(type: "integer", nullable: false),
                     Depth = table.Column<int>(type: "integer", nullable: false),
                     Status = table.Column<string>(type: "text", nullable: false),
@@ -142,6 +144,8 @@ namespace ResearchEngine.API.Migrations
                 {
                     Id = table.Column<Guid>(type: "uuid", nullable: false),
                     JobId = table.Column<Guid>(type: "uuid", nullable: false),
+                    ChatModelName = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: false),
+                    EmbeddingModelName = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: false),
                     ParentSynthesisId = table.Column<Guid>(type: "uuid", nullable: true),
                     Status = table.Column<string>(type: "character varying(50)", maxLength: 50, nullable: false),
                     Outline = table.Column<string>(type: "text", nullable: true),
