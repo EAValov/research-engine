@@ -35,6 +35,7 @@ Purpose:
 - route UI traffic to `research-webui`
 - route API traffic to `research-api`
 - optionally load-balance multiple `research-api` instances later
+- persist the local Caddy CA state so the trusted certificate survives `.\Deploy\single-host.ps1 up` redeploys
 
 `http://localhost:8080/` still works and can be used as a fallback, but the friendly HTTPS address is the recommended path.
 
@@ -169,6 +170,8 @@ This is the recommended setup flow for a clean Windows installation with current
    ```powershell
    .\Deploy\trust-caddy-local-ca.ps1
    ```
+
+   After the `Deploy/single-host/10-edge.yaml` fix, you should only need to do this once per local Caddy data volume. If you delete the `research-edge-caddy-data` Podman volume, Caddy will mint a new local CA and you must trust it again.
 
 8. Open the app:
 

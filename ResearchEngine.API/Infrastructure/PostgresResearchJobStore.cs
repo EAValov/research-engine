@@ -11,8 +11,7 @@ namespace ResearchEngine.Infrastructure;
 public sealed partial class PostgresResearchJobStore(
     IDbContextFactory<ResearchDbContext> dbContextFactory,
     IResearchEventBus eventBus,
-    IOptionsMonitor<LearningSimilarityOptions> similarityOptions,
-    IOptionsMonitor<ChatConfig> chatOptions,
+    IRuntimeSettingsAccessor runtimeSettings,
     IOptions<EmbeddingConfig> embeddingOptions,
     ILogger<IResearchJobStore> logger
 ) : IResearchJobStore
@@ -27,12 +26,13 @@ public sealed partial class PostgresResearchJobStore(
         CancellationToken ct = default)
     {
         var now = DateTimeOffset.UtcNow;
+        var settings = await runtimeSettings.GetCurrentAsync(ct);
 
         var jobEntity = new ResearchJob
         {
             Id = Guid.NewGuid(),
             Query = query,
-            ChatModelName = NormalizeModelName(chatOptions.CurrentValue.ModelId, nameof(ChatConfig.ModelId)),
+            ChatModelName = NormalizeModelName(settings.ChatConfig.ModelId, nameof(ChatConfig.ModelId)),
             EmbeddingModelName = NormalizeModelName(embeddingOptions.Value.ModelId, nameof(EmbeddingConfig.ModelId)),
             Breadth = breadth,
             Depth = depth,
@@ -305,6 +305,7 @@ public sealed partial class PostgresResearchJobStore(
         CancellationToken ct = default)
     {
         await using var db = await dbContextFactory.CreateDbContextAsync(ct);
+        var settings = await runtimeSettings.GetCurrentAsync(ct);
 
         var now = DateTimeOffset.UtcNow;
 
@@ -313,7 +314,7 @@ public sealed partial class PostgresResearchJobStore(
             Id = Guid.NewGuid(),
             JobId = jobId,
             ParentSynthesisId = parentSynthesisId,
-            ChatModelName = NormalizeModelName(chatOptions.CurrentValue.ModelId, nameof(ChatConfig.ModelId)),
+            ChatModelName = NormalizeModelName(settings.ChatConfig.ModelId, nameof(ChatConfig.ModelId)),
             EmbeddingModelName = NormalizeModelName(embeddingOptions.Value.ModelId, nameof(EmbeddingConfig.ModelId)),
             Status = SynthesisStatus.Created,
             Outline = outline,
@@ -500,7 +501,8 @@ public sealed partial class PostgresResearchJobStore(
         if (list.Count == 0)
             return;
 
-        var maxEvidenceLen = similarityOptions.CurrentValue.MaxEvidenceLength;
+        var settings = await runtimeSettings.GetCurrentAsync(ct);
+        var maxEvidenceLen = settings.LearningSimilarityOptions.MaxEvidenceLength;
         await using var db = await dbContextFactory.CreateDbContextAsync(ct);
 
         var sourceExists = await db.Sources.AnyAsync(s => s.Id == sourceId && s.JobId == jobId, ct);

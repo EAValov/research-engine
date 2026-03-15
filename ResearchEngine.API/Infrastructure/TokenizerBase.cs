@@ -1,4 +1,3 @@
-using Microsoft.Extensions.Options;
 using ResearchEngine.Configuration;
 using ResearchEngine.Domain;
 
@@ -11,14 +10,14 @@ public abstract class TokenizerBase : ITokenizer
     private const double EstimatedCharsPerToken = 4.0;
     private const double SafetyBufferMultiplier = 1.2;
 
-    private readonly IOptionsMonitor<ChatConfig> _chatOptions;
+    private readonly IRuntimeSettingsAccessor _runtimeSettings;
 
-    protected TokenizerBase(IOptionsMonitor<ChatConfig> options)
+    protected TokenizerBase(IRuntimeSettingsAccessor runtimeSettings)
     {
-        _chatOptions = options ?? throw new ArgumentNullException(nameof(options));
+        _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
     }
 
-    public Task<TokenizeResult> TokenizePromptAsync(
+    public async Task<TokenizeResult> TokenizePromptAsync(
         Prompt prompt,
         CancellationToken cancellationToken = default)
     {
@@ -28,7 +27,8 @@ public abstract class TokenizerBase : ITokenizer
         if (prompt.userPrompt is null)
             throw new ArgumentNullException(nameof(prompt.userPrompt));
 
-        var config = _chatOptions.CurrentValue ?? throw new InvalidOperationException("ChatConfig is not configured.");
+        var snapshot = await _runtimeSettings.GetCurrentAsync(cancellationToken);
+        var config = snapshot.ChatConfig ?? throw new InvalidOperationException("ChatConfig is not configured.");
 
         if (config.MaxContextLength is int configuredMaxContextLength &&
             configuredMaxContextLength < MinimumContextLength)
@@ -42,10 +42,10 @@ public abstract class TokenizerBase : ITokenizer
                         "ChatConfig.ModelId must be set to use TokenizePromptAsync.");
 
         if (config.MaxContextLength is int maxContextLength)
-            return Task.FromResult(EstimateTokenCount(prompt, maxContextLength));
+            return EstimateTokenCount(prompt, maxContextLength);
 
         var payload = BuildPayload(model, prompt);
-        return TokenizeCoreAsync(config, payload, cancellationToken);
+        return await TokenizeCoreAsync(config, payload, cancellationToken);
     }
 
     protected abstract Task<TokenizeResult> TokenizeCoreAsync(

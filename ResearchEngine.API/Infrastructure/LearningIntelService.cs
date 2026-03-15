@@ -1,7 +1,6 @@
 
 using System.Text;
 using System.Text.Json;
-using Microsoft.Extensions.Options;
 using ResearchEngine.Domain;
 using ResearchEngine.Configuration;
 using ResearchEngine.Prompts;
@@ -18,12 +17,10 @@ public sealed class LearningIntelService(
     IResearchLearningRepository learningRepository,
     IResearchLearningGroupRepository learningGroupRepository,
     IResearchSynthesisOverridesRepository synthesisOverridesRepository,
-    IOptionsMonitor<LearningSimilarityOptions> similarityOptions,
+    IRuntimeSettingsAccessor runtimeSettings,
     ILogger<LearningIntelService> logger)
     : ILearningIntelService
 {
-    private LearningSimilarityOptions CurrentOptions => similarityOptions.CurrentValue;
-
     public async Task<IReadOnlyList<Learning>> ExtractAndSaveLearningsAsync(
         Guid jobId,
         Guid sourceId,
@@ -38,7 +35,8 @@ public sealed class LearningIntelService(
         if (string.IsNullOrWhiteSpace(sourceContent))
             return Array.Empty<Learning>();
 
-        var options = CurrentOptions;
+        var settings = await runtimeSettings.GetCurrentAsync(ct);
+        var options = settings.LearningSimilarityOptions;
         var pending = new Queue<string>();
         pending.Enqueue(sourceContent);
 
@@ -54,7 +52,7 @@ public sealed class LearningIntelService(
                 continue;
 
             var adaptiveMax = Math.Clamp(
-                ComputeAdaptiveMaxLearnings(segment.Length),
+                ComputeAdaptiveMaxLearnings(segment.Length, options.MaxLearningsPerSegment),
                 options.MinLearningsPerSegment,
                 options.MaxLearningsPerSegment);
 
@@ -176,7 +174,8 @@ public sealed class LearningIntelService(
         if (string.IsNullOrWhiteSpace(text))
             throw new ArgumentException("Learning text is required.", nameof(text));
 
-        var options = CurrentOptions;
+        var settings = await runtimeSettings.GetCurrentAsync(ct);
+        var options = settings.LearningSimilarityOptions;
         var trimmedText = text.Trim();
         if (trimmedText.Length == 0)
             throw new ArgumentException("Learning text is required.", nameof(text));
@@ -313,7 +312,8 @@ public sealed class LearningIntelService(
     /// </summary>
     private async Task AssignGroupsAsync(Guid jobId, IList<Learning> learnings, CancellationToken ct)
     {
-        var options = CurrentOptions;
+        var settings = await runtimeSettings.GetCurrentAsync(ct);
+        var options = settings.LearningSimilarityOptions;
 
         foreach (var l in learnings)
         {
@@ -409,7 +409,8 @@ public sealed class LearningIntelService(
         var queryVector = new Pgvector.Vector(emb.Vector);
 
         var maxK = Math.Clamp(topK, 1, 200);
-        var localMinImportance = CurrentOptions.MinImportance;
+        var settings = await runtimeSettings.GetCurrentAsync(ct);
+        var localMinImportance = settings.LearningSimilarityOptions.MinImportance;
 
         // Load overrides once
         var snapshot = await synthesisOverridesRepository.GetSynthesisOverridesAsync(synthesisId, ct);
@@ -495,17 +496,21 @@ public sealed class LearningIntelService(
         var ungrouped = ordered.Where(l => l.LearningGroupId == Guid.Empty).ToList();
         dedupedByGroup.AddRange(ungrouped);
 
-        return ApplyDiversityFilter(dedupedByGroup, topK);
+        return ApplyDiversityFilter(
+            dedupedByGroup,
+            topK,
+            settings.LearningSimilarityOptions.DiversityMaxPerUrl,
+            settings.LearningSimilarityOptions.DiversityMaxTextSimilarity);
     }
 
-    private IReadOnlyList<Learning> ApplyDiversityFilter(IReadOnlyList<Learning> orderedCandidates, int topK)
+    private static IReadOnlyList<Learning> ApplyDiversityFilter(
+        IReadOnlyList<Learning> orderedCandidates,
+        int topK,
+        int maxPerRef,
+        double maxTextSimilarity)
     {
         if (orderedCandidates.Count == 0)
             return orderedCandidates;
-
-        var options = CurrentOptions;
-        var maxPerRef = options.DiversityMaxPerUrl; // keep option name for now
-        var maxTextSimilarity = options.DiversityMaxTextSimilarity;
 
         var selected = new List<Learning>(capacity: topK);
         var perRef = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
@@ -538,12 +543,12 @@ public sealed class LearningIntelService(
         return selected;
     }
 
-    private int ComputeAdaptiveMaxLearnings(int segmentLengthChars)
+    private static int ComputeAdaptiveMaxLearnings(int segmentLengthChars, int maxLearningsPerSegment)
     {
         if (segmentLengthChars <= 2000) return 5;
         if (segmentLengthChars <= 6000) return 8;
         if (segmentLengthChars <= 15000) return 12;
-        return CurrentOptions.MaxLearningsPerSegment;
+        return maxLearningsPerSegment;
     }
 
     private static (string left, string right) SplitSegmentOnBoundary(string segment)

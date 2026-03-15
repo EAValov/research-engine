@@ -42,6 +42,8 @@ spec:
         - containerPort: 8443
           hostPort: 8443
       volumeMounts:
+        - name: caddy-data
+          mountPath: /data
         - name: caddy-config
           mountPath: /etc/caddy/Caddyfile
           subPath: Caddyfile
@@ -49,6 +51,9 @@ spec:
         - name: XDG_DATA_HOME
           value: /data
   volumes:
+    - name: caddy-data
+      persistentVolumeClaim:
+        claimName: research-edge-caddy-data
     - name: caddy-config
       configMap:
         name: research-edge-caddyfile

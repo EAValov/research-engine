@@ -20,6 +20,7 @@ public sealed class ResearchDbContext : DbContext
     public DbSet<SynthesisLearningOverride> SynthesisLearningOverrides => Set<SynthesisLearningOverride>();
     public DbSet<LearningGroup> LearningGroups => Set<LearningGroup>();
     public DbSet<LearningGroupEmbedding> LearningGroupEmbeddings => Set<LearningGroupEmbedding>();
+    public DbSet<RuntimeSettingsRecord> RuntimeSettings => Set<RuntimeSettingsRecord>();
 
     public ResearchDbContext(
         DbContextOptions<ResearchDbContext> options,
@@ -46,6 +47,7 @@ public sealed class ResearchDbContext : DbContext
         ConfigureSynthesisLearningOverride(modelBuilder);
         ConfigureLearningGroup(modelBuilder);
         ConfigureLearningGroupEmbedding(modelBuilder);
+        ConfigureRuntimeSettings(modelBuilder);
     }
 
     private static void ConfigureResearchJob(ModelBuilder modelBuilder)
@@ -536,5 +538,29 @@ public sealed class ResearchDbContext : DbContext
 
         entity.HasIndex(e => e.LearningGroupId).IsUnique();
         entity.HasQueryFilter(e => e.Group.Job.DeletedAt == null);
+    }
+
+    private static void ConfigureRuntimeSettings(ModelBuilder modelBuilder)
+    {
+        var entity = modelBuilder.Entity<RuntimeSettingsRecord>();
+
+        entity.ToTable("runtime_settings");
+        entity.HasKey(x => x.Id);
+        entity.Property(x => x.Id).ValueGeneratedNever();
+
+        entity.Property(x => x.ChatEndpoint)
+            .IsRequired()
+            .HasMaxLength(2000);
+
+        entity.Property(x => x.ChatApiKey)
+            .IsRequired()
+            .HasMaxLength(2000);
+
+        entity.Property(x => x.ChatModelId)
+            .IsRequired()
+            .HasMaxLength(500);
+
+        entity.Property(x => x.UpdatedAt)
+            .HasDefaultValueSql("now() at time zone 'utc'");
     }
 }

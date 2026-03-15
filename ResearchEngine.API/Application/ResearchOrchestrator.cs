@@ -1,14 +1,13 @@
 using ResearchEngine.Configuration;
 using ResearchEngine.Domain;
 using System.Text;
-using Microsoft.Extensions.Options;
 using Hangfire;
 using Hangfire.States;
 
 namespace ResearchEngine.Application;
 
 public sealed class ResearchOrchestrator(
-    IOptionsMonitor<ResearchOrchestratorConfig> options,
+    IRuntimeSettingsAccessor runtimeSettings,
     ISearchClient searchClient,
     ICrawlClient crawlClient,
     IResearchJobRepository jobRepository,
@@ -22,8 +21,6 @@ public sealed class ResearchOrchestrator(
     ILogger<ResearchOrchestrator> logger)
     : IResearchOrchestrator
 {
-    private ResearchOrchestratorConfig CurrentOptions => options.CurrentValue;
-
     /// <summary>
     /// Creates a job row and immediately starts running it in the background.
     /// Returns the job id.
@@ -182,7 +179,8 @@ public sealed class ResearchOrchestrator(
         ResearchProgressTracker progress,
         CancellationToken ct)
     {
-        var options = CurrentOptions;
+        var settings = await runtimeSettings.GetCurrentAsync(ct);
+        var options = settings.ResearchOrchestratorConfig;
         var searchResults = await searchClient.SearchAsync(
             serpQuery,
             options.LimitSearches,

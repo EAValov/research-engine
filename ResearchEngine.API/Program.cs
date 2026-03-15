@@ -17,9 +17,7 @@ using StackExchange.Redis;
 using Microsoft.AspNetCore.HttpOverrides;
 
 var builder = WebApplication.CreateBuilder(args);
-var runtimeOverrideSource = new RuntimeSettingsOverrideSource();
-builder.Configuration.Sources.Add(runtimeOverrideSource);
-builder.Services.AddSingleton(runtimeOverrideSource.Provider);
+var runtimeSettingsBootstrap = RuntimeSettingsBootstrap.LoadValidated(builder.Configuration);
 
 // ---------- Logging ----------
 Log.Logger = new LoggerConfiguration()
@@ -88,38 +86,11 @@ builder.Services.AddHttpClient();
 
 // ---------- Options ----------
 builder.Services
-    .AddOptions<ChatConfig>()
-    .Bind(builder.Configuration.GetSection(nameof(ChatConfig)))
-    .Validate(
-        config => !string.IsNullOrWhiteSpace(config.ModelId),
-        $"{nameof(ChatConfig.ModelId)} must be configured.")
-    .Validate(
-        config => config.MaxContextLength is null ||
-                  config.MaxContextLength >= TokenizerBase.MinimumContextLength,
-        $"{nameof(ChatConfig.MaxContextLength)} must be at least {TokenizerBase.MinimumContextLength} when provided.")
-    .ValidateOnStart();
-
-builder.Services
     .AddOptions<EmbeddingConfig>()
     .Bind(builder.Configuration.GetSection(nameof(EmbeddingConfig)))
     .Validate(
         config => !string.IsNullOrWhiteSpace(config.ModelId),
         $"{nameof(EmbeddingConfig.ModelId)} must be configured.")
-    .ValidateOnStart();
-
-builder.Services
-    .AddOptions<ResearchOrchestratorConfig>()
-    .Bind(builder.Configuration.GetSection(nameof(ResearchOrchestratorConfig)))
-    .ValidateDataAnnotations()
-    .ValidateOnStart();
-
-builder.Services
-    .AddOptions<LearningSimilarityOptions>()
-    .Bind(builder.Configuration.GetSection(nameof(LearningSimilarityOptions)))
-    .ValidateDataAnnotations()
-    .Validate(
-        options => options.MinLearningsPerSegment <= options.MaxLearningsPerSegment,
-        $"{nameof(LearningSimilarityOptions.MinLearningsPerSegment)} must be less than or equal to {nameof(LearningSimilarityOptions.MaxLearningsPerSegment)}.")
     .ValidateOnStart();
 
 // ---------- Validation (Minimal APIs) ----------
@@ -208,9 +179,13 @@ builder.Services.AddScoped<ISearchClient, FirecrawlClient>();
 builder.Services.AddScoped<ICrawlClient, FirecrawlClient>();
 
 // ---------- Core services ----------
-builder.Services.AddSingleton<IChatModel, OpenAiChatModel>();
+builder.Services.AddSingleton(runtimeSettingsBootstrap);
+builder.Services.AddSingleton<IRuntimeSettingsRepository, PostgresRuntimeSettingsRepository>();
+builder.Services.AddScoped<IRuntimeSettingsAccessor, ScopedRuntimeSettingsAccessor>();
+
+builder.Services.AddScoped<IChatModel, OpenAiChatModel>();
 builder.Services.AddSingleton<IEmbeddingModel, OpenAiEmbeddingModel>();
-builder.Services.AddSingleton<ITokenizer, VllmTokenizer>();
+builder.Services.AddScoped<ITokenizer, VllmTokenizer>();
 
 builder.Services.AddScoped<IResearchOrchestrator, ResearchOrchestrator>();
 builder.Services.AddScoped<IResearchProtocolService, ResearchProtocolService>();
@@ -218,7 +193,6 @@ builder.Services.AddScoped<ILearningIntelService, LearningIntelService>();
 builder.Services.AddScoped<IQueryPlanningService, QueryPlanningService>();
 builder.Services.AddScoped<IReportSynthesisService, ReportSynthesisService>();
 builder.Services.AddSingleton<IJobSseTicketService, JobSseTicketService>();
-builder.Services.AddSingleton<AppSettingsJsonWriter>();
 
 builder.Services.AddScoped<IResearchJobStore, PostgresResearchJobStore>();
 builder.Services.AddScoped<IResearchJobRepository>(sp => sp.GetRequiredService<IResearchJobStore>());
@@ -232,8 +206,7 @@ builder.Services.AddScoped<IResearchSynthesisOverridesRepository>(sp => sp.GetRe
 // ---------- Health checks ----------
 builder.Services.AddHealthChecks()
     .AddCheck("self", () => HealthCheckResult.Healthy(), tags: ["ready"])
-    .AddUrlGroup(
-        new Uri($"{builder.Configuration["ChatConfig:Endpoint"]!.TrimEnd('/')}/models"),
+    .AddCheck<ChatBackendHealthCheck>(
         "chat",
         tags: ["ready", "llm", "chat"])
     .AddUrlGroup(
@@ -324,6 +297,8 @@ if (!app.Environment.IsEnvironment("Testing"))
     using var scope = app.Services.CreateScope();
     var db = scope.ServiceProvider.GetRequiredService<ResearchDbContext>();
     db.Database.Migrate();
+    var runtimeSettingsRepository = scope.ServiceProvider.GetRequiredService<IRuntimeSettingsRepository>();
+    await runtimeSettingsRepository.EnsureInitializedAsync();
 }
 
 

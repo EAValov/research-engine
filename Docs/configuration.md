@@ -20,6 +20,14 @@ In practice that means values can come from:
 - `ResearchEngine.API/appsettings.json`
 - environment variables
 
+For runtime-editable settings, the API now uses PostgreSQL as the source of truth after startup:
+
+- `ResearchOrchestratorConfig`
+- `LearningSimilarityOptions`
+- `ChatConfig`
+
+Those sections are loaded from configuration only to seed the `runtime_settings` table on first startup. After that, reads and writes go through the database so multiple API instances can share the same settings.
+
 Environment variables use the standard `__` separator, for example:
 
 ```text
@@ -49,14 +57,15 @@ That means environment variables override `appsettings.json`.
 
 This matters for the runtime settings UI:
 
-- the UI updates `ResearchOrchestratorConfig` and `LearningSimilarityOptions` by writing to `appsettings.json`
-- those changes take effect only if the same keys are not being overridden by environment variables
+- `EmbeddingConfig` and other non-runtime settings still follow normal ASP.NET Core precedence
+- `ResearchOrchestratorConfig`, `LearningSimilarityOptions`, and `ChatConfig` are seeded from configuration only when the database row does not exist yet
+- after initialization, the runtime settings UI reads and writes the shared database row instead of editing `appsettings.json`
 
 In the current `Deploy/single-host` manifests:
 
-- `ResearchOrchestratorConfig` is not overridden by env vars
-- `LearningSimilarityOptions` is not overridden by env vars
-- `ChatConfig` is overridden by env vars
+- `ResearchOrchestratorConfig` may be present in config as a bootstrap default
+- `LearningSimilarityOptions` may be present in config as a bootstrap default
+- `ChatConfig` may be present in config as a bootstrap default
 - `EmbeddingConfig` is overridden by env vars
 - several other API settings are overridden by env vars as well
 
@@ -287,7 +296,7 @@ Meaning:
 - `MaxUrlsPerSerpQuery`
   - maximum number of unique URLs processed from a SERP query
 
-These settings are live-readable through `IOptionsMonitor` and are exposed in the Web UI settings dialog.
+These settings are loaded from the shared runtime-settings row in PostgreSQL and are exposed in the Web UI settings dialog.
 
 In the current `Deploy/single-host` deployment, this section is not overridden by environment variables, so UI changes remain effective.
 
@@ -339,7 +348,7 @@ Meaning:
 - `MaxEvidenceLength`
   - maximum stored evidence length in characters
 
-These settings are live-readable through `IOptionsMonitor` and are exposed in the Web UI settings dialog.
+These settings are loaded from the shared runtime-settings row in PostgreSQL and are exposed in the Web UI settings dialog.
 
 In the current `Deploy/single-host` deployment, this section is not overridden by environment variables, so UI changes remain effective.
 
@@ -528,9 +537,10 @@ It currently supports:
 
 Behavior:
 
-- `PUT` writes the updated values to `ResearchEngine.API/appsettings.json`
-- the API reloads configuration immediately after writing
-- live consumers that use `IOptionsMonitor` pick up the new values
+- `GET` reads the shared `runtime_settings` row from PostgreSQL
+- `PUT` updates the shared `runtime_settings` row in PostgreSQL
+- API instances load the current runtime settings from the database per request / job scope
+- the row is created automatically from config defaults on first startup after migrations
 
 Current live-update behavior:
 
@@ -541,7 +551,8 @@ Current live-update behavior:
 
 Important:
 
-- environment-variable overrides still win over values written to `appsettings.json`
+- runtime settings updates are shared across API instances that use the same database
+- `EmbeddingConfig` and other non-runtime settings still come from normal configuration sources
 
 ## Web UI Configuration
 
@@ -603,18 +614,18 @@ The current `Deploy/single-host` manifests configure these important runtime val
 
 - database connection strings
 - Firecrawl base URL and API key
-- chat endpoint, model id, and API key
 - embedding endpoint, model id, dimension, and API key
 - Redis connection string
 - API key auth enabled flag and API key
 - Web UI default API URL
 
-The same manifests currently do not override:
+The same manifests may still contain bootstrap defaults for:
 
+- `ChatConfig`
 - `ResearchOrchestratorConfig`
 - `LearningSimilarityOptions`
 
-That is why the Web UI runtime settings editor can change those two groups successfully in the deployed single-host setup.
+Those values are copied into the database only when the `runtime_settings` row does not exist yet.
 
 ## Secrets
 
@@ -675,6 +686,6 @@ AuthenticationOptions__ApiKeys__0=replace-with-a-real-api-key
 
 ## Notes
 
-- `ChatConfig` is runtime-editable through the Web UI
+- `ChatConfig` is runtime-editable through the Web UI and stored in PostgreSQL
 - `EmbeddingConfig` is currently runtime-readable but not runtime-editable through the Web UI
 - the settings dialog reflects the effective API connection selected in the browser, not just the deployment defaults

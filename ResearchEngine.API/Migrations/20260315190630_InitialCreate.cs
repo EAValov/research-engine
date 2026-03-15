@@ -44,6 +44,33 @@ namespace ResearchEngine.API.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "runtime_settings",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "integer", nullable: false),
+                    LimitSearches = table.Column<int>(type: "integer", nullable: false),
+                    MaxUrlParallelism = table.Column<int>(type: "integer", nullable: false),
+                    MaxUrlsPerSerpQuery = table.Column<int>(type: "integer", nullable: false),
+                    MinImportance = table.Column<float>(type: "real", nullable: false),
+                    DiversityMaxPerUrl = table.Column<int>(type: "integer", nullable: false),
+                    DiversityMaxTextSimilarity = table.Column<double>(type: "double precision", nullable: false),
+                    MaxLearningsPerSegment = table.Column<int>(type: "integer", nullable: false),
+                    MinLearningsPerSegment = table.Column<int>(type: "integer", nullable: false),
+                    GroupAssignSimilarityThreshold = table.Column<float>(type: "real", nullable: false),
+                    GroupSearchTopK = table.Column<int>(type: "integer", nullable: false),
+                    MaxEvidenceLength = table.Column<int>(type: "integer", nullable: false),
+                    ChatEndpoint = table.Column<string>(type: "character varying(2000)", maxLength: 2000, nullable: false),
+                    ChatApiKey = table.Column<string>(type: "character varying(2000)", maxLength: 2000, nullable: false),
+                    ChatModelId = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: false),
+                    ChatMaxContextLength = table.Column<int>(type: "integer", nullable: true),
+                    UpdatedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false, defaultValueSql: "now() at time zone 'utc'")
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_runtime_settings", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "clarifications",
                 columns: table => new
                 {
@@ -491,6 +518,9 @@ namespace ResearchEngine.API.Migrations
 
             migrationBuilder.DropTable(
                 name: "research_events");
+
+            migrationBuilder.DropTable(
+                name: "runtime_settings");
 
             migrationBuilder.DropTable(
                 name: "synthesis_learning_overrides");

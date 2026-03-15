@@ -18,18 +18,18 @@ public static partial class ResearchApi
     /// GET /api/research/settings/runtime
     /// Returns the currently effective runtime settings and active model ids.
     /// </summary>
-    private static IResult GetRuntimeSettings(
-        IOptionsMonitor<ResearchOrchestratorConfig> researchOptions,
-        IOptionsMonitor<LearningSimilarityOptions> learningOptions,
-        IOptionsMonitor<ChatConfig> chatOptions,
+    private static async Task<IResult> GetRuntimeSettings(
+        IRuntimeSettingsRepository runtimeSettingsRepository,
         IOptionsMonitor<EmbeddingConfig> embeddingOptions)
     {
+        var settings = await runtimeSettingsRepository.GetCurrentAsync();
+
         return Results.Ok(new RuntimeSettingsResponse(
-            researchOptions.CurrentValue,
-            learningOptions.CurrentValue,
-            ToRuntimeChatConfigDto(chatOptions.CurrentValue),
+            settings.ResearchOrchestratorConfig,
+            settings.LearningSimilarityOptions,
+            ToRuntimeChatConfigDto(settings.ChatConfig),
             new RuntimeModelInfoDto(
-                chatOptions.CurrentValue.ModelId,
+                settings.ChatConfig.ModelId,
                 embeddingOptions.CurrentValue.ModelId)));
     }
 
@@ -40,7 +40,7 @@ public static partial class ResearchApi
     private static async Task<IResult> GetRuntimeChatModelsAsync(
         [FromBody] ChatModelCatalogRequest request,
         IHttpClientFactory httpClientFactory,
-        IOptionsMonitor<ChatConfig> chatOptions,
+        IRuntimeSettingsRepository runtimeSettingsRepository,
         CancellationToken ct)
     {
         var errors = new Dictionary<string, string[]>(StringComparer.Ordinal);
@@ -53,8 +53,9 @@ public static partial class ResearchApi
             ["Endpoint must be an absolute http:// or https:// URL."];
         }
 
+        var settings = await runtimeSettingsRepository.GetCurrentAsync(ct);
         var effectiveApiKey = string.IsNullOrWhiteSpace(request.ApiKey)
-            ? chatOptions.CurrentValue.ApiKey
+            ? settings.ChatConfig.ApiKey
             : request.ApiKey.Trim();
 
         if (string.IsNullOrWhiteSpace(effectiveApiKey))
@@ -84,12 +85,9 @@ public static partial class ResearchApi
     /// </summary>
     private static async Task<IResult> UpdateRuntimeSettingsAsync(
         [FromBody] UpdateRuntimeSettingsRequest request,
-        AppSettingsJsonWriter settingsWriter,
         IHttpClientFactory httpClientFactory,
+        IRuntimeSettingsRepository runtimeSettingsRepository,
         IDbContextFactory<ResearchDbContext> dbContextFactory,
-        IOptionsMonitor<ResearchOrchestratorConfig> researchOptions,
-        IOptionsMonitor<LearningSimilarityOptions> learningOptions,
-        IOptionsMonitor<ChatConfig> chatOptions,
         IOptionsMonitor<EmbeddingConfig> embeddingOptions,
         CancellationToken ct)
     {
@@ -116,7 +114,8 @@ public static partial class ResearchApi
             ];
         }
 
-        var existingChatConfig = chatOptions.CurrentValue;
+        var existingSettings = await runtimeSettingsRepository.GetCurrentAsync(ct);
+        var existingChatConfig = existingSettings.ChatConfig;
         var effectiveChatApiKey = string.IsNullOrWhiteSpace(request.ChatConfig.ApiKey)
             ? existingChatConfig.ApiKey
             : request.ChatConfig.ApiKey.Trim();
@@ -138,26 +137,25 @@ public static partial class ResearchApi
         if (errors.Count > 0)
             return Results.ValidationProblem(errors);
 
-        var updatedChatConfig = new ChatConfig
-        {
-            Endpoint = request.ChatConfig.Endpoint.Trim(),
-            ApiKey = effectiveChatApiKey,
-            ModelId = request.ChatConfig.ModelId.Trim(),
-            MaxContextLength = request.ChatConfig.MaxContextLength
-        };
-
-        await settingsWriter.WriteRuntimeSettingsAsync(
-            request.ResearchOrchestratorConfig,
-            request.LearningSimilarityOptions,
-            updatedChatConfig,
+        var updatedSettings = await runtimeSettingsRepository.UpdateAsync(
+            new RuntimeSettingsSnapshot(
+                request.ResearchOrchestratorConfig,
+                request.LearningSimilarityOptions,
+                new ChatConfig
+                {
+                    Endpoint = request.ChatConfig.Endpoint.Trim(),
+                    ApiKey = effectiveChatApiKey,
+                    ModelId = request.ChatConfig.ModelId.Trim(),
+                    MaxContextLength = request.ChatConfig.MaxContextLength
+                }),
             ct);
 
         return Results.Ok(new RuntimeSettingsResponse(
-            researchOptions.CurrentValue,
-            learningOptions.CurrentValue,
-            ToRuntimeChatConfigDto(chatOptions.CurrentValue),
+            updatedSettings.ResearchOrchestratorConfig,
+            updatedSettings.LearningSimilarityOptions,
+            ToRuntimeChatConfigDto(updatedSettings.ChatConfig),
             new RuntimeModelInfoDto(
-                chatOptions.CurrentValue.ModelId,
+                updatedSettings.ChatConfig.ModelId,
                 embeddingOptions.CurrentValue.ModelId)));
     }
 
@@ -231,7 +229,9 @@ public static partial class ResearchApi
         if (request.MaxContextLength is not null)
             return errors;
 
-        using var tokenizeRequest = new HttpRequestMessage(HttpMethod.Post, new Uri(endpointUri, "tokenize"));
+        using var tokenizeRequest = new HttpRequestMessage(
+            HttpMethod.Post,
+            OpenAiEndpointUri.AppendServerPath(endpointUri, "tokenize"));
         tokenizeRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", effectiveApiKey);
         tokenizeRequest.Content = JsonContent.Create(new
         {
@@ -274,7 +274,9 @@ public static partial class ResearchApi
         using var client = httpClientFactory.CreateClient();
         client.Timeout = TimeSpan.FromSeconds(8);
 
-        using var modelsRequest = new HttpRequestMessage(HttpMethod.Get, new Uri(endpointUri, "models"));
+        using var modelsRequest = new HttpRequestMessage(
+            HttpMethod.Get,
+            OpenAiEndpointUri.AppendV1Path(endpointUri, "models"));
         modelsRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
 
         HttpResponseMessage modelsResponse;

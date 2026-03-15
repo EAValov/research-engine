@@ -13,7 +13,7 @@ using ResearchEngine.Infrastructure;
 namespace ResearchEngine.API.Migrations
 {
     [DbContext(typeof(ResearchDbContext))]
-    [Migration("20260315102511_InitialCreate")]
+    [Migration("20260315190630_InitialCreate")]
     partial class InitialCreate
     {
         /// <inheritdoc />
@@ -332,6 +332,72 @@ namespace ResearchEngine.API.Migrations
                     b.HasIndex("Status");
 
                     b.ToTable("research_jobs", (string)null);
+                });
+
+            modelBuilder.Entity("ResearchEngine.Domain.RuntimeSettingsRecord", b =>
+                {
+                    b.Property<int>("Id")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("ChatApiKey")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<string>("ChatEndpoint")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<int?>("ChatMaxContextLength")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("ChatModelId")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<int>("DiversityMaxPerUrl")
+                        .HasColumnType("integer");
+
+                    b.Property<double>("DiversityMaxTextSimilarity")
+                        .HasColumnType("double precision");
+
+                    b.Property<float>("GroupAssignSimilarityThreshold")
+                        .HasColumnType("real");
+
+                    b.Property<int>("GroupSearchTopK")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("LimitSearches")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("MaxEvidenceLength")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("MaxLearningsPerSegment")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("MaxUrlParallelism")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("MaxUrlsPerSerpQuery")
+                        .HasColumnType("integer");
+
+                    b.Property<float>("MinImportance")
+                        .HasColumnType("real");
+
+                    b.Property<int>("MinLearningsPerSegment")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("now() at time zone 'utc'");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("runtime_settings", (string)null);
                 });
 
             modelBuilder.Entity("ResearchEngine.Domain.Source", b =>

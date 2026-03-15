@@ -1,7 +1,6 @@
 using System.ClientModel;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.AI;
-using Microsoft.Extensions.Options;
 using OpenAI;
 using OpenAI.Chat;
 using ResearchEngine.Configuration;
@@ -11,18 +10,18 @@ namespace ResearchEngine.Infrastructure;
 
 public sealed class OpenAiChatModel : IChatModel
 {
-    private readonly IOptionsMonitor<ChatConfig> _chatOptions;
+    private readonly IRuntimeSettingsAccessor _runtimeSettings;
     private readonly object _sync = new();
     private ChatClientState? _state;
 
-    public OpenAiChatModel(IOptionsMonitor<ChatConfig> options)
+    public OpenAiChatModel(IRuntimeSettingsAccessor runtimeSettings)
     {
-        _chatOptions = options ?? throw new ArgumentNullException(nameof(options));
+        _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
     }
 
-    public string ModelId => GetOrCreateState().Config.ModelId;
+    public string ModelId => GetOrCreateStateAsync(CancellationToken.None).GetAwaiter().GetResult().Config.ModelId;
 
-    public Task<ChatResponse> ChatAsync(
+    public async Task<ChatResponse> ChatAsync(
         Prompt prompt,
         IEnumerable<AITool>? tools = null,
         Microsoft.Extensions.AI.ChatResponseFormat? responseFormat = null,
@@ -34,7 +33,7 @@ public sealed class OpenAiChatModel : IChatModel
         if (prompt.userPrompt is null)
             throw new ArgumentNullException(nameof(prompt.userPrompt));
 
-        var state = GetOrCreateState();
+        var state = await GetOrCreateStateAsync(cancellationToken);
         var options = new ChatOptions();
 
         if (tools != null)
@@ -61,7 +60,7 @@ public sealed class OpenAiChatModel : IChatModel
             new(ChatRole.User, prompt.userPrompt)
         };
 
-        return state.ChatClient.GetResponseAsync(history, options, cancellationToken);
+        return await state.ChatClient.GetResponseAsync(history, options, cancellationToken);
     }
 
     public string StripThinkBlock(string text)
@@ -95,9 +94,10 @@ public sealed class OpenAiChatModel : IChatModel
             description: description);
     }
 
-    private ChatClientState GetOrCreateState()
+    private async Task<ChatClientState> GetOrCreateStateAsync(CancellationToken cancellationToken)
     {
-        var config = _chatOptions.CurrentValue ?? throw new InvalidOperationException("ChatConfig is not configured.");
+        var snapshot = await _runtimeSettings.GetCurrentAsync(cancellationToken);
+        var config = snapshot.ChatConfig ?? throw new InvalidOperationException("ChatConfig is not configured.");
 
         lock (_sync)
         {

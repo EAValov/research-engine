@@ -1,5 +1,4 @@
 using System.Text.Json;
-using Microsoft.Extensions.Options;
 using ResearchEngine.Configuration;
 using ResearchEngine.Domain;
 
@@ -10,9 +9,9 @@ public sealed class VllmTokenizer : TokenizerBase, IDisposable
     private readonly HttpClient _httpClient;
 
     public VllmTokenizer(
-        IOptionsMonitor<ChatConfig> options,
+        IRuntimeSettingsAccessor runtimeSettings,
         HttpClient? httpClient = null)
-        : base(options)
+        : base(runtimeSettings)
     {
         _httpClient = httpClient ?? new HttpClient();
     }
@@ -24,7 +23,7 @@ public sealed class VllmTokenizer : TokenizerBase, IDisposable
     {
         if (payload is null) throw new ArgumentNullException(nameof(payload));
 
-        var uri = new Uri(new Uri(config.Endpoint, UriKind.Absolute), "tokenize");
+        var uri = OpenAiEndpointUri.AppendServerPath(config.Endpoint, "tokenize");
 
         using var resp = await _httpClient.PostAsJsonAsync(
                 uri,
