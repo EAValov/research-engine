@@ -1,7 +1,7 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: research-searxng-config
+  name: crawl-searxng-config
 data:
   settings.yml: |
     use_default_settings: true
@@ -19,16 +19,65 @@ data:
       static_use_hash: true
 
 ---
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: crawl-schema-fix
+data:
+  nuq-schema-fix.sql: |
+    CREATE SCHEMA IF NOT EXISTS nuq;
+
+    DO $$ BEGIN
+      CREATE TYPE nuq.job_status AS ENUM ('queued', 'active', 'completed', 'failed');
+    EXCEPTION
+      WHEN duplicate_object THEN null;
+    END $$;
+
+    CREATE TABLE IF NOT EXISTS nuq.queue_crawl_finished (
+      id uuid NOT NULL DEFAULT gen_random_uuid(),
+      status nuq.job_status NOT NULL DEFAULT 'queued'::nuq.job_status,
+      data jsonb,
+      created_at timestamp with time zone NOT NULL DEFAULT now(),
+      priority int NOT NULL DEFAULT 0,
+      lock uuid,
+      locked_at timestamp with time zone,
+      stalls integer,
+      finished_at timestamp with time zone,
+      listen_channel_id text,
+      returnvalue jsonb,
+      failedreason text,
+      owner_id uuid,
+      group_id uuid,
+      CONSTRAINT queue_crawl_finished_pkey PRIMARY KEY (id)
+    );
+
+    CREATE INDEX IF NOT EXISTS queue_crawl_finished_active_locked_at_idx
+      ON nuq.queue_crawl_finished USING btree (locked_at)
+      WHERE (status = 'active'::nuq.job_status);
+    CREATE INDEX IF NOT EXISTS nuq_queue_crawl_finished_queued_optimal_2_idx
+      ON nuq.queue_crawl_finished (priority ASC, created_at ASC, id)
+      WHERE (status = 'queued'::nuq.job_status);
+    CREATE INDEX IF NOT EXISTS nuq_queue_crawl_finished_failed_created_at_idx
+      ON nuq.queue_crawl_finished USING btree (created_at)
+      WHERE (status = 'failed'::nuq.job_status);
+    CREATE INDEX IF NOT EXISTS nuq_queue_crawl_finished_completed_created_at_idx
+      ON nuq.queue_crawl_finished USING btree (created_at)
+      WHERE (status = 'completed'::nuq.job_status);
+
+---
+
 apiVersion: v1
 kind: Secret
 metadata:
   name: research-crawl-secrets
 type: Opaque
 stringData:
-  CRAWL_POSTGRES_DB: "firecrawl"
+  CRAWL_POSTGRES_DB: "postgres"
   CRAWL_POSTGRES_USER: "firecrawl"
   CRAWL_POSTGRES_PASSWORD: "firecrawl-password"
-  CRAWL_DATABASE_URL: "postgresql://firecrawl:firecrawl-password@127.0.0.1:5432/firecrawl?sslmode=disable"
+  CRAWL_DATABASE_URL: "postgresql://firecrawl:firecrawl-password@127.0.0.1:5432/postgres?sslmode=disable"
+  CRAWL_RABBITMQ_URL: "amqp://guest:guest@127.0.0.1:5672"
   BULL_AUTH_KEY: "28d4f12a03a9476ba93e59e3fa752623e090f9798ff94d1089dd5f706ae8213f"
   SEARXNG_SECRET: "fc57350014683f0e6e5938408f9742ccc584ceb561476e682af398e5d807dc78"
 
@@ -41,9 +90,26 @@ metadata:
     io.podman.annotations.networks: '["llm-net"]'
 spec:
   hostname: research-crawl
+  restartPolicy: OnFailure
+  initContainers:
+    - name: crawl-postgres-initdb
+      image: ghcr.io/firecrawl/nuq-postgres:latest@sha256:8565e5f46000085c16d247a4354c41e2439dbcf1640f7dd6e6406c0b18c31732
+      command:
+        - sh
+        - -ec
+        - |
+          find /initdb -mindepth 1 -delete
+          cp -a /docker-entrypoint-initdb.d/. /initdb/
+          cp /schema-fix/nuq-schema-fix.sql /initdb/090-nuq-schema-fix.sql
+      volumeMounts:
+        - name: crawl-postgres-initdb
+          mountPath: /initdb
+        - name: crawl-schema-fix
+          mountPath: /schema-fix
+          readOnly: true
   containers:
     - name: crawl-postgres
-      image: localhost/nuq-postgres:latest
+      image: ghcr.io/firecrawl/nuq-postgres:latest@sha256:8565e5f46000085c16d247a4354c41e2439dbcf1640f7dd6e6406c0b18c31732
       env:
         - name: POSTGRES_DB
           valueFrom:
@@ -65,6 +131,8 @@ spec:
       volumeMounts:
         - name: crawl-postgres-data
           mountPath: /var/lib/postgresql/data
+        - name: crawl-postgres-initdb
+          mountPath: /docker-entrypoint-initdb.d
 
     - name: crawl-redis
       image: docker.io/library/redis:7-alpine
@@ -72,8 +140,15 @@ spec:
       ports:
         - containerPort: 6379
 
+    - name: crawl-rabbitmq
+      image: docker.io/library/rabbitmq:3-management
+      command: ["rabbitmq-server"]
+      ports:
+        - containerPort: 5672
+        - containerPort: 15672
+
     - name: firecrawl-playwright
-      image: ghcr.io/firecrawl/playwright-service@sha256:46967190643b3506bbf32774c841787af353d750bcf4d8ee9edc25ecf35e0dea
+      image: ghcr.io/firecrawl/playwright-service:latest@sha256:42cfcbfbfc7aed8e5026d08a54a4379cbaf12ecac1ae2255fae41cc669959a7e
       ports:
         - containerPort: 3000
       env:
@@ -84,7 +159,7 @@ spec:
           mountPath: /app/data
 
     - name: searxng
-      image: searxng/searxng:latest@sha256:95e59f5ba7d48b4c7ee92f2705907e52c5b98715b0d8c4802863322a502a8c4a
+      image: searxng/searxng:latest@sha256:67a3e2e339eb33e60d16df2b328961583c908c4b6f3a176b23ecb9ddd6f137fd
       env:
         - name: SEARXNG_SECRET
           valueFrom:
@@ -103,9 +178,16 @@ spec:
           readOnly: true
 
     - name: firecrawl
-      image: ghcr.io/firecrawl/firecrawl@sha256:24aab751ce90357f1398cef41c82707a3aa65f66334af636fd2e5b9a2f4d8921
+      image: ghcr.io/firecrawl/firecrawl:latest@sha256:dce85da4cf4e5e9758ce6ac79856f5ad4dcac2a98591a61d535afaa7abd0328f
       ports:
         - containerPort: 3002
+      livenessProbe:
+        tcpSocket:
+          port: 3002
+        initialDelaySeconds: 30
+        periodSeconds: 10
+        timeoutSeconds: 2
+        failureThreshold: 6
       env:
         - name: PORT
           value: "3002"
@@ -146,6 +228,11 @@ spec:
             secretKeyRef:
               name: research-crawl-secrets
               key: CRAWL_DATABASE_URL
+        - name: NUQ_RABBITMQ_URL
+          valueFrom:
+            secretKeyRef:
+              name: research-crawl-secrets
+              key: CRAWL_RABBITMQ_URL
         - name: DATABASE_URL
           valueFrom:
             secretKeyRef:
@@ -165,6 +252,11 @@ spec:
     - name: crawl-postgres-data
       persistentVolumeClaim:
         claimName: crawl-nuq-postgres-data
+    - name: crawl-postgres-initdb
+      emptyDir: {}
+    - name: crawl-schema-fix
+      configMap:
+        name: crawl-schema-fix
     - name: crawl-firecrawl-data
       persistentVolumeClaim:
         claimName: crawl-firecrawl-data
@@ -173,4 +265,4 @@ spec:
         claimName: crawl-playwright-data
     - name: searxng-settings
       configMap:
-        name: research-searxng-config
+        name: crawl-searxng-config

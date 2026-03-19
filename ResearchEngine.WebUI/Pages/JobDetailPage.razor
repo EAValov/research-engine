@@ -65,16 +65,6 @@ else
             <div class="value">@FormatTime(_job.CreatedAt)</div>
         </div>
 
-        <div class="row">
-            <div class="label">Chat model</div>
-            <div class="value">@DisplayModelName(_job.ChatModelName)</div>
-        </div>
-
-        <div class="row">
-            <div class="label">Embedding model</div>
-            <div class="value">@DisplayModelName(_job.EmbeddingModelName)</div>
-        </div>
-
         <div class="toolbar" role="toolbar" aria-label="Job actions">
             <button class="toolbtn" type="button" @onclick="ToggleEvidence" aria-haspopup="dialog">
                 Evidence
@@ -138,7 +128,7 @@ else
                 @if (ActiveSynthesis is not null)
                 {
                     <div class="report-meta-line">
-                        <span>Created: @FormatTime(ActiveSynthesis.CreatedAt)</span>
+                        <span>Completed: @FormatTime(ActiveSynthesis.CompletedAt ?? DateTime.Now)</span>
                     </div>
                     <div class="report-meta-line">
                         <span>Chat: @DisplayModelName(ActiveSynthesis.ChatModelName)</span>
@@ -1021,7 +1011,8 @@ else
 
         try
         {
-            await JS.InvokeVoidAsync("researchEngine.downloadTextFile", fileName, exportMarkdown);
+            var exportDocument = BuildExportDocument(exportMarkdown, ActiveSynthesis);
+            await JS.InvokeVoidAsync("researchEngine.downloadTextFile", fileName, exportDocument);
         }
         catch
         {
@@ -1079,6 +1070,50 @@ else
             .ToList();
 
         return $"{rewritten}\n\n## Sources\n\n{string.Join("\n", sources)}";
+    }
+
+    private string BuildExportDocument(string markdown, SynthesisDto? synthesis)
+    {
+        var heading = BuildExportHeading();
+        var metadata = BuildExportMetadata(synthesis);
+        var body = (markdown ?? string.Empty).Trim();
+
+        if (string.IsNullOrWhiteSpace(body))
+            return $"{heading}\n\n{metadata}";
+
+        return $"{heading}\n\n{metadata}\n\n{body}";
+    }
+
+    private string BuildExportHeading()
+    {
+        var query = (_job?.Query ?? string.Empty)
+            .Replace("\r", " ", StringComparison.Ordinal)
+            .Replace("\n", " ", StringComparison.Ordinal)
+            .Trim();
+
+        if (string.IsNullOrWhiteSpace(query))
+            query = "Research report";
+
+        return $"# {query}";
+    }
+
+    private string BuildExportMetadata(SynthesisDto? synthesis)
+    {
+        var breadth = _job?.Breadth.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "Not recorded";
+        var depth = _job?.Depth.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "Not recorded";
+        DateTimeOffset? createdAt = synthesis?.CreatedAt ?? _job?.CreatedAt;
+        var completedAt = synthesis?.CompletedAt;
+
+        var createdText = createdAt is null ? "Not recorded" : FormatTime(createdAt.Value);
+        var completedText = completedAt is null ? "Not completed" : FormatTime(completedAt.Value);
+
+        return string.Join("\n", new[]
+        {
+            $"- Breadth: {breadth}",
+            $"- Depth: {depth}",
+            $"- Created: {createdText}",
+            $"- Completed: {completedText}"
+        });
     }
 
     private void ToggleProgressExpanded()

@@ -20,7 +20,7 @@ The recommended single-host layout is four pods with clear responsibility bounda
 - Crawl Pod
 - Model Pod
 
-This alignment keeps the stack easy to replace and scale without turning it into one large pod. If you prefer, you can also run a single PostgreSQL container and a single Redis container for the whole stack.
+This alignment keeps the stack easy to replace and scale without turning it into one large pod. If you prefer, you can also run a single PostgreSQL container and a single Redis container for the whole stack ().
 
 Secrets are scoped per component manifest so you can skip a component without deploying unrelated secrets:
 

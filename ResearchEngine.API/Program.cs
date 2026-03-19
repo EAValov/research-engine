@@ -208,11 +208,11 @@ builder.Services.AddHealthChecks()
     .AddCheck("self", () => HealthCheckResult.Healthy(), tags: ["ready"])
     .AddCheck<ChatBackendHealthCheck>(
         "chat",
-        tags: ["llm", "chat"])
+        tags: ["ready", "llm", "chat"])
     .AddUrlGroup(
         new Uri($"{builder.Configuration["EmbeddingConfig:Endpoint"]!.TrimEnd('/')}/models"),
         "embedding",
-        tags: ["llm", "embedding"])
+        tags: ["ready", "llm", "embedding"])
     .AddNpgSql(
         builder.Configuration.GetConnectionString("ResearchDb")!,
         name: "postgres",
@@ -239,8 +239,6 @@ builder.Services.AddCors(options =>
             "http://127.0.0.1:5170",
             "http://localhost:5173",
             "http://127.0.0.1:5173",
-            "https://localhost:5001",
-            "http://localhost:5000"
         ];
     }
 
