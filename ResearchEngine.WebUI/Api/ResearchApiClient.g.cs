@@ -5194,9 +5194,6 @@ namespace ResearchEngine.WebUI.Api
         [System.ComponentModel.DataAnnotations.Required(AllowEmptyStrings = true)]
         public string Query { get; set; } = default!;
 
-        [System.Text.Json.Serialization.JsonPropertyName("includeConfigureQuestions")]
-        public bool IncludeConfigureQuestions { get; set; } = false;
-
         private System.Collections.Generic.IDictionary<string, object>? _additionalProperties;
 
         [System.Text.Json.Serialization.JsonExtensionData]

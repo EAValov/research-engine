@@ -1879,9 +1879,6 @@ components:
       properties:
         query:
           type: string
-        includeConfigureQuestions:
-          type: boolean
-          default: false
     ProtocolClarificationsResponse:
       required:
         - questions

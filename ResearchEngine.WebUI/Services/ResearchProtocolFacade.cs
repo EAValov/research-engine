@@ -18,15 +18,13 @@ public sealed class ResearchProtocolFacade
 
     public async Task<ApiResult<IReadOnlyList<string>>> GetClarificationQuestionsAsync(
         string query,
-        bool includeConfigureQuestions,
         CancellationToken ct)
     {
         try
         {
             var resp = await _api.ClarificationsAsync(new ProtocolClarificationsRequest
             {
-                Query = query,
-                IncludeConfigureQuestions = includeConfigureQuestions
+                Query = query
             }, ct);
 
             var q = (resp?.Questions ?? Array.Empty<string>())

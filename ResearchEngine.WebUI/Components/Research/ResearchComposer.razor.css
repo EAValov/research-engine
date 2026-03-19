@@ -98,7 +98,7 @@
 .settings-grid {
     margin-top: 12px;
     display: grid;
-    grid-template-columns: 120px 120px 180px minmax(260px, 1fr);
+    grid-template-columns: 120px 120px minmax(260px, 1fr);
     gap: 12px;
 }
 

@@ -189,10 +189,6 @@ public static class OpenAiModelEndpoints
         var (breadthOverride, depthOverride) = ResearchProtocolHelper.ExtractBreadthDepthFromMessages(messages);
         var (langOverride, regionOverride) = ResearchProtocolHelper.ExtractLanguageRegionFromMessages(messages);
 
-        var configureRequested = messages.Any(m =>
-            !string.IsNullOrWhiteSpace(m.Content) &&
-            m.Content.Contains("/configure", StringComparison.OrdinalIgnoreCase));
-
         var userMessages = messages
             .Select((m, idx) => new { m, idx })
             .Where(x => IsRole(x.m, "user"))
@@ -232,7 +228,7 @@ public static class OpenAiModelEndpoints
         // PHASE 1: no block yet -> ask clarification questions
         if (!hasClarificationBlock)
         {
-            var questions = await protocolService.GenerateFeedbackQueriesAsync(initialQuery, configureRequested, ct);
+            var questions = await protocolService.GenerateFeedbackQueriesAsync(initialQuery, ct);
 
             var sb = new StringBuilder();
             sb.AppendLine("To better focus the research, please answer the following clarification questions:");

@@ -17,10 +17,14 @@ public class ResearchProtocolService : IResearchProtocolService
 
     public async Task<IReadOnlyList<string>> GenerateFeedbackQueriesAsync(
         string query,
-        bool includeBreadthDepthQuestions,
         CancellationToken ct = default)
     {
-        var prompt = FeedbackPromptFactory.Build(query, includeBreadthDepthQuestions);
+        var (detectedLanguage, _) = await AutoSelectLanguageRegionAsync(
+            query,
+            Array.Empty<Clarification>(),
+            ct);
+
+        var prompt = FeedbackPromptFactory.Build(query, detectedLanguage);
 
         var jsonOptions = new JsonSerializerOptions
         {

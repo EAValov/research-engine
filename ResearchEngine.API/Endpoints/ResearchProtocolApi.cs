@@ -49,7 +49,6 @@ public static class ResearchProtocolApi
         IReadOnlyList<string> questions =
             await protocolService.GenerateFeedbackQueriesAsync(
                 request.Query,
-                request.IncludeConfigureQuestions,
                 ct);
 
         return Results.Ok(new ProtocolClarificationsResponse(questions));

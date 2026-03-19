@@ -119,18 +119,6 @@
                             </select>
                         </div>
 
-                        <div class="field field-compact">
-                            <div class="lbl">Language</div>
-                            <select class="input"
-                                    value="@(_language ?? "en")"
-                                    @onchange="OnLanguageChanged">
-                                @foreach (var language in SupportedLanguages)
-                                {
-                                    <option value="@language.Code">@language.Name</option>
-                                }
-                            </select>
-                        </div>
-
                         <div class="field field-region">
                             <div class="lbl">Region</div>
                             <input class="input"
@@ -168,7 +156,6 @@
 
     private int? _breadth;
     private int? _depth;
-    private string? _language;
     private string? _region;
 
     private bool _busy;
@@ -181,15 +168,6 @@
     private readonly Dictionary<string, string> _answers = new();
     private static readonly int[] BreadthOptions = { 1, 2, 3, 4, 5, 6, 7, 8 };
     private static readonly int[] DepthOptions = { 1, 2, 3, 4 };
-    private static readonly (string Code, string Name)[] SupportedLanguages =
-    {
-        ("ar", "Arabic"),
-        ("zh", "Chinese"),
-        ("en", "English"),
-        ("fr", "French"),
-        ("ru", "Russian"),
-        ("es", "Spanish")
-    };
 
     private bool CanRun => !string.IsNullOrWhiteSpace(_query);
 
@@ -247,7 +225,6 @@
 
                 var qRes = await Protocol.GetClarificationQuestionsAsync(
                     query: query,
-                    includeConfigureQuestions: true,
                     ct: CancellationToken.None);
 
                 if (!qRes.IsSuccess)
@@ -274,12 +251,11 @@
 
             Dictionary<string, object>? overrides = null;
             // Only send overrides if user provided something (optional)
-            if (_breadth is not null || _depth is not null || !string.IsNullOrWhiteSpace(_language) || !string.IsNullOrWhiteSpace(_region))
+            if (_breadth is not null || _depth is not null || !string.IsNullOrWhiteSpace(_region))
             {
                 overrides = new Dictionary<string, object>();
                 if (_breadth is not null) overrides["breadth"] = _breadth.Value;
                 if (_depth is not null) overrides["depth"] = _depth.Value;
-                if (!string.IsNullOrWhiteSpace(_language)) overrides["language"] = _language!.Trim();
                 if (!string.IsNullOrWhiteSpace(_region)) overrides["region"] = _region!.Trim();
             }
 
@@ -300,7 +276,6 @@
                 // Populate only if user hasn't typed values yet
                 _breadth ??= breadth;
                 _depth ??= depth;
-                _language ??= NormalizeLanguageCode(language) ?? "en";
                 _region ??= region;
             }
             else
@@ -310,7 +285,7 @@
 
             breadth = _breadth ?? breadth;
             depth = _depth ?? depth;
-            language = NormalizeLanguageCode(_language) ?? NormalizeLanguageCode(language) ?? "en";
+            language = NormalizeLanguageCode(language) ?? "en";
             region = NormalizeRegion(_region);
 
             // 3) Create job
@@ -363,24 +338,13 @@
         return list;
     }
 
-    private void OnLanguageChanged(ChangeEventArgs e)
-    {
-        _language = NormalizeLanguageCode(e.Value?.ToString()) ?? "en";
-    }
-
     private static string? NormalizeLanguageCode(string? raw)
     {
         if (string.IsNullOrWhiteSpace(raw))
             return null;
 
         var s = raw.Trim().ToLowerInvariant();
-        foreach (var (code, _) in SupportedLanguages)
-        {
-            if (string.Equals(code, s, StringComparison.OrdinalIgnoreCase))
-                return code;
-        }
-
-        return null;
+        return s.Length == 2 ? s : null;
     }
 
     private static string? NormalizeRegion(string? raw)
