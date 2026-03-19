@@ -48,6 +48,10 @@ h1:focus {
     outline: none;
 }
 
+#mainContent:focus {
+    outline: none;
+}
+
 a, .btn-link {
     color: #0071c1;
 }
