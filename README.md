@@ -1,113 +1,121 @@
-# Research Engine
+<p align="center">
+  <img src="./README%20logo.png" alt="Research Engine" width="720">
+</p>
 
-Research Engine is a local-first deep research application that uses a locally hosted LLM to collect web learnings, store them as structured evidence, and generate cited research reports through a retrieval-based synthesis pipeline. It is designed for users who want private, inspectable, and controllable research workflows running on local infrastructure rather than opaque cloud-only systems.
+<p align="center">
+  <strong>Local-first deep research.</strong>
+</p>
 
-This app is designed for individual researches or small teams and the goal is to make the tool that is open, easy to install and just works.
-No cloud subsciptions needed - it's all running on your hardware.
+<p align="center">
+  Research Engine collects web evidence, distills it into structured learnings, and generates cited research reports through an inspectable retrieval-based synthesis pipeline.
+</p>
+
+<p align="center">
+  <a href="./Docs/Architecture.md">Architecture</a>
+  ·
+  <a href="./Docs/Deployment.md">Deployment</a>
+  ·
+  <a href="./Docs/Configuration.md">Configuration</a>
+</p>
+
+Research Engine is built for individual researchers and small teams that want private, inspectable, and controllable research workflows on local infrastructure instead of opaque cloud-only systems.
+
+No subscriptions are required. it's all running on your hardware.
+
 For free.
 
-## Design and idea
+## How is it different?
 
 Research Engine is built around a different architecture than cloud-based deep research systems like ChatGPT Deep Research.
 
-These systems are designed for quality and speed, so for each user question they can spawn several agents that are collecting and scraping pages, combining large amounts of source content into a single prompt, and sending that prompt to a large cloud model to generate the final report. This works well when large models and large context windows are available, but it is less suitable for smaller local models.
+Cloud systems optimize for quality and speed by spawning multiple agents, scraping many pages at the same time, combining large amounts of source content into a single prompt, and sending that prompt to a large hosted model. That works well when large models and large context windows are easy to access, but it is less suitable for smaller local models.
 
-Research Engine is designed to be more context-efficient. Instead of treating scraped pages as raw prompt material, it transforms research results into compact structured learnings, stores them in a database, and retrieves only the most relevant evidence during synthesis generation. The final report is written section by section through a RAG-based pipeline, which helps smaller local models produce better results without requiring the full research corpus in context at once.
+Research Engine is designed to be more context-efficient. Instead of treating scraped pages as raw prompt material, it transforms research results into compact structured learnings, stores them in a database, and retrieves only the most relevant evidence during synthesis generation. The final report is written section by section through a RAG-based pipeline, which helps smaller local models produce better results without keeping the full research data in context at once.
 
-Basically it trades speed and scalability for compactness, allowing us to run deep-research on a local model with decent quality. Checkout the examples:
+In practice, that trades speed and scalability for compactness, controllability, and better fit for local deployments.
 
-- [Example Report 1](./examples/report-1.md)
-- [Example Report 2](./examples/report-2.md)
-- [Example Report 3](./examples/report-3.md)
+This architecture allow us to separate "learning extraction" and the "Synthesis" parts of the job, with the intermediate state saved into the Database. This enables an interactive evidence workflow. Users can inspect the sources and learnings used by the model, verify citations, pin or exclude evidence, and regenerate the synthesis with additional instructions without rerunning the entire research job from scratch.
 
-This architecture also enables an interactive evidence workflow. Users can inspect the sources and learnings used by the model, verify citations, pin or exclude evidence, and regenerate the synthesis with additional instructions without rerunning the whole research job from scratch.
-
-More on that in [Architecture](./Docs/Architecture.md).
+More detail is available in the [Architecture guide](./Docs/Architecture.md).
 
 ## Key Features
 
-- **Local-first deep research**
-  - Uses a locally hosted LLM instead of requiring a cloud model
-
-- **Privacy-oriented design**
-  - Built to run locally so research workflows, prompts, and generated reports can stay under the user’s control
-
-- **Interactive evidence review**
-  - Inspect sources and learnings used by the model
-  - Click citations in the final report to verify supporting evidence
-
-- **Traceable citations**
-  - Reports include clickable citations
-  - Users can inspect the original source URL and the exact learning text used in synthesis
-
-- **Pin / exclude workflow**
-  - Pin valuable sources or learnings
-  - Exclude weak or irrelevant evidence
-  - Regenerate the report using curated evidence instead of starting over
-
-- **Regeneration with additional instructions**
-  - Refine the synthesis with extra directions for the model
-  - Improve report quality without rerunning the full research collection pipeline
-
-## How it Works
-
-1. The user submits a research query  
-   Optional clarifications can be added to steer the research scope.
-
-2. The system performs web research  
-   Search queries are generated and SERP/web content is collected.
-
-3. The system extracts learnings  
-   Web content is transformed into structured learnings rather than kept as raw long-form prompt context.
-
-4. Learnings are stored in the database  
-   The database supports vector search for later retrieval.
-
-5. The LLM plans the report structure  
-   It generates synthesis sections based on the collected research space.
-
-6. Each section is written with retrieval  
-   Relevant learnings are fetched from the database through vector search and supplied to the model as evidence.
-
-7. The user reviews the result  
-   The final report contains citations linked to sources and learnings.
-
-8. The user curates evidence and regenerates  
-   Sources and learnings can be pinned or excluded, and the synthesis can be regenerated with additional instructions.
+- **Local-first deep research** using locally hosted chat and embedding models
+- **Privacy-oriented by design** so prompts, sources, and generated reports remain under your control
+- **Structured evidence pipeline** that turns collected web content into compact learnings
+- **Traceable citations** with source URLs and evidence popovers in the final report
+- **Interactive evidence review** for inspecting sources and learnings before accepting a synthesis
+- **Pin and exclude workflow** for curating evidence without restarting the full job
+- **Regeneration with extra instructions** to refine a report from the existing research set
 
 ## Screenshots
 
-> Add UI screenshots here:
->
-> - main research page
-> - generated synthesis view
-> - citation / evidence drawer
-> - pin / exclude workflow
-> - regeneration UI
+<table>
+  <tr>
+    <td align="center" width="50%">
+      <strong>Main research workspace</strong><br><br>
+      <img src="./Docs/Screenshots/Main.png" alt="Main research workspace" width="100%"><br><br>
+      Start new research runs, tune scope, and monitor recent jobs from one workspace.
+    </td>
+    <td align="center" width="50%">
+      <strong>Generated synthesis with citations</strong><br><br>
+      <img src="./Docs/Screenshots/Report.png" alt="Generated synthesis with citations" width="100%"><br><br>
+      Review a completed report with inline citations, evidence popovers, export tools, and the entry point for regeneration.
+    </td>
+  </tr>
+  <tr>
+    <td align="center" width="50%">
+      <strong>Evidence drawer and curation workflow</strong><br><br>
+      <img src="./Docs/Screenshots/Evidence.png" alt="Evidence drawer and curation workflow" width="100%"><br><br>
+      Inspect sources and learnings, then pin or exclude evidence before generating the next synthesis iteration.
+    </td>
+    <td align="center" width="50%">
+      <strong>Regeneration UI</strong><br><br>
+      <img src="./Docs/Screenshots/NewSynthesisWindow.png" alt="New synthesis dialog" width="100%"><br><br>
+      Create a new synthesis with additional instructions and pinned or excluded evidence overrides.
+    </td>
+  </tr>
+</table>
+
+<p align="center">
+  <strong>Regenerated Synthesis Result</strong>
+</p>
+
+<p align="center">
+  <img src="./Docs/Screenshots/NewSynthesisRegenerated.png" alt="Regenerated synthesis report" width="900">
+</p>
+
+<p align="center">
+  The regenerated report keeps the citation-driven reading experience while reflecting the new synthesis instructions and curated evidence set.
+</p>
+
+## How It Works
+
+1. The user submits a research query. Optional clarifications can be added to steer the scope.
+2. The system performs web research. Search queries are generated and web content is collected.
+3. The system extracts learnings. Raw pages are compressed into structured evidence instead of being kept as long prompt context.
+4. Learnings are stored in the database, which supports vector retrieval.
+5. The LLM plans the report structure.
+6. Each section is written with retrieval, using the most relevant evidence from the research set.
+7. The user reviews the report with clickable citations and inspectable evidence.
+8. The user curates evidence and regenerates the synthesis with pinned, excluded, or newly guided inputs.
 
 ## Example Reports
 
-Example generated reports are included in the repository:
+- [Long-duration energy storage](<./Examples/Long-duration energy storage.md>)
+- [Treatment of monogenic skin disorders](<./Examples/Treatment of monogenic skin disorders.md>)
 
-- [Example Report 1](./examples/report-1.md)
-- [Example Report 2](./examples/report-2.md)
-- [Example Report 3](./examples/report-3.md)
+## Super Quick Start
 
-These examples show the kind of cited synthesis output that Research Engine produces.
+If your machine is roughly comparable to the following:
 
-### Super Quick Start
-
-If you have a similar PC:
-- CPU: AMD Ryzen 7940HX (16 cores)
+- CPU: AMD Ryzen 7940HX
 - RAM: 32 GB DDR5 5200
-- GPU: Nvidia RTX 5090 Founders Edition
+- GPU: Nvidia RTX 5090
+- OS: Windows 11 with WSL2
+- Containers: Podman Desktop
 
-And your PC is running:
-- Windows 11
-- WSL2
-- Podman desktop
-
-Than you can just do:
+You can start with:
 
 ```bash
 git clone https://github.com/EAValov/research-engine.git
@@ -116,29 +124,31 @@ podman build -t research-webui:latest ./ResearchEngine.WebUI/
 powershell -File .\Deploy\single-host.ps1 up
 ```
 
-Than open your browser and navigate to:
+Then open:
 
 ```text
 http://localhost:8080
 ```
 
-Wait until the ready indicator is green:
-Docs\Screenshots\Ready.png
+Wait until the `Live` and `Ready` indicators are green.
 
-It's ready to run.
+![Ready indicator](./Docs/Screenshots/Ready.png)
 
-Optionally you can configure an HTTPs and frendly url like https://research-webui.llm.local:8443
-Checkout the [Deployment Guide](./Docs/Deployment.md) for more details. 
+At that point the app is ready to use. Good luck with your research!
 
-## Configuration
+For less powerfull machines, server deployment and if you want HTTPS and a friendly local URL such as `https://research-webui.llm.local:8443`, see the [Deployment guide](./Docs/Deployment.md).
 
-Checkout the [Configuration Guide](./Docs/Configuration.md)
+## Documentation
+
+- [Architecture](./Docs/Architecture.md)
+- [Deployment](./Docs/Deployment.md)
+- [Configuration](./Docs/Configuration.md)
 
 ## License
 
 This project is licensed under the **GNU Affero General Public License v3.0 (AGPL-3.0)**.
 
-The AGPL license ensures that if the software is modified and used to provide a network-accessible service, the corresponding source code of that modified version must also be made available under the same license.
+The AGPL ensures that if the software is modified and used to provide a network-accessible service, the corresponding source code of that modified version must also be made available under the same license.
 
 See [LICENSE](./LICENSE) for details.
 
@@ -146,7 +156,7 @@ See [LICENSE](./LICENSE) for details.
 
 Research Engine is intended to be open and remain open.
 
-If someone adapts the project and runs it as a networked service, they should also share the source code of that adapted version. AGPL-3.0 supports this goal and helps ensure that improvements made to hosted versions of the software remain available to users.
+If someone adapts the project and runs it as a networked service, they should also share the source code of that adapted version. AGPL-3.0 supports that goal and helps ensure that improvements made to hosted versions of the software remain available to users.
 
 ## Citation
 

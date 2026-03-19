@@ -1,3 +1,10 @@
+# What are the most promising approaches to long-duration energy storage, and what limits their large-scale deployment?
+
+- Breadth: 5
+- Depth: 3
+- Created: 2026-03-19 19:36:19
+- Completed: 2026-03-19 19:37:37
+
 ## Introduction
 
 This report examines the evolving landscape of long-duration energy storage (LDES), focusing on technologies capable of delivering power for six hours or more to address the intermittency of renewable energy sources. As global renewable energy integration accelerates, LDES has emerged as a critical enabler of grid reliability, with deployments reaching 15 GWh globally in 2025—a 49% year-on-year increase [1]. The research explores the most promising approaches, including pumped hydro storage (PHS), compressed air energy storage (CAES), thermal systems, flow batteries, and hydrogen-based solutions, while analyzing barriers to their large-scale adoption.  

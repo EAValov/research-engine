@@ -1,3 +1,10 @@
+# Compare mRNA, saRNA, and base editing for treatment of monogenic skin disorders in terms of durability, safety, delivery feasibility, and translational readiness.
+
+- Breadth: 5
+- Depth: 3
+- Created: 2026-03-19 19:28:29
+- Completed: 2026-03-19 19:29:38
+
 ## Introduction
 
 Monogenic skin disorders, such as epidermolysis bullosa and ichthyosis, arise from single-gene mutations that disrupt critical skin functions, leading to severe structural and physiological impairments [1]. These conditions often require targeted, durable interventions due to their lifelong impact on patients. Traditional therapies remain limited, underscoring the urgency for innovative approaches. mRNA, self-amplifying RNA (saRNA), and base editing represent emerging modalities with distinct advantages: mRNA offers rapid, scalable synthesis and non-integrating safety profiles [2], while saRNA extends protein expression duration with single-dose efficacy [3]. Base editing, meanwhile, enables precise genetic correction with reduced off-target risks [4]. Each method addresses unique challenges in delivery, durability, and translational feasibility, yet their comparative effectiveness remains under active investigation.
