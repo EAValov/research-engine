@@ -58,8 +58,6 @@ public partial class SettingsDialog : ComponentBase
     private RuntimeCrawlConfigModel _draftCrawlConfig = new();
     private string _draftChatApiKey = string.Empty;
     private string _draftCrawlApiKey = string.Empty;
-    private bool _draftChatAuthEnabled = true;
-    private bool _draftCrawlAuthEnabled = true;
     private readonly List<string> _chatModelOptions = new();
     private ResearchOrchestratorConfigModel _baselineResearchOptions = new();
     private LearningSimilarityOptionsModel _baselineLearningOptions = new();
@@ -79,6 +77,7 @@ public partial class SettingsDialog : ComponentBase
     private string _baselineApiBaseUrl = string.Empty;
     private string _baselineApiKey = string.Empty;
     private bool _baselineApiAuthEnabled;
+    private bool _baselineApiHasKey => !string.IsNullOrWhiteSpace(_baselineApiKey);
 
     private bool IsAnyTesting => _testingApiConnection || _testingChatApi || _testingCrawlApi;
 
@@ -112,7 +111,7 @@ public partial class SettingsDialog : ComponentBase
             ApiConnectionSettings.NormalizeBaseUrl(_draftApiBaseUrl),
             ApiConnectionSettings.NormalizeBaseUrl(_baselineApiBaseUrl),
             StringComparison.OrdinalIgnoreCase)
-        || !string.Equals(_draftApiKey, _baselineApiKey, StringComparison.Ordinal)
+        || !string.Equals(GetEffectiveDraftApiKey(), _baselineApiKey, StringComparison.Ordinal)
         || _draftApiAuthEnabled != _baselineApiAuthEnabled;
 
     private bool HasRuntimeSettingsChanges =>
@@ -164,7 +163,7 @@ public partial class SettingsDialog : ComponentBase
     private void LoadApiDraftFromRuntime()
     {
         _draftApiBaseUrl = ApiConnection.ApiBaseUrl;
-        _draftApiKey = ApiConnection.ApiKey;
+        _draftApiKey = string.Empty;
         _draftApiAuthEnabled = ApiConnection.AuthEnabled;
     }
 
@@ -206,14 +205,14 @@ public partial class SettingsDialog : ComponentBase
             {
                 ResearchOrchestratorConfig = CloneResearchOptions(_draftResearchOptions),
                 LearningSimilarityOptions = CloneLearningOptions(_draftLearningOptions),
-                ChatConfig = CloneChatConfigForUpdate(_draftChatConfig, _draftChatApiKey, _draftChatAuthEnabled),
-                CrawlConfig = CloneCrawlConfigForUpdate(_draftCrawlConfig, _draftCrawlApiKey, _draftCrawlAuthEnabled)
+                ChatConfig = CloneChatConfigForUpdate(_draftChatConfig, _draftChatApiKey),
+                CrawlConfig = CloneCrawlConfigForUpdate(_draftCrawlConfig, _draftCrawlApiKey)
             };
 
             var saveResult = await UpdateRuntimeSettingsDirectAsync(
                 _draftApiBaseUrl,
                 _draftApiAuthEnabled,
-                _draftApiKey,
+                GetEffectiveDraftApiKey(),
                 request,
                 CancellationToken.None);
 
@@ -247,12 +246,12 @@ public partial class SettingsDialog : ComponentBase
 
     private bool ApplyApiDraft()
     {
-        var success = ApiConnection.TryApply(_draftApiBaseUrl, _draftApiKey, _draftApiAuthEnabled);
+        var success = ApiConnection.TryApply(_draftApiBaseUrl, GetEffectiveDraftApiKey(), _draftApiAuthEnabled);
         if (!success)
             return false;
 
-        _draftApiBaseUrl = ApiConnection.ApiBaseUrl;
-        AppState.SetApiSettings(_draftApiBaseUrl, _draftApiKey, _draftApiAuthEnabled);
+        LoadApiDraftFromRuntime();
+        AppState.SetApiSettings(ApiConnection.ApiBaseUrl, ApiConnection.ApiKey, ApiConnection.AuthEnabled);
         CaptureApiBaseline();
         return true;
     }
@@ -304,14 +303,6 @@ public partial class SettingsDialog : ComponentBase
         ResetChatModelOptionsState();
     }
 
-    private void OnChatAuthChanged(ChangeEventArgs e)
-    {
-        _draftChatAuthEnabled = e.Value is bool value && value;
-        ResetSettingsMessages();
-        ClearChatApiTestFeedback();
-        ResetChatModelOptionsState();
-    }
-
     private void OnCrawlEndpointChanged(ChangeEventArgs e)
     {
         _draftCrawlConfig.Endpoint = e.Value?.ToString() ?? string.Empty;
@@ -326,13 +317,6 @@ public partial class SettingsDialog : ComponentBase
         ResetSettingsMessages();
         ClearCrawlApiTestFeedback();
         _fieldErrors.Remove("CrawlConfig.ApiKey");
-    }
-
-    private void OnCrawlAuthChanged(ChangeEventArgs e)
-    {
-        _draftCrawlAuthEnabled = e.Value is bool value && value;
-        ResetSettingsMessages();
-        ClearCrawlApiTestFeedback();
     }
 
     private void OnChatMaxContextLengthChanged(ChangeEventArgs e)
@@ -379,7 +363,7 @@ public partial class SettingsDialog : ComponentBase
                 normalizedBaseUrl,
                 "api/ping",
                 _draftApiAuthEnabled,
-                _draftApiKey,
+                GetEffectiveDraftApiKey(),
                 CancellationToken.None);
 
             if (probe.Status != HttpStatusCode.OK)
@@ -475,12 +459,12 @@ public partial class SettingsDialog : ComponentBase
             var result = await ProbeCrawlApiDirectAsync(
                 _draftApiBaseUrl,
                 _draftApiAuthEnabled,
-                _draftApiKey,
+                GetEffectiveDraftApiKey(),
                 new CrawlApiProbeRequestModel
                 {
                     Endpoint = normalizedEndpoint,
-                    ApiKey = _draftCrawlAuthEnabled ? _draftCrawlApiKey : string.Empty,
-                    UseStoredApiKey = _draftCrawlAuthEnabled && string.IsNullOrWhiteSpace(_draftCrawlApiKey)
+                    ApiKey = _draftCrawlApiKey,
+                    UseStoredApiKey = string.IsNullOrWhiteSpace(_draftCrawlApiKey)
                 },
                 CancellationToken.None);
 
@@ -507,7 +491,7 @@ public partial class SettingsDialog : ComponentBase
             var result = await GetRuntimeSettingsDirectAsync(
                 _draftApiBaseUrl,
                 _draftApiAuthEnabled,
-                _draftApiKey,
+                GetEffectiveDraftApiKey(),
                 CancellationToken.None);
 
             if (result.Data is not null)
@@ -539,8 +523,6 @@ public partial class SettingsDialog : ComponentBase
         _draftCrawlConfig = CloneRuntimeCrawlConfig(response.CrawlConfig);
         _draftChatApiKey = string.Empty;
         _draftCrawlApiKey = string.Empty;
-        _draftChatAuthEnabled = response.ChatConfig.HasApiKey;
-        _draftCrawlAuthEnabled = response.CrawlConfig.HasApiKey;
         _baselineResearchOptions = CloneResearchOptions(response.ResearchOrchestratorConfig);
         _baselineLearningOptions = CloneLearningOptions(response.LearningSimilarityOptions);
         _baselineChatConfig = CloneRuntimeChatConfig(response.ChatConfig);
@@ -584,7 +566,7 @@ public partial class SettingsDialog : ComponentBase
             SetFieldError("ChatConfig.MaxContextLength", "Value must be at least 10000.");
         }
 
-        if (_draftChatAuthEnabled && !_draftChatConfig.HasApiKey && string.IsNullOrWhiteSpace(_draftChatApiKey))
+        if (!_draftChatConfig.HasApiKey && string.IsNullOrWhiteSpace(_draftChatApiKey))
             SetFieldError("ChatConfig.ApiKey", "Enter the chat backend API key.");
 
         if (ApiConnectionSettings.NormalizeBaseUrl(_draftCrawlConfig.Endpoint) is null)
@@ -669,10 +651,15 @@ public partial class SettingsDialog : ComponentBase
 
     private void CaptureApiBaseline()
     {
-        _baselineApiBaseUrl = _draftApiBaseUrl;
-        _baselineApiKey = _draftApiKey;
-        _baselineApiAuthEnabled = _draftApiAuthEnabled;
+        _baselineApiBaseUrl = ApiConnection.ApiBaseUrl;
+        _baselineApiKey = ApiConnection.ApiKey;
+        _baselineApiAuthEnabled = ApiConnection.AuthEnabled;
     }
+
+    private string GetEffectiveDraftApiKey()
+        => string.IsNullOrWhiteSpace(_draftApiKey)
+            ? _baselineApiKey
+            : _draftApiKey.Trim();
 
     private void StartAppliedState()
     {
@@ -1072,20 +1059,20 @@ public partial class SettingsDialog : ComponentBase
             HasApiKey = source.HasApiKey
         };
 
-    private static UpdateChatConfigModel CloneChatConfigForUpdate(RuntimeChatConfigModel source, string apiKey, bool authEnabled)
+    private static UpdateChatConfigModel CloneChatConfigForUpdate(RuntimeChatConfigModel source, string apiKey)
         => new()
         {
             Endpoint = source.Endpoint,
             ModelId = source.ModelId,
             MaxContextLength = source.MaxContextLength,
-            ApiKey = authEnabled ? apiKey : string.Empty
+            ApiKey = apiKey
         };
 
-    private static UpdateCrawlConfigModel CloneCrawlConfigForUpdate(RuntimeCrawlConfigModel source, string apiKey, bool authEnabled)
+    private static UpdateCrawlConfigModel CloneCrawlConfigForUpdate(RuntimeCrawlConfigModel source, string apiKey)
         => new()
         {
             Endpoint = source.Endpoint,
-            ApiKey = authEnabled ? apiKey : string.Empty
+            ApiKey = apiKey
         };
 
     private IReadOnlyList<string> BuildChatModelDropdownOptions()
@@ -1129,12 +1116,12 @@ public partial class SettingsDialog : ComponentBase
             var result = await GetChatModelCatalogDirectAsync(
                 _draftApiBaseUrl,
                 _draftApiAuthEnabled,
-                _draftApiKey,
+                GetEffectiveDraftApiKey(),
                 new ChatModelCatalogRequestModel
                 {
                     Endpoint = normalizedEndpoint,
-                    ApiKey = _draftChatAuthEnabled ? _draftChatApiKey : string.Empty,
-                    UseStoredApiKey = _draftChatAuthEnabled && string.IsNullOrWhiteSpace(_draftChatApiKey)
+                    ApiKey = _draftChatApiKey,
+                    UseStoredApiKey = string.IsNullOrWhiteSpace(_draftChatApiKey)
                 },
                 ct);
 

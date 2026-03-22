@@ -13,11 +13,11 @@
                  role="dialog"
                  aria-modal="true"
                  aria-labelledby="settingsTitle"
-                @onclick:stopPropagation="true">
+                 @onclick:stopPropagation="true">
             <div class="settings-head">
                 <div>
                     <h2 id="settingsTitle">Settings</h2>
-                    <p class="settings-subtitle">ResearchEngine API, Chat LLM API, Crawl API, search settings, and learning similarity.</p>
+                    <p class="settings-subtitle">ResearchEngine API, Chat LLM settings, crawl settings, search settings, and learning similarity.</p>
                 </div>
                 <button type="button" class="close-btn" @onclick="CloseSettings" aria-label="Close settings">×</button>
             </div>
@@ -49,42 +49,45 @@
                             <label class="settings-field">
                             <span class="settings-label-row">
                                 <span>Write-only API key</span>
-                                <span class="settings-help" title="API key used for authenticated API requests and sent as Authorization: Bearer &lt;key&gt;.">Authorization key</span>
+                                <span class="settings-help" title="API key used for authenticated API requests and sent as Authorization: Bearer &lt;key&gt;.">Leave blank to keep current key</span>
                             </span>
                             <input class="settings-input"
                                    value="@_draftApiKey"
                                    @oninput="OnApiKeyChanged"
                                    type="password"
                                    disabled="@(!_draftApiAuthEnabled)"
-                                   placeholder="Paste API key" />
-                            </label>
-
-                            <div class="settings-inline-actions">
-                                <label class="settings-switch">
-                                    <input type="checkbox"
-                                           checked="@_draftApiAuthEnabled"
-                                           @onchange="OnApiAuthChanged" />
-                                    <span title="Include the API key on API requests using the Bearer authorization scheme.">API Auth</span>
-                                </label>
-
-                                <button type="button"
-                                        class="secondarybtn"
-                                        @onclick="TestApiConnectionAsync"
-                                        disabled="@(!CanTestApiConnection)">
-                                    @(_testingApiConnection ? "Testing..." : "Test API")
-                                </button>
-
+                                   placeholder="@(_baselineApiHasKey ? "Leave blank to keep current key" : "Enter API key")" />
+                            <div class="settings-test-result" aria-live="polite">
                                 @if (HasApiConnectionTestFeedback)
                                 {
                                     <span class="@GetTestBadgeClass(_apiConnectionTestStatus)"
-                                          title="@_apiConnectionTestMessage"
-                                          aria-live="polite">
+                                          title="@_apiConnectionTestMessage">
                                         @GetTestBadgeLabel(_apiConnectionTestStatus)
                                     </span>
-                                    <span class="@GetTestFeedbackClass(_apiConnectionTestStatus)">
+                                    <span class="@GetTestFeedbackClass(_apiConnectionTestStatus)"
+                                          title="@_apiConnectionTestMessage">
                                         @_apiConnectionTestMessage
                                     </span>
                                 }
+                            </div>
+                            </label>
+
+                            <div class="settings-inline-actions">
+                                <div class="settings-inline-controls">
+                                    <label class="settings-switch">
+                                        <input type="checkbox"
+                                               checked="@_draftApiAuthEnabled"
+                                               @onchange="OnApiAuthChanged" />
+                                        <span title="Include the API key on API requests using the Bearer authorization scheme.">API Auth</span>
+                                    </label>
+
+                                    <button type="button"
+                                            class="secondarybtn"
+                                            @onclick="TestApiConnectionAsync"
+                                            disabled="@(!CanTestApiConnection)">
+                                        @(_testingApiConnection ? "Testing..." : "Test")
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -92,7 +95,7 @@
 
                 <section class="settings-group">
                     <div class="settings-group-head">
-                        <h3>Chat LLM API</h3>
+                        <h3>Chat LLM Settings</h3>
                         <p>Runtime chat settings for the connected API. Leave the API key blank to keep the current secret.</p>
                     </div>
 
@@ -129,35 +132,30 @@
                             {
                                 <span class="settings-field-error">@chatApiKeyError</span>
                             }
-                            </label>
-
-                            <div class="settings-inline-actions">
-                                <label class="settings-switch">
-                                    <input type="checkbox"
-                                           checked="@_draftChatAuthEnabled"
-                                           @onchange="OnChatAuthChanged"
-                                           disabled="@IsRuntimeSettingsDisabled" />
-                                    <span>API Auth</span>
-                                </label>
-
-                                <button type="button"
-                                        class="secondarybtn"
-                                        @onclick="TestChatApiAsync"
-                                        disabled="@(!CanTestChatApi || IsRuntimeSettingsDisabled)">
-                                    @(_testingChatApi ? "Testing..." : "Test API")
-                                </button>
-
+                            <div class="settings-test-result" aria-live="polite">
                                 @if (HasChatApiTestFeedback)
                                 {
                                     <span class="@GetTestBadgeClass(_chatApiTestStatus)"
-                                          title="@_chatApiTestMessage"
-                                          aria-live="polite">
+                                          title="@_chatApiTestMessage">
                                         @GetTestBadgeLabel(_chatApiTestStatus)
                                     </span>
-                                    <span class="@GetTestFeedbackClass(_chatApiTestStatus)">
+                                    <span class="@GetTestFeedbackClass(_chatApiTestStatus)"
+                                          title="@_chatApiTestMessage">
                                         @_chatApiTestMessage
                                     </span>
                                 }
+                            </div>
+                            </label>
+
+                            <div class="settings-inline-actions">
+                                <div class="settings-inline-controls">
+                                    <button type="button"
+                                            class="secondarybtn"
+                                            @onclick="TestChatApiAsync"
+                                            disabled="@(!CanTestChatApi || IsRuntimeSettingsDisabled)">
+                                        @(_testingChatApi ? "Testing..." : "Test")
+                                    </button>
+                                </div>
                             </div>
                         </div>
 
@@ -191,10 +189,6 @@
                             {
                                 <span class="settings-field-error">@_chatModelOptionsError</span>
                             }
-                            else
-                            {
-                                <span class="settings-help-inline">Use Test API to refresh the model list.</span>
-                            }
                         </label>
 
                         <label class="settings-field">
@@ -218,7 +212,7 @@
 
                 <section class="settings-group">
                     <div class="settings-group-head">
-                        <h3>Crawl API</h3>
+                        <h3>Crawl settings</h3>
                         <p>Runtime crawl backend settings for the connected API. Leave the API key blank to keep the current secret.</p>
                     </div>
 
@@ -255,35 +249,30 @@
                                 {
                                     <span class="settings-field-error">@crawlApiKeyError</span>
                                 }
+                                <div class="settings-test-result" aria-live="polite">
+                                    @if (HasCrawlApiTestFeedback)
+                                    {
+                                        <span class="@GetTestBadgeClass(_crawlApiTestStatus)"
+                                              title="@_crawlApiTestMessage">
+                                            @GetTestBadgeLabel(_crawlApiTestStatus)
+                                        </span>
+                                        <span class="@GetTestFeedbackClass(_crawlApiTestStatus)"
+                                              title="@_crawlApiTestMessage">
+                                            @_crawlApiTestMessage
+                                        </span>
+                                    }
+                                </div>
                             </label>
 
                             <div class="settings-inline-actions">
-                                <label class="settings-switch">
-                                    <input type="checkbox"
-                                           checked="@_draftCrawlAuthEnabled"
-                                           @onchange="OnCrawlAuthChanged"
-                                           disabled="@IsRuntimeSettingsDisabled" />
-                                    <span>API Auth</span>
-                                </label>
-
-                                <button type="button"
-                                        class="secondarybtn"
-                                        @onclick="TestCrawlApiAsync"
-                                        disabled="@(!CanTestCrawlApi || IsRuntimeSettingsDisabled)">
-                                    @(_testingCrawlApi ? "Testing..." : "Test API")
-                                </button>
-
-                                @if (HasCrawlApiTestFeedback)
-                                {
-                                    <span class="@GetTestBadgeClass(_crawlApiTestStatus)"
-                                          title="@_crawlApiTestMessage"
-                                          aria-live="polite">
-                                        @GetTestBadgeLabel(_crawlApiTestStatus)
-                                    </span>
-                                    <span class="@GetTestFeedbackClass(_crawlApiTestStatus)">
-                                        @_crawlApiTestMessage
-                                    </span>
-                                }
+                                <div class="settings-inline-controls">
+                                    <button type="button"
+                                            class="secondarybtn"
+                                            @onclick="TestCrawlApiAsync"
+                                            disabled="@(!CanTestCrawlApi || IsRuntimeSettingsDisabled)">
+                                        @(_testingCrawlApi ? "Testing..." : "Test")
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     </div>
