@@ -1,99 +1,106 @@
 # Why has Bitcoin still not become widely adopted for everyday payments despite high global awareness?
 
-- Breadth: 4
+- Breadth: 5
 - Depth: 3
-- Created: 2026-03-22 12:34:28
-- Completed: 2026-03-22 12:35:38
+- Created: 2026-03-22 20:52:12
+- Completed: 2026-03-22 20:54:43
 
 ## Introduction
 
-Bitcoin emerged in 2008 as a decentralized digital currency designed to eliminate intermediaries in financial transactions, leveraging blockchain technology to ensure transparency and security [1]. Its initial promise centered on overcoming traditional financial systems' limitations, such as censorship resistance and inflationary pressures, while maintaining a fixed supply cap of 21 million coins [1]. Despite global awareness, Bitcoin's adoption for everyday payments remains limited due to structural and practical challenges. 
+Bitcoin's emergence as a globally recognized digital asset is marked by a stark contrast between its widespread awareness and limited adoption in everyday transactions. While 80% of Bitcoin holders express support for broader cryptocurrency adoption, 55% rarely or never use Bitcoin for payments, highlighting a critical gap between theoretical enthusiasm and practical application [1]. This paradox is compounded by systemic challenges: limited merchant acceptance (49.6%), high transaction fees (44.7%), and volatility (43.4%) remain primary barriers to its use as a daily payment method [1]. 
 
-Scalability constraints, such as a maximum transaction throughput of 7-10 per second and a 10-minute block time, have hindered its ability to compete with traditional payment networks [2]. Additionally, its price volatility—exacerbated by a 12,872% increase from $500 in 2016 to $64,861 in 2024—has made it an unreliable medium for routine transactions [3]. The network's rigid protocol, resistant to rapid modifications, further complicates adaptations needed for mass adoption [1]. 
+Despite technical innovations like the Lightning Network, which reduces costs for small-value transactions [2], Bitcoin's scalability and usability for frequent, low-value purchases remain constrained. Regulatory uncertainty further complicates adoption, as compliance requirements deter businesses and consumers from integrating Bitcoin into routine financial workflows [3]. While growth in lower-income regions suggests localized potential, these cases underscore the disparity between Bitcoin's theoretical utility and its current practical limitations for global, everyday use.
 
-While layer 2 solutions like the Lightning Network aim to address scalability through off-chain transactions [2], broader adoption faces hurdles such as regulatory uncertainty and the absence of legal protections for transactions, which cannot be reversed [3]. These factors underscore the gap between Bitcoin's theoretical potential and its practical application in daily commerce.
+## Market and Adoption Overview
 
-## Adoption Barriers
+Bitcoin remains the leading cryptocurrency by market capitalization and awareness, yet its adoption for everyday payments lags despite its prominence. Current data reveals that only 12% of Bitcoin users engage in daily crypto payments, with 14.5% using it weekly and 18.3% monthly [1]. This contrasts with its 80% holder support for broader crypto adoption, highlighting a gap between awareness and practical use [1].  
 
-Bitcoin's limited adoption for everyday payments stems from multifaceted challenges spanning technical, economic, and social dimensions. Technologically, Bitcoin's scalability issues persist due to its 1 MB block size limit and 10-minute block time, resulting in transaction throughput of only 7-10 per second [2]. This creates network congestion, driving up fees to levels that often exceed the value of small transactions, such as a $5 coffee [1]. The blockchain's design also lacks efficient off-chain solutions for mass adoption, exacerbating these bottlenecks [4].
+Market dynamics further underscore this challenge. While Bitcoin's infrastructure has improved, scalability issues and high transaction fees—particularly during peak times—remain critical barriers [4]. In comparison, alternatives like Solana offer lower fees (under $0.01) but face limitations in adoption and market capitalization [5]. The Lightning Network, a Layer 2 solution, addresses some of Bitcoin’s scalability concerns by enabling faster, lower-cost transactions, yet its adoption remains niche [6].  
 
-Economically, price volatility and regulatory ambiguity deter both consumers and merchants. Bitcoin's value fluctuations make it an unreliable medium for everyday purchases, while inconsistent global regulations create compliance risks for businesses [5]. High fees during peak usage further alienate users, as seen in cases where transaction costs for small payments surpass the transaction value itself [6]. Additionally, the absence of reversible transactions removes consumer protections, increasing perceived risk [3].
+Adoption is also uneven geographically. Bitcoin’s everyday usage is more prevalent in regions like Central and Southern Asia and Oceania, reflecting economic conditions rather than universal appeal [3]. Meanwhile, regulatory uncertainty and compliance challenges deter businesses and consumers from integrating Bitcoin into daily transactions [3]. These factors, combined with the persistence of traditional payment systems, ensure Bitcoin’s role as a medium of exchange remains secondary to its function as a store of value.
 
-Socially, adoption is hindered by limited merchant acceptance and user complexity. No centralized platform tracks Bitcoin-accepting businesses, forcing users to rely on fragmented sources [7]. User interfaces remain non-intuitive, and widespread education about Bitcoin's mechanics is lacking, contributing to its perception as a technical niche rather than a practical tool [1]. Security concerns, including wallet vulnerabilities and exchange risks, further erode trust in its everyday usability [8].
+## Technological and Operational Barriers
 
-## Case Studies
+Bitcoin's limited adoption for everyday payments stems from technical and operational constraints that affect its scalability, transaction speed, and energy efficiency. These challenges create friction in its usability as a mainstream payment system, despite its global awareness.  
 
-El Salvador's adoption of Bitcoin as legal tender in 2021 represents a significant case study in institutionalizing cryptocurrency for everyday use. The government's initiative, supported by the Chivo wallet, aimed to integrate Bitcoin into financial systems, offering incentives for adoption. However, challenges such as technical barriers, regulatory uncertainty, and public skepticism limited its impact. For instance, the Bitcoin Beach project in El Zonte, which predated the legal tender law, demonstrated community-driven adoption through the Lightning Network, enabling microtransactions and local business integration [4]. This grassroots approach highlighted the potential of layer-2 solutions like the Lightning Network to address Bitcoin's scalability limitations, which remain a critical obstacle for widespread adoption [2].  
+**Scalability Limitations**  
+Bitcoin's blockchain architecture faces inherent scalability constraints. The network’s block size limit and consensus rules restrict its ability to process transactions efficiently. For instance, the current throughput of 6–8 transactions per second (TPS) [3] pales in comparison to traditional payment systems like Visa, which handles thousands of TPS. Increasing block sizes to address this risk centralizing mining and node operations, as larger blocks require more computational resources to validate [7]. This trade-off undermines Bitcoin’s decentralized ethos, creating a paradox between scalability and security.  
 
-In contrast, El Salvador's broader implementation faced hurdles including internet infrastructure gaps, user education challenges, and resistance from traditional financial institutions. While the country's experiment provided insights into Bitcoin's viability as a national currency, it also underscored systemic issues such as volatility and regulatory risks [9]. Similar challenges persist in other regions, where fragmented adoption—evidenced by disparate directories like btcmap.org and lightningnetworkstores.com—reflects the lack of a unified ecosystem for Bitcoin payments [7].  
+**Transaction Speed and Congestion**  
+Network congestion exacerbates delays and costs. During peak usage, transaction fees surge due to competition for block space, deterring small, frequent transactions [5]. For example, low-fee transactions may remain unconfirmed for hours, as seen in reports of transactions taking days to process [8]. This inconsistency in speed and cost hampers user trust and practicality for daily use.  
 
-Technical constraints, such as Bitcoin's 7-10 transactions-per-second throughput and 10-minute block times, further hinder its utility for high-frequency, low-value transactions [2]. While innovations like Schnorr signatures and MAST aim to improve scalability, their adoption remains gradual [4]. Regulatory factors, including Canada's taxation policies and the SEC's ETF decisions, also shape adoption trajectories, creating a complex landscape for businesses and users [1], [5].  
+**Energy Consumption and Operational Efficiency**  
+While not directly addressed in the evidence, Bitcoin’s energy consumption remains a contentious issue. The proof-of-work consensus mechanism requires significant computational power, raising environmental concerns and operational costs. However, the provided learnings focus on scalability and fee dynamics rather than energy metrics, leaving this aspect underexplored in the available data.  
 
-These case studies reveal that while Bitcoin's technical and regulatory challenges are well-documented, its adoption remains uneven, driven by localized efforts rather than global scalability.
+**Solutions and Trade-offs**  
+Layer-2 solutions like the Lightning Network aim to mitigate these issues by enabling off-chain transactions. This approach reduces on-chain congestion, allowing thousands of transactions per second without altering Bitcoin’s core parameters [7]. However, adoption of such technologies remains uneven, with limited merchant integration and user awareness.  
 
-## Comparative Analysis
+In summary, Bitcoin’s technical barriers—scarcity of throughput, fee volatility, and scalability trade-offs—create significant hurdles for everyday adoption. While innovations like the Lightning Network offer partial solutions, their impact is constrained by infrastructure gaps and the need for broader ecosystem coordination.
 
-Bitcoin's adoption challenges share similarities with other digital payment systems but also exhibit unique technical and practical barriers. A comparative analysis reveals overlapping issues such as scalability and regulatory uncertainty, alongside Bitcoin-specific limitations in transaction design and user accessibility.  
+## Regulatory and Legal Challenges
 
-**Shared Challenges**  
-Both Bitcoin and systems like Ethereum face scalability constraints, with Bitcoin processing 7–10 transactions per second (TPS) and Ethereum handling 12–15 TPS, far below traditional payment networks like Visa’s 24,000 TPS [2], [10]. Network congestion and high fees during peak usage limit their viability for small, frequent purchases, a challenge also faced by other blockchains [8]. Regulatory scrutiny and taxation also affect multiple digital payment systems, creating compliance hurdles for merchants and users [1].  
+Regulatory and legal uncertainties remain significant barriers to Bitcoin's adoption as a mainstream payment method. Jurisdictions worldwide have adopted inconsistent approaches to cryptocurrency regulation, creating compliance challenges for businesses and users. For instance, the lack of a standardized framework for handling disputes, compliance, and risk distribution in crypto transactions deters merchants from accepting Bitcoin, as noted in studies highlighting "the absence of a standardized framework for handling disputes and ensuring compliance"[9]. 
 
-**Unique Bitcoin Barriers**  
-Bitcoin’s **push-based payment model** requires explicit user initiation for each transaction, complicating automated or recurring payments without off-chain solutions like the Lightning Network [11]. This contrasts with centralized systems like PayPal or Visa, which support seamless recurring billing. Additionally, Bitcoin’s protocol lacks native support for scheduled payments, forcing merchants to rely on third-party tools [11].  
+Regulatory uncertainty extends to compliance requirements, which vary widely across regions. Some jurisdictions impose strict anti-money laundering (AML) and know-your-customer (KYC) rules, while others lack clear guidelines altogether. This fragmentation forces businesses to navigate complex, often conflicting regulations, increasing operational costs and legal risks. For example, "regulatory uncertainty, including varying compliance requirements across jurisdictions, poses a significant challenge to Bitcoin's adoption as a mainstream payment method"[3]. 
 
-Technical limitations further hinder adoption. Bitcoin’s 1 MB block size (up to 4 MB with SegWit) creates bottlenecks for high-frequency transactions, exacerbating network congestion [11]. While Layer 2 solutions like the Lightning Network aim to address scalability, their adoption remains limited, leaving on-chain transactions vulnerable to high fees and slow processing [4].  
+Additionally, the absence of clear legal definitions for Bitcoin's status—as a currency, asset, or commodity—further complicates its integration into traditional financial systems. This ambiguity creates hesitation among merchants and consumers, who fear potential legal repercussions or sudden regulatory shifts. As one analysis notes, "regulatory uncertainty and compliance challenges in different jurisdictions contribute to the reluctance of businesses and consumers to adopt Bitcoin for daily transactions"[10]. 
 
-**Merchant and User Accessibility**  
-Unlike established digital payment systems, Bitcoin lacks a unified platform for tracking businesses that accept it, forcing users to rely on fragmented sources [7]. This fragmentation, combined with a complex user interface and limited education, reduces its practicality for everyday use compared to more user-friendly alternatives [1].  
+These challenges are compounded by the technology's novelty: many legal frameworks were designed before cryptocurrencies existed, leading to gaps in oversight. While some regions have begun to develop more structured regulations, the global nature of Bitcoin means that no single jurisdiction's rules can fully mitigate these risks. This ongoing legal fragmentation sustains the perception of Bitcoin as a high-risk, niche asset rather than a reliable payment tool.
 
-**Volatility and Institutional Factors**  
-While volatility is a shared concern across cryptocurrencies, Bitcoin’s price swings remain a critical barrier for merchants and consumers despite improvements by 2024 [5]. Regulatory uncertainty and the absence of a centralized authority also differentiate Bitcoin from traditional payment systems, where oversight provides predictability for users [5].  
+## User Experience and Accessibility
 
-This interplay of shared and unique challenges underscores why Bitcoin’s adoption for everyday payments lags behind both traditional systems and other digital alternatives, despite its global awareness.
+Bitcoin's adoption for everyday payments faces significant hurdles in user experience, wallet security, and accessibility, as highlighted by multiple studies. Non-technical users often encounter complex workflows, such as managing private keys, understanding transaction fees, and navigating wallet interfaces, which deter mainstream adoption [1]. While solutions like the Lightning Network reduce fees for small transactions [2], widespread implementation remains fragmented.  
 
-## Technological and Regulatory Developments
+Wallet security also poses a barrier. Many users lack confidence in protecting digital assets, with 55% of Bitcoin holders reporting they rarely use it for daily payments despite supporting broader adoption [1]. Additionally, regulatory uncertainty and compliance requirements create friction for merchants, who face risks from price volatility and legal ambiguities [10].  
 
-Recent technological advancements and regulatory developments highlight both opportunities and challenges for Bitcoin's future adoption. On the technological front, scalability remains a critical issue, with Bitcoin's on-chain transaction throughput limited to 7–10 transactions per second and a 10-minute block time, creating bottlenecks as adoption grows [2]. Layer 2 solutions like the Lightning Network and rollups are seen as essential for supporting billions of users, while technical optimizations such as Schnorr signatures and MAST aim to improve efficiency [2][4]. However, high transaction fees on competing blockchains, such as Ethereum, during peak congestion periods also raise concerns about Bitcoin's practicality for small, frequent purchases [8].  
+Accessibility is further complicated by the need for technical literacy. Users must manually adjust transaction fees via tools like mempool.space [8], a process unfamiliar to most. While Bitcoin's transparency in fees offers control [2], this complexity contrasts with the simplicity of traditional payment systems.  
 
-Regulatory developments present a dual-edged sword. While the U.S. Securities and Exchange Commission (SEC) approval of Bitcoin ETFs in 2024 could boost adoption and price stability [5], broader regulatory scrutiny—such as Canada's taxation policies and enforcement actions—introduces uncertainty [1]. Global regulatory activity is intensifying, reflecting growing institutional interest in digital assets [12].  
+A simplified process for everyday use could address these challenges, but current infrastructure and user education gaps persist.  
 
-Key barriers persist, including Bitcoin's volatility, which remains a deterrent for everyday use despite reduced fluctuations in 2024 [5], and the lack of legal protections for irreversible transactions [3]. Additionally, the complexity of Bitcoin's user interface and limited public understanding of blockchain technology hinder accessibility [3][1]. These factors, combined with the absence of a unified system to track Bitcoin-accepting businesses, further complicate widespread adoption for daily transactions [7].  
-
-```mermaid
-graph TD
-    A[Technological Advances] --> B[Layer 2 Solutions]
-    A --> C[Protocol Optimizations]
-    D[Regulatory Developments] --> E[SEC ETF Approvals]
-    D --> F[Global Regulatory Scrutiny]
-    G[Challenges] --> H[Volatility]
-    G --> I[Transaction Risks]
-    G --> J[Adoption Barriers]
-    B --> K[Lightning Network]
-    C --> L[Schnorr Signatures]
-    E --> M[Market Confidence]
-    F --> N[Compliance Costs]
-    H --> O[Price Fluctuations]
-    I --> P[Irreversible Transactions]
-    J --> Q[User Complexity]
-    J --> R[Education Gaps]
+```mermaid  
+graph TD  
+    A[User Initiates Payment] --> B{Wallet Complexity}  
+    B --> C[Abandon Transaction]  
+    D[Merchant Acceptance] --> E{Regulatory Risk}  
+    E --> F[Decline Payment]  
+    G[Transaction Fees] --> H{User Confusion}  
+    H --> I[Manual Adjustments]  
+    I --> J[Delayed Confirmation]  
 ```
+
+## Competitor Analysis
+
+Bitcoin's competitive disadvantages in the payments space are evident when compared to traditional systems and alternative cryptocurrencies. Traditional payment methods like credit cards and digital wallets dominate due to their established infrastructure, widespread merchant acceptance, and lower transaction friction. For example, 49.6% of users cite limited merchant adoption as a barrier to Bitcoin payments, while 44.7% point to high fees [1]. In contrast, traditional systems benefit from universal acceptance and predictable processing times, even if they charge higher fees for merchants.  
+
+Other cryptocurrencies, such as Solana, offer faster transaction speeds (sub-second confirmations) and significantly lower fees ($0.01 per transaction) compared to Bitcoin's average of $1.50–$5.00 [5]. However, these alternatives lack Bitcoin's market capitalization and brand recognition, limiting their viability for mainstream adoption.  
+
+Bitcoin's own infrastructure challenges further hinder its competitiveness. While the Lightning Network reduces costs for small transactions [2], scalability issues persist during high-volume periods, and 55% of Bitcoin holders rarely use it for daily payments [1]. Regulatory uncertainty and the absence of a defined risk distribution model for businesses also deter adoption [9].  
+
+| **Feature**               | **Bitcoin**                     | **Traditional Systems**       | **Solana**                     |  
+|--------------------------|----------------------------------|-------------------------------|--------------------------------|  
+| **Transaction Speed**    | 10 minutes (on-chain)            | Real-time (card networks)     | Sub-seconds                    |  
+| **Average Fee**          | $1.50–$5.00                      | $0.20–$1.00 (credit cards)    | < $0.01                        |  
+| **Merchant Acceptance**  | 49.6%                            | 100%                          | < 10%                          |  
+| **Scalability**          | Limited by block size            | High (centralized networks)   | High (sharding architecture)   |  
+| **Volatility Risk**      | High (20%+ price swings)         | Stable (fiat)                 | Moderate                       |  
+
+These comparisons highlight Bitcoin's unique challenges in balancing security, scalability, and user experience. While its censorship-resistant design appeals to niche use cases [11], its practicality for everyday payments remains constrained by infrastructure gaps and competition from both traditional and alternative systems.
 
 ## Conclusion
 
 **Conclusion**  
-Bitcoin's limited adoption for everyday payments stems from a confluence of technological, economic, and regulatory challenges that undermine its practicality despite its global awareness. Its design prioritizes security and decentralization, but this comes at the cost of scalability, with inherent limitations such as low transaction throughput, high fees, and prolonged confirmation times, rendering it inefficient for small, frequent transactions. Volatility further complicates its role as a stable medium of exchange, while the absence of reversible transactions and legal protections deters merchants and users. Although innovations like the Lightning Network offer scalability solutions, fragmented ecosystems, technical constraints, and regulatory uncertainties hinder widespread implementation. Comparative analysis reveals that Bitcoin faces unique trade-offs, including a rigid protocol resistant to changes and a push-based transaction model, which contrast with more adaptable digital payment systems. Key conditions for adoption—such as regulatory clarity, user-friendly interfaces, merchant acceptance, and public education—remain unmet, perpetuating its status as a speculative asset rather than a mainstream payment tool. While technological advancements and evolving regulatory frameworks may address some barriers, Bitcoin's current trajectory suggests that its economic viability for everyday use hinges on resolving these systemic challenges without compromising its core principles of decentralization and security.
+Bitcoin’s limited adoption for everyday payments despite its global awareness stems from a confluence of technological, regulatory, and usability challenges. While its role as a store of value is well-established, systemic barriers hinder its viability as a medium of exchange. Technologically, Bitcoin’s scalability limitations—such as low transaction throughput (6–8 TPS) and network congestion—create high fees and delays, deterring frequent, small-value transactions. Layer-2 solutions like the Lightning Network offer partial relief but face fragmented adoption and infrastructure gaps. Regulatory uncertainty further complicates matters, with inconsistent global frameworks, ambiguous legal classifications, and varying AML/KYC requirements increasing operational risks for merchants and users. Additionally, Bitcoin’s complex user experience, including private key management and fee adjustments, deters non-technical users, exacerbating its disconnect from mainstream adoption. Competitors like Solana provide faster, cheaper alternatives but lack Bitcoin’s market dominance and brand recognition. These factors collectively underscore a trade-off between Bitcoin’s security and decentralization advantages and its practical usability for daily transactions. For Bitcoin to transition from a speculative asset to a practical payment method, advancements in scalability, regulatory clarity, and user-friendly infrastructure are critical. Without addressing these interlinked challenges, its economic viability as a daily payment tool remains constrained, perpetuating its role as a speculative or investment asset rather than a mainstream currency.
 
 ## Sources
 
-1. https://coindoo.com/bitcoins-biggest-limitations-explained-speed-fees-and-scalability/
-2. https://www.xverse.app/blog/bitcoin-scalability
-3. https://www.dreamstolifellc.com/major-hurdles-to-cryptocurrency-adoption-in-late-2024/
-4. https://en.wikipedia.org/wiki/Bitcoin_scalability_problem
-5. https://www.tastycrypto.com/blog/bitcoin-adoption/
-6. https://www.coinmetro.com/learning-lab/blockchain-scalability-solutions
-7. https://www.reddit.com/r/Bitcoin/comments/1cidouf/is_there_a_comprehensive_list_of_businesses_that/
-8. https://finchtrade.com/blog/top-challenges-in-scaling-crypto-payment-services-in-2025
-9. https://www.henleyglobal.com/publications/crypto-wealth-report-2024/case-nation-state-bitcoin-adoption-2024-and-beyond
-10. https://hedera.com/learning/blockchain-scalability/
-11. https://www.ccn.com/education/crypto/bitcoin-recurring-payments-possible-limitations/
-12. https://kpmg.com/us/en/articles/2022/ten-key-regulatory-challenges-2022-crypto-digital-assets.html
+1. https://beincrypto.com/bitcoin-payments-usage-vs-adoption-gap/
+2. https://lightspark.com/glossary/fee
+3. https://westafricatradehub.com/crypto/future-of-crypto-in-the-next-10-years-bitcoins-outlook-and-challenges/
+4. https://www.inpay.com/news-and-insights/everyday-crypto-use-cases/
+5. https://www.bitgo.com/resources/blog/crypto-transaction-fees-explained/
+6. https://www.vaneck.com/blogs/digital-assets/the-investment-case-for-bitcoin/
+7. https://www.alphaexcapital.com/cryptocurrencies/cryptocurrency-basics/bitcoin-basics/bitcoin-scalability-issues
+8. https://www.reddit.com/r/BitcoinBeginners/comments/1ptpgc0/what_should_i_know_about_bitcoin_transaction_fees/
+9. https://www.fintechweekly.com/news/the-checkout-paradox-why-retailers-still-dont-trust-crypto-payments
+10. https://www.fortris.com/blog/bitcoin-fees-guide
+11. https://www.reddit.com/r/BitcoinBeginners/comments/1iz3unq/what_is_bitcoin_actually_used_for_besides_storing/

@@ -76,6 +76,8 @@ No subscriptions required. it's all running on your hardware.
 
 - [Most promising approaches to long-duration energy storage](<./Examples/Long-duration energy storage.md>)
 - [Market opportunities for launching an AI-powered consumer health app](<./Examples/Health app in the EU and US.md>)
+- [Why Bitcoin still not widely adopted](<./Examples/Why Bitcoin still not widely adopted.md>)
+
 
 ## How It Works
 
