@@ -14,6 +14,7 @@ public interface IResearchJobRepository
     Task<ResearchJob?> GetJobAsync(Guid id, CancellationToken ct = default);
 
     Task<IReadOnlyList<ResearchJob>> ListJobsAsync(CancellationToken ct = default);
+    Task<IReadOnlyList<ResearchJob>> ListArchivedJobsAsync(CancellationToken ct = default);
 
     Task<int> UpdateJobAsync(ResearchJob job, CancellationToken ct = default);
 
@@ -24,6 +25,9 @@ public interface IResearchJobRepository
     Task<int> ClearJobCancelRequestAsync(Guid jobId, CancellationToken ct = default);
 
     Task<bool> IsJobCancelRequestedAsync(Guid jobId, CancellationToken ct = default);
+
+    Task<int> ArchiveJobAsync(Guid jobId, CancellationToken ct = default);
+    Task<int> UnarchiveJobAsync(Guid jobId, CancellationToken ct = default);
 
     Task<int> SoftDeleteJobAsync(Guid jobId, string? reason, CancellationToken ct = default);
 

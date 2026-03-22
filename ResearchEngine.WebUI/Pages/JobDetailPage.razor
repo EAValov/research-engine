@@ -14,6 +14,7 @@
 @inject SynthesisIterationFacade Iteration
 @inject OverridesStore Overrides
 @inject LearningGroupFacade LearningGroups
+@inject NavigationManager Nav
 @inject IJSRuntime JS
 
 <PageTitle>Job</PageTitle>
@@ -65,6 +66,14 @@ else
             <div class="value">@FormatTime(_job.CreatedAt)</div>
         </div>
 
+        @if (_job.ArchivedAt is DateTimeOffset archivedAt)
+        {
+            <div class="row">
+                <div class="label">Archived</div>
+                <div class="value">@FormatTime(archivedAt)</div>
+            </div>
+        }
+
         <div class="toolbar" role="toolbar" aria-label="Job actions">
             <button class="toolbtn" type="button" @onclick="ToggleEvidence" aria-haspopup="dialog">
                 Evidence
@@ -97,11 +106,49 @@ else
                     @(_cancelInFlight ? "Canceling…" : "Cancel job")
                 </button>
             }
+
+            <span class="toolbar-spacer" aria-hidden="true"></span>
+
+            @if (IsArchived)
+            {
+                <button class="secondarybtn"
+                        type="button"
+                        disabled="@_archiveInFlight"
+                        @onclick="UnarchiveAsync">
+                    @(_archiveInFlight ? "Unarchiving…" : "Unarchive")
+                </button>
+
+                <button class="dangerbtn"
+                        type="button"
+                        disabled="@_deleteInFlight"
+                        @onclick="RequestDeleteArchivedConfirm">
+                    @(_deleteInFlight ? "Deleting…" : "Delete")
+                </button>
+            }
+            else
+            {
+                <button class="secondarybtn"
+                        type="button"
+                        disabled="@_archiveInFlight"
+                        @onclick="RequestArchiveConfirm">
+                    @(_archiveInFlight ? "Archiving…" : "Archive")
+                </button>
+            }
         </div>
 
         @if (_cancelError is not null)
         {
             <ErrorBanner Error="_cancelError" OnRetry="CancelAsync" />
+        }
+
+        @if (_archiveError is not null)
+        {
+            <ErrorBanner Error="_archiveError" OnRetry="RetryArchiveActionAsync" />
+        }
+
+        @if (_deleteError is not null)
+        {
+            <ErrorBanner Error="_deleteError" OnRetry="DeleteArchivedAsync" />
         }
     </section>
 
@@ -313,10 +360,42 @@ else
                            PrefillOutline="@_prefillOutline"
                            BaseSynthesisId="_baseSynthesisId"
                            OnCreateAndRun="CreateAndRunSynthesisAsync" />
+
+    @if (HasPendingConfirm)
+    {
+        <div class="confirm-overlay" @onclick="CancelPendingConfirm">
+            <section class="confirm-dialog"
+                     role="dialog"
+                     aria-modal="true"
+                     aria-labelledby="jobConfirmTitle"
+                     @onclick:stopPropagation="true"
+                     @onkeydown="OnConfirmKeyDown"
+                     tabindex="-1">
+                <div class="confirm-head">
+                    <h3 id="jobConfirmTitle">@ConfirmTitle</h3>
+                    <button type="button" class="confirm-close" @onclick="CancelPendingConfirm" aria-label="Close">×</button>
+                </div>
+
+                <p class="confirm-message">@ConfirmMessage</p>
+
+                <div class="confirm-actions">
+                    <button type="button" class="secondarybtn" @onclick="CancelPendingConfirm">Cancel</button>
+                    <button type="button" class="dangerbtn" @onclick="ConfirmPendingActionAsync">@ConfirmAcceptLabel</button>
+                </div>
+            </section>
+        </div>
+    }
 }
 
 @code {
     [Parameter] public Guid JobId { get; set; }
+
+    private enum JobConfirmAction
+    {
+        None,
+        Archive,
+        DeleteArchived
+    }
 
     private bool _isJobLoading = true;
     private ApiError? _jobError;
@@ -353,6 +432,14 @@ else
 
     private bool _cancelInFlight;
     private ApiError? _cancelError;
+
+    private bool _archiveInFlight;
+    private ApiError? _archiveError;
+
+    private bool _deleteInFlight;
+    private ApiError? _deleteError;
+
+    private JobConfirmAction _pendingConfirm = JobConfirmAction.None;
 
     private bool _synthesisLoading;
     private ApiError? _synthesisError;
@@ -400,6 +487,30 @@ else
         string.Equals(_terminalStatus, "Canceled", StringComparison.OrdinalIgnoreCase) ||
         string.Equals(_job?.Status?.ToString(), "Canceled", StringComparison.OrdinalIgnoreCase);
 
+    private bool IsArchived => _job?.ArchivedAt is not null;
+    private bool HasPendingConfirm => _pendingConfirm != JobConfirmAction.None;
+
+    private string ConfirmTitle => _pendingConfirm switch
+    {
+        JobConfirmAction.Archive => "Archive job?",
+        JobConfirmAction.DeleteArchived => "Delete archived job?",
+        _ => string.Empty
+    };
+
+    private string ConfirmMessage => _pendingConfirm switch
+    {
+        JobConfirmAction.Archive => "This job will be moved out of Recent and shown in Archive.",
+        JobConfirmAction.DeleteArchived => "This will soft-delete the archived job and hide it from the app lists.",
+        _ => string.Empty
+    };
+
+    private string ConfirmAcceptLabel => _pendingConfirm switch
+    {
+        JobConfirmAction.Archive => "Archive",
+        JobConfirmAction.DeleteArchived => "Delete",
+        _ => "Confirm"
+    };
+
     private string CurrentStatusChip
         => _terminalStatus
         ?? (IsEffectivelyRunning ? "Running" : (_job?.Status?.ToString() ?? "Unknown"));
@@ -427,6 +538,8 @@ else
         _eventsError = null;
         _streamError = null;
         _cancelError = null;
+        _archiveError = null;
+        _deleteError = null;
 
         _synthesisError = null;
         _synthesisEmpty = false;
@@ -867,6 +980,141 @@ else
     {
         if (_lastCreateInput is null) return Task.CompletedTask;
         return CreateAndRunSynthesisAsync(_lastCreateInput);
+    }
+
+    private Task RetryArchiveActionAsync()
+        => IsArchived ? UnarchiveAsync() : ArchiveAsync();
+
+    private void RequestArchiveConfirm()
+    {
+        if (_job is null || IsArchived || _archiveInFlight)
+            return;
+
+        _pendingConfirm = JobConfirmAction.Archive;
+    }
+
+    private void RequestDeleteArchivedConfirm()
+    {
+        if (_job is null || !IsArchived || _deleteInFlight)
+            return;
+
+        _pendingConfirm = JobConfirmAction.DeleteArchived;
+    }
+
+    private void CancelPendingConfirm()
+    {
+        _pendingConfirm = JobConfirmAction.None;
+    }
+
+    private Task OnConfirmKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape")
+            CancelPendingConfirm();
+
+        return Task.CompletedTask;
+    }
+
+    private async Task ConfirmPendingActionAsync()
+    {
+        var action = _pendingConfirm;
+        _pendingConfirm = JobConfirmAction.None;
+
+        if (action == JobConfirmAction.Archive)
+        {
+            await ArchiveAsync();
+            return;
+        }
+
+        if (action == JobConfirmAction.DeleteArchived)
+            await DeleteArchivedAsync();
+    }
+
+    private async Task ArchiveAsync()
+    {
+        if (_job is null || IsArchived || _archiveInFlight)
+            return;
+
+        _archiveError = null;
+        _archiveInFlight = true;
+
+        try
+        {
+            var res = await JobFacade.ArchiveJobAsync(JobId);
+            if (!res.IsSuccess)
+            {
+                _archiveError = res.Error;
+                return;
+            }
+
+            if (_job is not null)
+            {
+                _job.ArchivedAt = DateTimeOffset.Now;
+                _job.UpdatedAt = DateTimeOffset.Now;
+            }
+        }
+        finally
+        {
+            _archiveInFlight = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task UnarchiveAsync()
+    {
+        if (_job is null || !IsArchived || _archiveInFlight)
+            return;
+
+        _archiveError = null;
+        _archiveInFlight = true;
+
+        try
+        {
+            var res = await JobFacade.UnarchiveJobAsync(JobId);
+            if (!res.IsSuccess)
+            {
+                _archiveError = res.Error;
+                return;
+            }
+
+            if (_job is not null)
+            {
+                _job.ArchivedAt = null;
+                _job.UpdatedAt = DateTimeOffset.Now;
+            }
+        }
+        finally
+        {
+            _archiveInFlight = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task DeleteArchivedAsync()
+    {
+        if (_job is null || !IsArchived || _deleteInFlight)
+            return;
+
+        _deleteError = null;
+        _deleteInFlight = true;
+
+        try
+        {
+            var res = await JobFacade.SoftDeleteJobAsync(JobId);
+            if (!res.IsSuccess)
+            {
+                _deleteError = res.Error;
+                return;
+            }
+
+            await StopSynthesisWatchAsync();
+            await StopStreamAsync();
+            Nav.NavigateTo("/archive");
+        }
+        finally
+        {
+            _deleteInFlight = false;
+            StateHasChanged();
+        }
     }
 
     private async Task CancelAsync()
@@ -1420,6 +1668,7 @@ else
 }
 
 .job-card .toolbar { margin-top: 6px; display: flex; gap: 8px; flex-wrap: wrap; }
+.job-card .toolbar-spacer { flex: 1 1 auto; }
 
 .toolbtn {
     padding: 8px 10px;
@@ -1450,6 +1699,62 @@ else
     cursor: pointer;
 }
 .secondarybtn:focus-visible { outline: 2px solid var(--border-strong); outline-offset: 2px; }
+
+.confirm-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 1700;
+    background: var(--overlay);
+    display: grid;
+    place-items: center;
+    padding: 12px;
+}
+
+.confirm-dialog {
+    width: min(520px, 100%);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    box-shadow: 0 18px 54px rgba(0, 0, 0, 0.28);
+    display: grid;
+    gap: 12px;
+    padding: 14px;
+}
+
+.confirm-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.confirm-head h3 {
+    margin: 0;
+    font-size: 1rem;
+}
+
+.confirm-close {
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text);
+    border-radius: 8px;
+    width: 32px;
+    height: 32px;
+    cursor: pointer;
+}
+.confirm-close:focus-visible { outline: 2px solid var(--border-strong); outline-offset: 2px; }
+
+.confirm-message {
+    margin: 0;
+    color: var(--muted);
+    line-height: 1.45;
+}
+
+.confirm-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+}
 
 .report {
     margin-top: 14px;

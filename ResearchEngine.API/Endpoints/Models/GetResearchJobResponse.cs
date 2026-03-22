@@ -10,6 +10,7 @@ public sealed record GetResearchJobResponse(
     string Status,
     string TargetLanguage,
     string? Region,
+    DateTimeOffset? ArchivedAt,
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt,
     IReadOnlyList<ClarificationDto> Clarifications,

@@ -49,6 +49,7 @@
     display: inline-flex;
     align-items: center;
     gap: 8px;
+    font: inherit;
     border: 1px solid var(--border);
     background: var(--surface);
     color: var(--text);
@@ -80,6 +81,30 @@
     display: inline-flex;
     align-items: center;
     gap: 8px;
+}
+
+.archive-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font: inherit;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text);
+    border-radius: 999px;
+    padding: 6px 12px;
+    min-height: 34px;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.archive-toggle:hover {
+    border-color: var(--border-strong);
+}
+
+.archive-toggle:focus-visible {
+    outline: 2px solid var(--border-strong);
+    outline-offset: 2px;
 }
 
 .api-health {
@@ -137,9 +162,4 @@
     .api-health {
         flex-wrap: wrap;
     }
-}
-
-/* Ensure form controls inherit theme */
-input, textarea, select, button {
-    font: inherit;
 }

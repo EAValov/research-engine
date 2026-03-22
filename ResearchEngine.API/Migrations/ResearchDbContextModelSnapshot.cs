@@ -255,6 +255,9 @@ namespace ResearchEngine.API.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<DateTimeOffset?>("ArchivedAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<int>("Breadth")
                         .HasColumnType("integer");
 
@@ -323,6 +326,8 @@ namespace ResearchEngine.API.Migrations
                         .HasDefaultValueSql("now() at time zone 'utc'");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("ArchivedAt");
 
                     b.HasIndex("DeletedAt");
 

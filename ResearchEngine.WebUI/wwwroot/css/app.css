@@ -40,6 +40,13 @@ html, body {
     font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
 }
 
+input,
+textarea,
+select,
+button {
+    font: inherit;
+}
+
 *, *::before, *::after {
     box-sizing: border-box;
 }

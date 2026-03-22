@@ -171,6 +171,12 @@ paths:
     get:
       tags:
         - Research API
+      parameters:
+        - name: archived
+          in: query
+          required: true
+          schema:
+            type: boolean
       responses:
         '200':
           description: OK
@@ -277,6 +283,70 @@ paths:
               oneOf:
                 - type: 'null'
                 - $ref: '#/components/schemas/DeleteJobRequest'
+      responses:
+        '204':
+          description: No Content
+        '404':
+          description: Not Found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+  '/api/jobs/{jobId}/archive':
+    post:
+      tags:
+        - Research API
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: No Content
+        '404':
+          description: Not Found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+  '/api/jobs/{jobId}/unarchive':
+    post:
+      tags:
+        - Research API
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
       responses:
         '204':
           description: No Content
@@ -1427,6 +1497,7 @@ components:
         - status
         - targetLanguage
         - region
+        - archivedAt
         - createdAt
         - updatedAt
         - clarifications
@@ -1464,6 +1535,11 @@ components:
           type:
             - 'null'
             - string
+        archivedAt:
+          type:
+            - 'null'
+            - string
+          format: date-time
         createdAt:
           type: string
           format: date-time
@@ -1965,6 +2041,7 @@ components:
         - status
         - targetLanguage
         - region
+        - archivedAt
         - createdAt
         - updatedAt
       type: object
@@ -1998,6 +2075,11 @@ components:
           type:
             - 'null'
             - string
+        archivedAt:
+          type:
+            - 'null'
+            - string
+          format: date-time
         createdAt:
           type: string
           format: date-time

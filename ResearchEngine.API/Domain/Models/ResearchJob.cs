@@ -24,6 +24,8 @@ public sealed class ResearchJob
     public DateTimeOffset? CancelRequestedAt { get; set; }
     public string? CancelReason { get; set; }
 
+    public DateTimeOffset? ArchivedAt { get; set; }
+
     public DateTimeOffset? DeletedAt { get; set; }
     public string? DeletedReason { get; set; }
 

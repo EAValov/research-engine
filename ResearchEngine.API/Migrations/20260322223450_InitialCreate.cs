@@ -35,6 +35,7 @@ namespace ResearchEngine.API.Migrations
                     CancelRequested = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
                     CancelRequestedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
                     CancelReason = table.Column<string>(type: "character varying(2000)", maxLength: 2000, nullable: true),
+                    ArchivedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
                     DeletedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
                     DeletedReason = table.Column<string>(type: "character varying(2000)", maxLength: 2000, nullable: true)
                 },
@@ -430,6 +431,11 @@ namespace ResearchEngine.API.Migrations
                 name: "IX_research_events_JobId_SynthesisId",
                 table: "research_events",
                 columns: new[] { "JobId", "SynthesisId" });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_research_jobs_ArchivedAt",
+                table: "research_jobs",
+                column: "ArchivedAt");
 
             migrationBuilder.CreateIndex(
                 name: "IX_research_jobs_DeletedAt",

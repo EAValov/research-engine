@@ -13,7 +13,7 @@ using ResearchEngine.Infrastructure;
 namespace ResearchEngine.API.Migrations
 {
     [DbContext(typeof(ResearchDbContext))]
-    [Migration("20260315215943_InitialCreate")]
+    [Migration("20260322223450_InitialCreate")]
     partial class InitialCreate
     {
         /// <inheritdoc />
@@ -258,6 +258,9 @@ namespace ResearchEngine.API.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<DateTimeOffset?>("ArchivedAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<int>("Breadth")
                         .HasColumnType("integer");
 
@@ -326,6 +329,8 @@ namespace ResearchEngine.API.Migrations
                         .HasDefaultValueSql("now() at time zone 'utc'");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("ArchivedAt");
 
                     b.HasIndex("DeletedAt");
 

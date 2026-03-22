@@ -97,10 +97,14 @@ public sealed class ResearchDbContext : DbContext
         entity.Property(j => j.CancelReason)
             .HasMaxLength(2000);
 
+        entity.Property(j => j.ArchivedAt);
+
         entity.Property(j => j.DeletedAt);
 
         entity.Property(j => j.DeletedReason)
             .HasMaxLength(2000);
+
+        entity.HasIndex(j => j.ArchivedAt);
 
         entity.HasIndex(j => j.DeletedAt);
 

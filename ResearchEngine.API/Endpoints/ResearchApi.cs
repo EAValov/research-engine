@@ -68,6 +68,18 @@ public static partial class ResearchApi
             .ProducesProblem(StatusCodes.Status401Unauthorized)
             .ProducesProblem(StatusCodes.Status403Forbidden);
 
+        api.MapPost("/jobs/{jobId:guid}/archive", ArchiveJobAsync)
+            .Produces(StatusCodes.Status204NoContent)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status403Forbidden);
+
+        api.MapPost("/jobs/{jobId:guid}/unarchive", UnarchiveJobAsync)
+            .Produces(StatusCodes.Status204NoContent)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status403Forbidden);
+
         api.MapPost("/jobs/{jobId:guid}/cancel", CancelJobAsync)
             .Accepts<CancelJobRequest>("application/json")
             .Produces<CancelJobResponse>(StatusCodes.Status202Accepted)

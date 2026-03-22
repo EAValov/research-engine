@@ -10,5 +10,6 @@ public sealed record ResearchJobListItemDto(
     string Status,
     string TargetLanguage,
     string? Region,
+    DateTimeOffset? ArchivedAt,
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt);

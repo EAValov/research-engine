@@ -82,7 +82,16 @@ public sealed partial class PostgresResearchJobStore(
         await using var db = await dbContextFactory.CreateDbContextAsync(ct);
 
         return await db.ResearchJobs
-            .Where(j => j.DeletedAt == null)
+            .Where(j => j.ArchivedAt == null)
+            .ToListAsync(ct);
+    }
+
+    public async Task<IReadOnlyList<ResearchJob>> ListArchivedJobsAsync(CancellationToken ct = default)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(ct);
+
+        return await db.ResearchJobs
+            .Where(j => j.ArchivedAt != null)
             .ToListAsync(ct);
     }
 
@@ -144,6 +153,34 @@ public sealed partial class PostgresResearchJobStore(
             .Where(j => j.Id == jobId)
             .Select(j => j.CancelRequested)
             .FirstOrDefaultAsync(ct);
+    }
+
+    public async Task<int> ArchiveJobAsync(Guid jobId, CancellationToken ct = default)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(ct);
+
+        var entity = await db.ResearchJobs.FirstOrDefaultAsync(j => j.Id == jobId, ct);
+        if (entity is null || entity.ArchivedAt is not null)
+            return 0;
+
+        entity.ArchivedAt = DateTimeOffset.UtcNow;
+        entity.UpdatedAt = DateTimeOffset.UtcNow;
+
+        return await db.SaveChangesAsync(ct);
+    }
+
+    public async Task<int> UnarchiveJobAsync(Guid jobId, CancellationToken ct = default)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(ct);
+
+        var entity = await db.ResearchJobs.FirstOrDefaultAsync(j => j.Id == jobId, ct);
+        if (entity is null || entity.ArchivedAt is null)
+            return 0;
+
+        entity.ArchivedAt = null;
+        entity.UpdatedAt = DateTimeOffset.UtcNow;
+
+        return await db.SaveChangesAsync(ct);
     }
 
     public async Task<int> SoftDeleteJobAsync(Guid jobId, string? reason, CancellationToken ct = default)

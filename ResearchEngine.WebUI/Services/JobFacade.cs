@@ -38,4 +38,43 @@ public sealed class JobFacade
             return ApiResult<CancelJobResponse>.Fail(ApiErrorMapper.Map(ex));
         }
     }
+
+    public async Task<ApiResult<bool>> ArchiveJobAsync(Guid jobId, CancellationToken ct = default)
+    {
+        try
+        {
+            await _api.ArchiveAsync(jobId, ct);
+            return ApiResult<bool>.Ok(true);
+        }
+        catch (Exception ex)
+        {
+            return ApiResult<bool>.Fail(ApiErrorMapper.Map(ex));
+        }
+    }
+
+    public async Task<ApiResult<bool>> UnarchiveJobAsync(Guid jobId, CancellationToken ct = default)
+    {
+        try
+        {
+            await _api.UnarchiveAsync(jobId, ct);
+            return ApiResult<bool>.Ok(true);
+        }
+        catch (Exception ex)
+        {
+            return ApiResult<bool>.Fail(ApiErrorMapper.Map(ex));
+        }
+    }
+
+    public async Task<ApiResult<bool>> SoftDeleteJobAsync(Guid jobId, CancellationToken ct = default)
+    {
+        try
+        {
+            await _api.JobsDELETEAsync(jobId, body: null, cancellationToken: ct);
+            return ApiResult<bool>.Ok(true);
+        }
+        catch (Exception ex)
+        {
+            return ApiResult<bool>.Fail(ApiErrorMapper.Map(ex));
+        }
+    }
 }

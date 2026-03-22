@@ -52,10 +52,13 @@ public static partial class ResearchApi
     /// Lists jobs for the UX sidebar.
     /// </summary>
     private static async Task<IResult> ListJobsAsync(
+        [FromQuery] bool archived,
         IResearchJobRepository jobRepository,
         CancellationToken ct)
     {
-        var jobs = await jobRepository.ListJobsAsync(ct);
+        var jobs = archived
+            ? await jobRepository.ListArchivedJobsAsync(ct)
+            : await jobRepository.ListJobsAsync(ct);
 
         var items = jobs.Select(j => new ResearchJobListItemDto(
             Id: j.Id,
@@ -67,6 +70,7 @@ public static partial class ResearchApi
             Status: j.Status.ToString(),
             TargetLanguage: j.TargetLanguage,
             Region: j.Region,
+            ArchivedAt: j.ArchivedAt,
             CreatedAt: j.CreatedAt,
             UpdatedAt: j.UpdatedAt
         )).ToList();
@@ -101,6 +105,7 @@ public static partial class ResearchApi
             Status: job.Status.ToString(),
             TargetLanguage: job.TargetLanguage,
             Region: job.Region,
+            ArchivedAt: job.ArchivedAt,
             CreatedAt: job.CreatedAt,
             UpdatedAt: job.UpdatedAt,
             Clarifications: job.Clarifications
@@ -118,6 +123,64 @@ public static partial class ResearchApi
                     latest.CreatedAt,
                     latest.CompletedAt)
             ));
+    }
+
+    /// <summary>
+    /// POST /api/research/jobs/{jobId}/archive
+    /// Archives a job, hiding it from the default recent jobs list.
+    /// </summary>
+    private static async Task<IResult> ArchiveJobAsync(
+        Guid jobId,
+        IResearchJobRepository jobRepository,
+        IResearchEventRepository eventRepository,
+        CancellationToken ct)
+    {
+        var job = await jobRepository.GetJobAsync(jobId, ct);
+        if (job is null) return Results.NotFound();
+
+        var actionStage = MapUserActionStage(job.Status);
+
+        await jobRepository.ArchiveJobAsync(jobId, ct);
+
+        await eventRepository.AppendEventAsync(
+            jobId,
+            new ResearchEvent(
+                DateTimeOffset.UtcNow,
+                actionStage,
+                "Job archived by user"
+            ),
+            ct);
+
+        return Results.NoContent();
+    }
+
+    /// <summary>
+    /// POST /api/research/jobs/{jobId}/unarchive
+    /// Restores a job back to the default recent jobs list.
+    /// </summary>
+    private static async Task<IResult> UnarchiveJobAsync(
+        Guid jobId,
+        IResearchJobRepository jobRepository,
+        IResearchEventRepository eventRepository,
+        CancellationToken ct)
+    {
+        var job = await jobRepository.GetJobAsync(jobId, ct);
+        if (job is null) return Results.NotFound();
+
+        var actionStage = MapUserActionStage(job.Status);
+
+        await jobRepository.UnarchiveJobAsync(jobId, ct);
+
+        await eventRepository.AppendEventAsync(
+            jobId,
+            new ResearchEvent(
+                DateTimeOffset.UtcNow,
+                actionStage,
+                "Job unarchived by user"
+            ),
+            ct);
+
+        return Results.NoContent();
     }
 
     /// <summary>
@@ -167,6 +230,8 @@ public static partial class ResearchApi
         var job = await jobRepository.GetJobAsync(jobId, ct);
         if (job is null) return Results.NotFound();
 
+        var actionStage = MapUserActionStage(job.Status);
+
         if (!string.IsNullOrWhiteSpace(job.HangfireJobId))
             backgroundJobs.Delete(job.HangfireJobId);
 
@@ -176,11 +241,20 @@ public static partial class ResearchApi
             jobId,
             new ResearchEvent(
                 DateTimeOffset.UtcNow,
-                ResearchEventStage.Planning,
+                actionStage,
                 $"Job deleted (soft){(string.IsNullOrWhiteSpace(request?.Reason) ? "" : $": {request!.Reason}")}"
             ),
             ct);
 
         return Results.NoContent();
     }
+
+    private static ResearchEventStage MapUserActionStage(ResearchJobStatus status)
+        => status switch
+        {
+            ResearchJobStatus.Completed => ResearchEventStage.Completed,
+            ResearchJobStatus.Failed => ResearchEventStage.Failed,
+            ResearchJobStatus.Canceled => ResearchEventStage.Canceled,
+            _ => ResearchEventStage.Planning
+        };
 }

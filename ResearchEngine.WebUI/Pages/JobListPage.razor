@@ -1,19 +1,26 @@
 @page "/"
+@page "/archive"
 @using ResearchEngine.WebUI.Api
 @using ResearchEngine.WebUI.Components.Common
 @using ResearchEngine.WebUI.Components.Research
 @using ResearchEngine.WebUI.Services
+@implements IDisposable
 @inject IResearchApiClient Api
 @inject NavigationManager Nav
 
-<ResearchComposer />
+@if (!IsArchiveView)
+{
+    <ResearchComposer />
+}
 
-<section class="jobs" aria-label="Existing jobs">
+<section class="jobs" aria-label="@(IsArchiveView ? "Archived jobs" : "Existing jobs")">
     <div class="jobs-head">
-        <h2 class="h2">Recent</h2>
-        <button type="button" class="secondary" @onclick="ReloadAsync" disabled="@_loading">
-            @(_loading ? "Refreshing…" : "Refresh")
-        </button>
+        <h2 class="h2">@(IsArchiveView ? "Archive" : "Recent")</h2>
+        <div class="jobs-actions">
+            <button type="button" class="secondary" @onclick="ReloadAsync" disabled="@_loading">
+                @(_loading ? "Refreshing…" : "Refresh")
+            </button>
+        </div>
     </div>
 
     @if (_error is not null)
@@ -26,7 +33,7 @@
     }
     else if (_jobs.Count == 0)
     {
-        <p>No jobs yet. Create one above.</p>
+        <p>@(IsArchiveView ? "No archived jobs yet." : "No jobs yet. Create one above.")</p>
     }
     else
     {
@@ -40,7 +47,14 @@
                         <div class="meta">
                             <span class="pill">@j.Status</span>
                             <span class="dot">•</span>
-                            <span>@j.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</span>
+                            @if (IsArchiveView && j.ArchivedAt is DateTimeOffset archivedAt)
+                            {
+                                <span>Archived @archivedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</span>
+                            }
+                            else
+                            {
+                                <span>@j.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</span>
+                            }
                             <span class="dot">•</span>
                             <span>@j.TargetLanguage</span>
                             @if (!string.IsNullOrWhiteSpace(j.Region))
@@ -60,13 +74,33 @@
 </section>
 
 @code {
+    private bool _isArchiveView;
     private bool _loading = true;
     private ApiError? _error;
     private readonly List<ResearchJobListItemDto> _jobs = new();
 
+    private bool IsArchiveView => _isArchiveView;
+
     protected override async Task OnInitializedAsync()
     {
+        Nav.LocationChanged += OnLocationChanged;
+        _isArchiveView = IsArchiveRoute(Nav.Uri);
         await ReloadAsync();
+    }
+
+    private void OnLocationChanged(object? sender, LocationChangedEventArgs e)
+    {
+        var isArchive = IsArchiveRoute(e.Location);
+        if (isArchive == _isArchiveView)
+            return;
+
+        _isArchiveView = isArchive;
+
+        _ = InvokeAsync(async () =>
+        {
+            await ReloadAsync();
+            StateHasChanged();
+        });
     }
 
     private async Task ReloadAsync()
@@ -77,10 +111,15 @@
 
         try
         {
-            var resp = await Api.JobsGETAsync();
-            _jobs.AddRange(resp.Jobs
-                .OrderByDescending(x => x.UpdatedAt)
-                .ToList());
+            var resp = await Api.JobsGETAsync(archived: IsArchiveView);
+            var ordered = IsArchiveView
+                ? resp.Jobs
+                    .OrderByDescending(x => x.ArchivedAt ?? DateTimeOffset.MinValue)
+                    .ThenByDescending(x => x.UpdatedAt)
+                : resp.Jobs
+                    .OrderByDescending(x => x.UpdatedAt);
+
+            _jobs.AddRange(ordered.ToList());
         }
         catch (Exception ex)
         {
@@ -94,6 +133,17 @@
 
     private void OpenJob(Guid jobId) => Nav.NavigateTo($"/jobs/{jobId}");
 
+    private bool IsArchiveRoute(string? absoluteUri = null)
+    {
+        var path = Nav.ToBaseRelativePath(absoluteUri ?? Nav.Uri);
+        if (string.IsNullOrWhiteSpace(path))
+            return false;
+
+        var noQuery = path.Split('?', 2)[0];
+        var normalized = noQuery.Split('#', 2)[0].Trim('/');
+        return string.Equals(normalized, "archive", StringComparison.OrdinalIgnoreCase);
+    }
+
     private void OnRowKeyDown(KeyboardEventArgs e, Guid jobId)
     {
         if (e.Key == "Enter" || e.Key == " ")
@@ -101,4 +151,9 @@
     }
 
     private static string ShortId(Guid id) => id.ToString("N")[..8];
+
+    public void Dispose()
+    {
+        Nav.LocationChanged -= OnLocationChanged;
+    }
 }
