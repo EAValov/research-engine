@@ -4,7 +4,7 @@ title: "Research Engine"
 authors:
   - family-names: "Valov"
     given-names: "Evgenii"
-repository-code: "https://github.com/<your-github-username>/research-engine"
+repository-code: "https://github.com/EAValov/research-engine"
 license: "AGPL-3.0"
 abstract: >-
   Research Engine is an LLM-driven local-first and privacy-focused deep research application.
