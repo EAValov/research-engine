@@ -187,7 +187,7 @@ Single-host deployment example:
 ```yaml
 env:
   - name: ChatConfig__Endpoint
-    value: "http://research-model:8000/v1"
+    value: "http://research-llm:8000/v1"
   - name: ChatConfig__ModelId
     value: "nvidia/Qwen3-30B-A3B-NVFP4"
   - name: ChatConfig__ApiKey

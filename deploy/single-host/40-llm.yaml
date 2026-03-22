@@ -1,11 +1,11 @@
 apiVersion: v1
 kind: Pod
 metadata:
-  name: research-model
+  name: research-llm
   annotations:
     io.podman.annotations.networks: '["llm-net"]'
 spec:
-  hostname: research-model
+  hostname: research-llm
   containers:
     - name: vllm
       image: docker.io/vllm/vllm-openai:v0.17.1-cu130

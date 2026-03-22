@@ -134,7 +134,7 @@ This is the recommended setup flow for a clean Windows installation with current
 
    - Cloud crawl: set `FirecrawlOptions__BaseUrl` and `FirecrawlOptions__ApiKey` to your provider values.
    - Cloud model: set `ChatConfig__Endpoint`, `ChatConfig__ApiKey`, and `ChatConfig__ModelId` to your provider values.
-   - Local-by-default values already point to `research-crawl` and `research-model`.
+   - Local-by-default values already point to `research-crawl` and `research-llm`.
 
 5. Deploy the full stack:
 

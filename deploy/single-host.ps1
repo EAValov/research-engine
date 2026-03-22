@@ -52,9 +52,9 @@ function Get-ComponentDefinitions {
             ManifestPath = Join-Path $base "30-crawl.yaml"
         },
         [pscustomobject]@{
-            Name         = "model"
-            PodName      = "research-model"
-            ManifestPath = Join-Path $base "40-model-vllm.yaml"
+            Name         = "LLM"
+            PodName      = "research-LLM"
+            ManifestPath = Join-Path $base "40-LLM.yaml"
         },
         [pscustomobject]@{
             Name         = "edge"
