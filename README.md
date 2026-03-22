@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="./README%20logo.png" alt="Research Engine" width="720">
+  <img src="./Docs/Images/README%20logo.png" alt="Research Engine" width="720">
 </p>
 
 <p align="center">
@@ -18,21 +18,66 @@
   <a href="./Docs/Configuration.md">Configuration</a>
 </p>
 
-Research Engine is built for individual researchers and small teams that want private, inspectable, and controllable research workflows on local infrastructure instead of opaque cloud-only systems.
+Research Engine is built for individual researchers and small teams who want private, inspectable, and controllable research workflows on local infrastructure instead of cloud-only systems.
 
-No subscriptions are required. it's all running on your hardware.
+No subscriptions required. it's all running on your hardware.
 
 ## Key Features
 
 - **Local-first deep research** using locally hosted chat and embedding models
 - **Privacy-oriented by design** so prompts, sources, and generated reports remain under your control
-- **Structured evidence pipeline** that turns collected web content into compact learnings
-- **Traceable citations** with source URLs and evidence popovers in the final report
+- **Traceable citations** with source URLs and evidence popovers in the final report (See screenshots)
 - **Interactive evidence review** for inspecting sources and learnings before accepting a synthesis
 - **Pin and exclude workflow** for curating evidence without restarting the full job
 - **Regeneration with extra instructions** to refine a report from the existing research set
 
-### How It Works
+## Screenshots
+
+<table>
+  <tr>
+    <td align="center" width="50%">
+      <strong>Main research workspace</strong><br><br>
+      <img src="./Docs/Images/Screenshots/Main.png" alt="Main research workspace" width="100%"><br><br>
+      Start new research runs, tune scope, and monitor recent jobs from one workspace.
+    </td>
+    <td align="center" width="50%">
+      <strong>Generated synthesis with citations</strong><br><br>
+      <img src="./Docs/Images/Screenshots/Report.png" alt="Generated synthesis with citations" width="100%"><br><br>
+      Review a completed report with inline citations, evidence popovers, export tools, and the entry point for regeneration.
+    </td>
+  </tr>
+  <tr>
+    <td align="center" width="50%">
+      <strong>Evidence drawer and curation workflow</strong><br><br>
+      <img src="./Docs/Images/Screenshots/Evidence.png" alt="Evidence drawer and curation workflow" width="100%"><br><br>
+      Inspect sources and learnings, then pin or exclude evidence before generating the next synthesis iteration.
+    </td>
+    <td align="center" width="50%">
+      <strong>Regeneration UI</strong><br><br>
+      <img src="./Docs/Images/Screenshots/NewSynthesisWindow.png" alt="New synthesis dialog" width="100%"><br><br>
+      Create a new synthesis with additional instructions and pinned or excluded evidence overrides.
+    </td>
+  </tr>
+</table>
+
+<p align="center" width="50%">
+  <strong>Regenerated Synthesis Result</strong>
+</p>
+
+<p align="center">
+  <img src="./Docs/Images/Screenshots/NewSynthesisRegenerated.png" alt="Regenerated synthesis report" width="900">
+</p>
+
+<p align="center">
+  The regenerated report keeps the citation-driven reading experience while reflecting the new synthesis instructions and curated evidence set.
+</p>
+
+## Example Reports
+
+- [Most promising approaches to long-duration energy storage](<./Examples/Long-duration energy storage.md>)
+- [Market opportunities for launching an AI-powered consumer health app](<./Examples/Health app in the EU and US.md>)
+
+## How It Works
 
 1. The user submits a research query. Optional clarifications can be added for better scope.
 2. The system performs web research. Search queries are generated and web content is collected.
@@ -42,52 +87,6 @@ No subscriptions are required. it's all running on your hardware.
 6. Each section is written with retrieval, using the most relevant evidence from the research set.
 7. The user reviews the report with clickable citations and inspectable evidence.
 8. The user curates evidence and regenerates the synthesis with pinned, excluded, or newly guided inputs.
-
-## Screenshots
-
-<table>
-  <tr>
-    <td align="center" width="50%">
-      <strong>Main research workspace</strong><br><br>
-      <img src="./Docs/Screenshots/Main.png" alt="Main research workspace" width="100%"><br><br>
-      Start new research runs, tune scope, and monitor recent jobs from one workspace.
-    </td>
-    <td align="center" width="50%">
-      <strong>Generated synthesis with citations</strong><br><br>
-      <img src="./Docs/Screenshots/Report.png" alt="Generated synthesis with citations" width="100%"><br><br>
-      Review a completed report with inline citations, evidence popovers, export tools, and the entry point for regeneration.
-    </td>
-  </tr>
-  <tr>
-    <td align="center" width="50%">
-      <strong>Evidence drawer and curation workflow</strong><br><br>
-      <img src="./Docs/Screenshots/Evidence.png" alt="Evidence drawer and curation workflow" width="100%"><br><br>
-      Inspect sources and learnings, then pin or exclude evidence before generating the next synthesis iteration.
-    </td>
-    <td align="center" width="50%">
-      <strong>Regeneration UI</strong><br><br>
-      <img src="./Docs/Screenshots/NewSynthesisWindow.png" alt="New synthesis dialog" width="100%"><br><br>
-      Create a new synthesis with additional instructions and pinned or excluded evidence overrides.
-    </td>
-  </tr>
-</table>
-
-<p align="center">
-  <strong>Regenerated Synthesis Result</strong>
-</p>
-
-<p align="center">
-  <img src="./Docs/Screenshots/NewSynthesisRegenerated.png" alt="Regenerated synthesis report" width="900">
-</p>
-
-<p align="center">
-  The regenerated report keeps the citation-driven reading experience while reflecting the new synthesis instructions and curated evidence set.
-</p>
-
-## Example Reports
-
-- [Long-duration energy storage](<./Examples/Long-duration energy storage.md>)
-- [Treatment of monogenic skin disorders](<./Examples/Treatment of monogenic skin disorders.md>)
 
 ## Super Quick Start
 
@@ -116,7 +115,7 @@ http://localhost:8080
 
 Wait until the `Live` and `Ready` indicators are green - this means that LLM server is ready.
 
-![Ready indicator](./Docs/Screenshots/Ready.png)
+![Ready indicator](./Docs/Images/Screenshots/Ready.png)
 
 At that point the app is ready to use. Good luck with your research!
 
@@ -132,7 +131,7 @@ Research Engine is designed to be more context-efficient. Instead of treating sc
 
 In practice, that trades speed and scalability for compactness, controllability, and better fit for local deployments.
 
-This architecture allow us to separate "learning extraction" and the "Report generaton" parts of the job, with the intermediate state saved into the Database. This enables an interactive evidence workflow. Users can inspect the sources and learnings used by the model, verify citations, pin or exclude evidence, and regenerate the synthesis with additional instructions without rerunning the entire research job from scratch.
+This architecture allow us to separate "learning extraction" and the "report generaton" parts of the job, with the intermediate state saved into the Database. This enables an interactive evidence workflow. Users can inspect the sources and learnings used by the model, verify citations, pin or exclude evidence, and regenerate the synthesis with additional instructions without rerunning the entire research job from scratch.
 
 More details in [Architecture guide](./Docs/Architecture.md).
 

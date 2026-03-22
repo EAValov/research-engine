@@ -182,8 +182,11 @@ spec:
       ports:
         - containerPort: 3002
       livenessProbe:
-        tcpSocket:
-          port: 3002
+        exec:
+          command:
+            - node
+            - -e
+            - "const s=require('net').connect({host:'127.0.0.1',port:3002}); s.on('connect',()=>{s.end(); process.exit(0);}); s.on('error',()=>process.exit(1)); setTimeout(()=>process.exit(1),1500);"
         initialDelaySeconds: 30
         periodSeconds: 10
         timeoutSeconds: 2
@@ -241,9 +244,9 @@ spec:
         - name: BLOCK_MEDIA
           value: "true"
         - name: MAX_CPU
-          value: "0.95"
+          value: "0.7"
         - name: MAX_RAM
-          value: "0.95"
+          value: "0.7"
       volumeMounts:
         - name: crawl-firecrawl-data
           mountPath: /app/data
