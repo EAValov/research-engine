@@ -56,11 +56,26 @@ public class QueryPlanningService(IChatModel chatModel, ILogger<QueryPlanningSer
                 withoutThink);
         }
 
+        var maxQueries = Math.Max(1, breadth);
+
         var queries = plan?.Queries?
             .Where(q => !string.IsNullOrWhiteSpace(q))
             .Select(q => q.Trim())
-            .Take(breadth)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Take(maxQueries)
             .ToList() ?? new List<string>();
+
+        if (queries.Count == 0)
+        {
+            var fallbackQuery = BuildFallbackQuery(query);
+            queries.Add(fallbackQuery);
+
+            logger.LogWarning(
+                "SERP planner returned 0 queries for '{Query}'. Falling back to a single query '{FallbackQuery}'. Raw response: {RawResponse}",
+                query,
+                fallbackQuery,
+                Truncate(withoutThink, 400));
+        }
 
         logger.LogInformation(
             "Generated {Count} SERP queries for query '{Query}' with depth={Depth}, breadth={Breadth}",
@@ -70,6 +85,23 @@ public class QueryPlanningService(IChatModel chatModel, ILogger<QueryPlanningSer
             breadth);
 
         return queries;
+    }
+
+    private static string BuildFallbackQuery(string query)
+    {
+        var trimmed = query?.Trim();
+        if (!string.IsNullOrWhiteSpace(trimmed))
+            return trimmed;
+
+        return "latest overview";
+    }
+
+    private static string Truncate(string value, int maxChars)
+    {
+        if (string.IsNullOrEmpty(value) || value.Length <= maxChars)
+            return value;
+
+        return value[..maxChars] + "...";
     }
 
     private sealed class SerpQueryPlanResponse
