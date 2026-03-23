@@ -1,17 +1,17 @@
 # Deployment Guide
 
-Welcome to the deployment guide for Research Engine. This guide is focused on a single-host deployment because it is the simplest option.
+This guide focuses on the simplest supported setup: a single-host deployment.
 
-If you're planning to deploy it to Kubernetes, that is very much possible. Use this document and the YAML files in `Deploy/single-host` as a base.
+If you want to move to Kubernetes later, use this document and the files in `Deploy/single-host` as the baseline.
 
-Podman is the recommended platform because it is secure and open source. The example setup was tested on Windows 11 with WSL and Podman, and it works well there.
+Podman is the recommended platform because it is secure and open source. The example setup was tested on Windows 11 with WSL2 and Podman, and it works well there.
 
 My PC specs for reference:
 - CPU: AMD Ryzen 7940HX (16 cores)
 - RAM: 32 GB DDR5 5200
 - GPU: Nvidia RTX 5090
 
-If you have the similar PC, you can jump into `Recommended User Flow` section and just follow the steps there - otherwise, you'd need to configure LLM server for your hardware. Research quality and speed mainly depend on the LLM. See `LLM Server configuration` section for details.
+If you have similar hardware, you can jump straight to the `Recommended User Flow` section. Otherwise, you will likely need to tune the LLM server for your machine. Research quality and speed mainly depend on the model backend. See `LLM Server configuration` for details.
 
 The recommended single-host layout is four pods with clear responsibility boundaries:
 
@@ -20,7 +20,7 @@ The recommended single-host layout is four pods with clear responsibility bounda
 - Crawl Pod
 - Model Pod
 
-This alignment keeps the stack easy to replace and scale without turning it into one large pod. If you prefer, you can also run a single PostgreSQL container and a single Redis container for the whole stack ().
+This alignment keeps the stack easy to replace and scale without turning it into one large pod. If you prefer, you can also run a single PostgreSQL container and a single Redis container for the whole stack.
 
 Secrets are scoped per component manifest so you can skip a component without deploying unrelated secrets:
 
@@ -58,7 +58,7 @@ Build `research-webui` and `research-api` from source for now. Container images 
 
 `ollama` is not optional and is used to generate embeddings. You can replace it with any OpenAI-compatible embeddings service. Ollama is used here because it is easy to deploy. In the example setup, it uses the CPU to compute embeddings and keep some load off the GPU.
 
-`research-api` supports horizontal scaling and rate limiting. See `Docs/configuration.md`.
+`research-api` supports horizontal scaling and rate limiting. See [Configuration](./Configuration.md).
 
 ## Crawl Pod
 
@@ -93,11 +93,12 @@ For a local deployment, follow the vLLM docs:
 Any OpenAI-compatible web service can be used instead of `vllm`. The current sample setup is tuned for a single RTX 5090. 
 
 ### LLM Server requirements
-1. [Required] The model and the backend must support tool calling with `tool_choice: required`, because it is used by the research pipeline. 
-2. [Required] The model and the backend must support `structured output` - the json template for the model response.
-3. [Optional] The app using /tokenize endpoint in the internal RAG pipeline to split chunks - it's optional, but without it the app must rely on the MaxContextLength and use heuristic method to calculate context lenght with 20% safe buffer, which is not ideal. 
 
-vLLM is preferable backend as it supports all the related features. Ollama, for example, also works but missing the /tokenize endpoint. Below is the compatability chart:
+1. [Required] The backend and model must support tool calling with `tool_choice: required`, because the research pipeline depends on it.
+2. [Required] The backend and model must support structured output with a JSON schema.
+3. [Optional] The app can use a `/tokenize` endpoint in the internal RAG pipeline to split content more accurately. Without it, the app falls back to `MaxContextLength` and a heuristic estimate with a 20% safety buffer.
+
+vLLM is the preferred backend because it supports all of these features. Ollama also works, but it does not expose `/tokenize`. Below is the compatibility chart:
 
 #### Chat Backend Compatibility
 
@@ -108,7 +109,8 @@ vLLM is preferable backend as it supports all the related features. Ollama, for 
 | `LM Studio` | Yes | No | Yes, but `tool_choice: required` is not supported | No | Current version 0.4.6 will not work. |
 
 ### LLM Server configuration
-The most important part of the configuration is choosing the right model. The goal is to find the best balance between quality and speed. 
+
+The most important part of the configuration is choosing the right model. The goal is to find the best balance between quality and speed.
 Speed matters too: the slower the model, the slower the research.
 As a rule of thumb, the model should process at least 50 tokens per second if you want to generate a mid-size report in around 8-10 minutes.
 

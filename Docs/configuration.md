@@ -1,46 +1,66 @@
 # Configuration Guide
 
-This document describes the current runtime configuration for the Research Engine solution.
+Use this page in two ways:
 
-It is based on:
+- for first-time setup, read `Quick Mental Model`, `Most Common Settings`, and `Precedence`
+- for detailed tuning, jump to the section reference further down
+
+This guide is based on:
 
 - `ResearchEngine.API`
 - `ResearchEngine.WebUI`
 - `ResearchEngine.API/appsettings.json`
+- `ResearchEngine.WebUI/wwwroot/appsettings.json`
 - the single-host deployment manifests in `Deploy/single-host`
 
-## Configuration Sources
+## Quick Mental Model
+
+- API startup configuration comes from `ResearchEngine.API/appsettings.json` and environment variables
+- after the first startup, `ResearchOrchestratorConfig`, `LearningSimilarityOptions`, and `ChatConfig` become database-backed runtime settings stored in PostgreSQL
+- Web UI startup defaults come from `ResearchEngine.WebUI/wwwroot/appsettings.json`
+- each browser can override the Web UI API URL and API key locally through the settings dialog
+
+## Most Common Settings
+
+| Setting | What it controls | Usually set via |
+| --- | --- | --- |
+| `ConnectionStrings__ResearchDb` | main PostgreSQL connection | env var or secret |
+| `FirecrawlOptions__BaseUrl` | search and scrape backend | env var |
+| `ChatConfig__Endpoint`, `ChatConfig__ModelId`, `ChatConfig__ApiKey` | chat backend for planning and synthesis | env var initially, then the runtime settings UI |
+| `EmbeddingConfig__Endpoint`, `EmbeddingConfig__ModelId`, `EmbeddingConfig__Dimension`, `EmbeddingConfig__ApiKey` | embeddings backend | env var |
+| `AuthenticationOptions__ApiKeys__0` | API access key | secret |
+| `API_BASE_URL` | default API URL used by the Web UI container | env var |
+
+## Where Settings Live
 
 ### API
 
 The API uses standard ASP.NET Core configuration providers.
 
-In practice that means values can come from:
+In practice, values come from:
 
 - `ResearchEngine.API/appsettings.json`
 - environment variables
 
-For runtime-editable settings, the API now uses PostgreSQL as the source of truth after startup:
+On first startup, the API also seeds the PostgreSQL `runtime_settings` row for:
 
 - `ResearchOrchestratorConfig`
 - `LearningSimilarityOptions`
 - `ChatConfig`
 
-Those sections are loaded from configuration only to seed the `runtime_settings` table on first startup. After that, reads and writes go through the database so multiple API instances can share the same settings.
+After that, those three sections are read from the database instead of from `appsettings.json`.
 
 Environment variables use the standard `__` separator, for example:
 
 ```text
 ConnectionStrings__ResearchDb
 ChatConfig__Endpoint
-EmbeddingConfig__Dimensions
+EmbeddingConfig__Dimension
 ```
 
 ### Web UI
 
-The Web UI is a Blazor WebAssembly app.
-
-It has two layers of configuration:
+The Web UI is a Blazor WebAssembly app with two layers:
 
 - startup defaults from `ResearchEngine.WebUI/wwwroot/appsettings.json`
 - browser-local overrides stored by the settings dialog
@@ -49,17 +69,16 @@ In the containerized deployment, `ResearchEngine.WebUI/entrypoint.sh` rewrites t
 
 ## Precedence
 
-### API config values priority
+### API
 
-Standard ASP.NET Core precedence applies.
+1. Environment variables override `appsettings.json`.
+2. On first startup, `ResearchOrchestratorConfig`, `LearningSimilarityOptions`, and `ChatConfig` are copied into the PostgreSQL `runtime_settings` row.
+3. After that, those three sections are read from PostgreSQL by the app and by the runtime settings UI.
+4. Other sections, including `EmbeddingConfig`, continue to use normal ASP.NET Core precedence.
 
-That means environment variables override `appsettings.json`.
+Important consequence:
 
-This matters for the runtime settings UI:
-
-- `EmbeddingConfig` and other non-runtime settings still follow normal ASP.NET Core precedence
-- `ResearchOrchestratorConfig`, `LearningSimilarityOptions`, and `ChatConfig` are seeded from configuration only when the database row does not exist yet
-- after initialization, the runtime settings UI reads and writes the shared database row instead of editing `appsettings.json`
+- if you change `ChatConfig__*`, `ResearchOrchestratorConfig__*`, or `LearningSimilarityOptions__*` in environment variables after first startup, the existing database row still wins until you update the runtime settings or reset that row
 
 In the current `Deploy/single-host` manifests:
 
@@ -69,16 +88,39 @@ In the current `Deploy/single-host` manifests:
 - `EmbeddingConfig` is overridden by env vars
 - several other API settings are overridden by env vars as well
 
-### Web UI precedence
-
-For the browser app:
+### Web UI
 
 1. deployment-generated `appsettings.json` provides defaults
 2. browser-local saved settings override those defaults for that user
 
-So the API URL and API key shown in the UI are user-overridable even if the container started with default values from environment variables.
+So the API URL and API key shown in the UI are user-specific, even if the container started with shared defaults.
 
-## API Configuration
+## Common Gotchas
+
+- `EmbeddingConfig__Dimension` must match the real embedding vector size exactly
+- `ChatConfig__ApiKey` cannot be empty, even for local backends that ignore authentication
+- after first startup, runtime-edited `ChatConfig`, `ResearchOrchestratorConfig`, and `LearningSimilarityOptions` live in PostgreSQL, not in `appsettings.json`
+- Web UI API settings are stored per browser, so two users can see different API URLs or API keys
+
+## API Configuration Reference
+
+The most commonly touched API sections are:
+
+- `ConnectionStrings`
+- `FirecrawlOptions`
+- `ChatConfig`
+- `EmbeddingConfig`
+- `ResearchOrchestratorConfig`
+- `LearningSimilarityOptions`
+
+| Section | Runtime-editable after first startup? | What it controls |
+| --- | --- | --- |
+| `ConnectionStrings` | No | PostgreSQL connections for the app and Hangfire |
+| `FirecrawlOptions` | No | search and scraping backend |
+| `ChatConfig` | Yes | chat backend used for planning and synthesis |
+| `EmbeddingConfig` | No | embeddings backend and vector size |
+| `ResearchOrchestratorConfig` | Yes | search breadth and crawl parallelism |
+| `LearningSimilarityOptions` | Yes | evidence extraction, grouping, and retrieval heuristics |
 
 ### `ConnectionStrings`
 
@@ -352,6 +394,9 @@ These settings are loaded from the shared runtime-settings row in PostgreSQL and
 
 In the current `Deploy/single-host` deployment, this section is not overridden by environment variables, so UI changes remain effective.
 
+<details>
+<summary>Advanced API sections: authentication, Redis, Hangfire, CORS, rate limiting, and logging</summary>
+
 ### `AuthenticationOptions`
 
 ```json
@@ -521,6 +566,8 @@ The current sample configuration writes logs to:
 - console
 - `logs/app.log` with hourly rolling files
 
+</details>
+
 ## API Runtime Settings Endpoint
 
 The API exposes a runtime settings endpoint:
@@ -642,6 +689,9 @@ The single-host example stores them as Kubernetes-style `Secret` manifests in `D
 
 ## Minimal Environment Variable Example
 
+<details>
+<summary>Open minimal API and Web UI env var examples</summary>
+
 API example:
 
 ```text
@@ -683,6 +733,8 @@ Web UI example:
 API_BASE_URL=http://localhost:8090
 AuthenticationOptions__ApiKeys__0=replace-with-a-real-api-key
 ```
+
+</details>
 
 ## Notes
 
