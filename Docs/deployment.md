@@ -9,7 +9,7 @@ Podman is the recommended platform because it is secure and open source. The exa
 My PC specs for reference:
 - CPU: AMD Ryzen 7940HX (16 cores)
 - RAM: 32 GB DDR5 5200
-- GPU: Nvidia RTX 5090 Founders Edition
+- GPU: Nvidia RTX 5090
 
 If you have the similar PC, you can jump into `Recommended User Flow` section and just follow the steps there - otherwise, you'd need to configure LLM server for your hardware. Research quality and speed mainly depend on the LLM. See `LLM Server configuration` section for details.
 

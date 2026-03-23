@@ -48,35 +48,60 @@ The runtime is made up of six main parts:
 ---
 
 ## System architecture
-![ResearchEngine system architecture](./Docs/Screenshots/Architecture.svg)
-
-In plain English: the UI starts work and shows progress, background services build the evidence base, the synthesis service writes reports from that evidence, and PostgreSQL holds the durable state that ties the whole system together.
-
----
-
-## End-to-end request flow
-
 ```mermaid
 flowchart LR
-    A[User submits query] --> B[Protocol suggests clarifications and settings]
-    B --> C[API creates ResearchJob]
-    C --> D[Hangfire starts Research Orchestrator]
-    D --> E[Model generates search queries]
-    E --> F[Firecrawl searches and scrapes pages]
-    F --> G[Sources are stored and deduplicated]
-    G --> H[LearningIntelService extracts learnings]
-    H --> I[Embeddings are generated]
-    I --> J[Learnings are grouped and stored]
-    J --> K[Synthesis is created]
-    K --> L[Section plan is generated]
-    L --> M[Each section retrieves relevant learnings]
-    M --> N[Section outputs are persisted]
-    N --> O[Final report is assembled]
-    O --> P[UI shows report, evidence, and progress history]
-    P --> Q[User can refine and regenerate]
+    subgraph Client
+        UI["Web UI<br/>query composition,<br/>progress tracking, report viewing"]
+    end
+
+    subgraph Core
+        API["API<br/>REST API,<br/>protocol handling, SSE delivery"]
+        EXEC["Execution<br/>Hangfire queues,<br/>research orchestration,<br/>section-based synthesis"]
+        EVID["Evidence<br/>source persistence,<br/>learning extraction,<br/>embeddings and grouping"]
+    end
+
+    subgraph Storage
+        PG["PostgreSQL + pgvector<br/>jobs, events, sources,<br/>learnings, groups, syntheses"]
+        REDIS["Redis<br/>low-latency event fan-out,<br/>live progress updates"]
+    end
+
+    subgraph Backends
+        CHAT["Chat Model<br/>planning and synthesis"]
+        EMB["Embedding Model<br/>vectorization and retrieval"]
+        FIRE["Firecrawl<br/>search and content scraping"]
+    end
+
+    UI --> API
+    API --> EXEC
+    EXEC --> EVID
+
+    API --> PG
+    EXEC --> PG
+    EVID --> PG
+
+    PG --> REDIS
+    REDIS --> UI
+
+    EXEC --> CHAT
+    EVID --> EMB
+    EVID --> FIRE
+
+    classDef ui fill:#dbe8f4,stroke:#b7c6d8,color:#0b5ed7;
+    classDef api fill:#dfe8e0,stroke:#b7c6ba,color:#1f7a3f;
+    classDef exec fill:#e6ddf3,stroke:#c7b8e3,color:#7b4fd6;
+    classDef evid fill:#ece4c8,stroke:#d2c79d,color:#9a6a00;
+    classDef store fill:#e8eaed,stroke:#c8ced6,color:#24292f;
+    classDef ext fill:#dbe8f4,stroke:#b7c6d8,color:#0b5ed7;
+
+    class UI ui;
+    class API api;
+    class EXEC exec;
+    class EVID evid;
+    class PG,REDIS store;
+    class CHAT,EMB,FIRE ext;
 ```
 
-The important point is that the report is **not** the first major output of the pipeline. The first output is the evidence base.
+Simply: the UI starts work and shows progress, background services build the evidence base, the synthesis service writes reports from that evidence, and PostgreSQL holds the durable state that ties the whole system together.
 
 ---
 
