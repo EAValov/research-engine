@@ -33,19 +33,20 @@ No subscription required. Your prompts, sources, and reports stay on infrastruct
 
 ## Super Quick Start
 
-Best fit: Windows 11 + WSL2 + Podman + a machine that can run local models comfortably.
-
-If your hardware is smaller, or you want HTTPS and a friendly local URL such as `https://research-webui.llm.local:8443`, see the [Deployment guide](./Docs/Deployment.md).
-
-The sample local setup was tested on hardware roughly comparable to:
+The app is conteinerized. You don't need Linux or Mac - it will just work on your Windows 11 gaming PC. It was tested on this configuration:
 
 - CPU: AMD Ryzen 7940HX (16 cores)
 - RAM: 32 GB DDR5 5200
-- GPU: Nvidia RTX 5090
+- GPU: **Nvidia RTX 5090**
 - OS: Windows 11 with WSL2
 - Containers: Podman Desktop
+- [GPU container access](https://podman-desktop.io/docs/podman/gpu) is configured. 
 
-Quick path:
+The main requirement is a GPU that is powerful enough to run at least 8b - 14B models with a decent speed. 
+
+If your hardware is smaller, or you want HTTPS and a friendly local URL such as `https://research-webui.llm.local:8443`, see the [Deployment guide](./Docs/Deployment.md).
+
+If you have a similar PC, you can use these simple commands:
 
 ```bash
 git clone https://github.com/EAValov/research-engine.git
