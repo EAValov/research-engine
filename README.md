@@ -42,9 +42,9 @@ The app is conteinerized. You don't need Linux or Mac - it will just work on you
 - Containers: Podman Desktop
 - [GPU container access](https://podman-desktop.io/docs/podman/gpu) is configured. 
 
-The main requirement is a GPU that is powerful enough to run at least 8b - 14B models with a decent speed. 
+The main requirement is that system must be powerful enough to run at least 8b - 14B models with a decent speed and context window. 
 
-If your hardware is smaller, or you want HTTPS and a friendly local URL such as `https://research-webui.llm.local:8443`, see the [Deployment guide](./Docs/Deployment.md).
+If your hardware is different, or you want HTTPS and a friendly local URL such as `https://research-webui.llm.local:8443`, see the [Deployment guide](./Docs/Deployment.md).
 
 If you have a similar PC, you can use these simple commands:
 
