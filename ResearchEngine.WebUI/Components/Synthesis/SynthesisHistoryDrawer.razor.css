@@ -40,12 +40,17 @@
 
 .x {
     border: 1px solid var(--border);
-    background: var(--surface2);
+    background: var(--button-bg);
     color: var(--text);
     border-radius: 10px;
     width: 32px;
     height: 32px;
     cursor: pointer;
+    transition: background-color 120ms ease, border-color 120ms ease;
+}
+.x:hover {
+    background: var(--button-bg-hover);
+    border-color: var(--button-border-hover);
 }
 .x:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 
@@ -59,13 +64,21 @@
 
 .tab {
     border: 1px solid var(--border);
-    background: var(--surface2);
+    background: var(--button-bg);
     color: var(--text);
     border-radius: 999px;
     padding: 6px 10px;
     cursor: pointer;
+    transition: background-color 120ms ease, border-color 120ms ease;
 }
-.tab.active { border-color: var(--text); }
+.tab:hover {
+    background: var(--button-bg-hover);
+    border-color: var(--button-border-hover);
+}
+.tab.active {
+    border-color: var(--text);
+    background: var(--button-bg-hover);
+}
 .tab:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 
 .body { padding: 12px; overflow: auto; overflow-x: hidden; background: var(--surface); }

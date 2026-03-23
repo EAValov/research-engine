@@ -62,9 +62,15 @@
     padding: 6px 10px;
     border-radius: 6px;
     border: 1px solid var(--border);
-    background: transparent;
+    background: var(--button-bg);
     color: var(--text);
     cursor: pointer;
+    transition: background-color 120ms ease, border-color 120ms ease;
+}
+
+.settings:hover {
+    background: var(--button-bg-hover);
+    border-color: var(--button-border-hover);
 }
 
 .check {
@@ -84,10 +90,15 @@
 .runbtn {
     padding: 10px 14px;
     border-radius: 6px;
-    border: 1px solid var(--border);
+    border: 1px solid var(--btn);
     background: var(--btn);
     color: var(--btnText);
     cursor: pointer;
+    transition: box-shadow 120ms ease, border-color 120ms ease;
+}
+
+.runbtn:hover:not(:disabled) {
+    box-shadow: inset 0 0 0 999px var(--button-primary-hover-overlay);
 }
 
 .runbtn:disabled {
@@ -165,11 +176,17 @@ select.input option {
 
 .secondarybtn {
     border: 1px solid var(--border);
-    background: transparent;
+    background: var(--button-bg);
     color: var(--text);
     border-radius: 6px;
     padding: 10px 14px;
     cursor: pointer;
+    transition: background-color 120ms ease, border-color 120ms ease;
+}
+
+.secondarybtn:hover:not(:disabled) {
+    background: var(--button-bg-hover);
+    border-color: var(--button-border-hover);
 }
 
 .secondarybtn:disabled { opacity: 0.55; cursor: not-allowed; }

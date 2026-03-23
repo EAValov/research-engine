@@ -26,11 +26,16 @@
 
 .secondary {
     border: 1px solid var(--border);
-    background: var(--bg);
+    background: var(--button-bg);
     color: var(--text);
     border-radius: 6px;
     padding: 6px 10px;
     cursor: pointer;
+    transition: background-color 120ms ease, border-color 120ms ease;
+}
+.secondary:hover:not(:disabled) {
+    background: var(--button-bg-hover);
+    border-color: var(--button-border-hover);
 }
 .secondary:focus-visible { outline: 2px solid var(--border-strong); outline-offset: 2px; }
 .secondary:disabled { opacity: 0.6; cursor: not-allowed; }

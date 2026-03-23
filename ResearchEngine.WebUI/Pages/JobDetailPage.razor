@@ -1677,6 +1677,10 @@ else
     background: var(--border-strong);
     color: var(--bg);
     cursor: pointer;
+    transition: box-shadow 120ms ease, border-color 120ms ease;
+}
+.toolbtn:hover:not(:disabled) {
+    box-shadow: inset 0 0 0 999px var(--button-primary-hover-overlay);
 }
 .toolbtn:focus-visible { outline: 2px solid var(--border-strong); outline-offset: 2px; }
 
@@ -1684,19 +1688,29 @@ else
     padding: 8px 10px;
     border-radius: 6px;
     border: 1px solid var(--border);
-    background: var(--surface);
+    background: var(--button-bg);
     color: var(--text);
     cursor: pointer;
+    transition: background-color 120ms ease, border-color 120ms ease;
+}
+.dangerbtn:hover:not(:disabled) {
+    background: var(--button-bg-hover);
+    border-color: var(--button-border-hover);
 }
 .dangerbtn:focus-visible { outline: 2px solid var(--border-strong); outline-offset: 2px; }
 
 .secondarybtn {
     border: 1px solid var(--border);
-    background: var(--surface);
+    background: var(--button-bg);
     color: var(--text);
     border-radius: 6px;
     padding: 6px 10px;
     cursor: pointer;
+    transition: background-color 120ms ease, border-color 120ms ease;
+}
+.secondarybtn:hover:not(:disabled) {
+    background: var(--button-bg-hover);
+    border-color: var(--button-border-hover);
 }
 .secondarybtn:focus-visible { outline: 2px solid var(--border-strong); outline-offset: 2px; }
 
@@ -1735,12 +1749,17 @@ else
 
 .confirm-close {
     border: 1px solid var(--border);
-    background: var(--surface);
+    background: var(--button-bg);
     color: var(--text);
     border-radius: 8px;
     width: 32px;
     height: 32px;
     cursor: pointer;
+    transition: background-color 120ms ease, border-color 120ms ease;
+}
+.confirm-close:hover {
+    background: var(--button-bg-hover);
+    border-color: var(--button-border-hover);
 }
 .confirm-close:focus-visible { outline: 2px solid var(--border-strong); outline-offset: 2px; }
 

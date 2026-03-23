@@ -83,11 +83,17 @@
 
 .ovr-clear {
     border: 1px solid var(--border);
-    background: var(--surface2);
+    background: var(--button-bg);
     color: var(--text);
     border-radius: 6px;
     padding: 6px 10px;
     cursor: pointer;
+    transition: background-color 120ms ease, border-color 120ms ease;
+}
+
+.ovr-clear:hover:not(:disabled) {
+    background: var(--button-bg-hover);
+    border-color: var(--button-border-hover);
 }
 
 .ovr-clear:disabled {
@@ -102,7 +108,7 @@
 
 .x {
     border: 1px solid var(--border);
-    background: var(--surface2);
+    background: var(--button-bg);
     color: var(--text);
     border-radius: 6px;
     width: 36px;
@@ -112,10 +118,12 @@
     font-size: 18px;
 
     flex: 0 0 auto;
+    transition: background-color 120ms ease, border-color 120ms ease;
 }
 
 .x:hover {
-    filter: brightness(1.06);
+    background: var(--button-bg-hover);
+    border-color: var(--button-border-hover);
 }
 
 .x:focus-visible {
@@ -134,15 +142,22 @@
 
 .tab {
     border: 1px solid var(--border);
-    background: var(--surface2);
+    background: var(--button-bg);
     color: var(--text);
     border-radius: 6px;
     padding: 6px 10px;
     cursor: pointer;
+    transition: background-color 120ms ease, border-color 120ms ease;
+}
+
+.tab:hover {
+    background: var(--button-bg-hover);
+    border-color: var(--button-border-hover);
 }
 
 .tab.active {
     border-color: var(--border-strong);
+    background: var(--button-bg-hover);
 }
 
 .tab:focus-visible {

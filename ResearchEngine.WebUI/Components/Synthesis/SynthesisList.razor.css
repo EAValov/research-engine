@@ -93,23 +93,34 @@
 
 .btn {
     border: 1px solid var(--border);
-    background: var(--surface);
+    background: var(--button-bg);
     color: var(--text);
     border-radius: 10px;
     padding: 6px 10px;
     cursor: pointer;
+    transition: background-color 120ms ease, border-color 120ms ease;
+}
+.btn:hover {
+    background: var(--button-bg-hover);
+    border-color: var(--button-border-hover);
 }
 
 .btn:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 
 .ghost {
     border: 1px solid var(--border);
-    background: var(--surface);
+    background: var(--button-bg);
     color: var(--text);
     border-radius: 10px;
     padding: 6px 10px;
     cursor: pointer;
     opacity: 0.9;
+    transition: background-color 120ms ease, border-color 120ms ease, opacity 120ms ease;
+}
+.ghost:hover {
+    background: var(--button-bg-hover);
+    border-color: var(--button-border-hover);
+    opacity: 1;
 }
 
 .ghost:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
@@ -125,11 +136,17 @@
 
 .load {
     border: 1px solid var(--border);
-    background: var(--surface);
+    background: var(--button-bg);
     color: var(--text);
     border-radius: 10px;
     padding: 8px 12px;
     cursor: pointer;
+    transition: background-color 120ms ease, border-color 120ms ease;
+}
+
+.load:hover:not(:disabled) {
+    background: var(--button-bg-hover);
+    border-color: var(--button-border-hover);
 }
 
 .load:disabled {

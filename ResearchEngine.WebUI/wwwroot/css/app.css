@@ -5,9 +5,21 @@
 
     --surface: #ffffff;
     --surface2: #fafafa;
+    --surface3: #f0f4f8;
+    --card: var(--surface);
+    --panel: var(--surface2);
 
     --border: #e6e6e6;
     --border-strong: #111111;
+    --btn: var(--border-strong);
+    --btnText: var(--bg);
+    --button-bg: #f3f5f8;
+    --button-bg-hover: #e8edf4;
+    --button-border-hover: #c7d0dc;
+    --button-primary-hover-overlay: rgba(255,255,255,0.08);
+    --popover-border: #d5dbe6;
+    --citation-link: #004f86;
+    --citation-link-hover: #003f6b;
 
     --shadow: 0 1px 0 rgba(0,0,0,0.05);
     --overlay: rgba(0,0,0,0.25);
@@ -23,9 +35,21 @@
 
     --surface: #151822;
     --surface2: #10131b;
+    --surface3: #1b2230;
+    --card: var(--surface);
+    --panel: var(--surface2);
 
     --border: #2a2f3a;
     --border-strong: #f2f2f2;
+    --btn: var(--border-strong);
+    --btnText: var(--bg);
+    --button-bg: #1b2230;
+    --button-bg-hover: #263143;
+    --button-border-hover: #465469;
+    --button-primary-hover-overlay: rgba(0,0,0,0.08);
+    --popover-border: #3a4350;
+    --citation-link: #0b4f86;
+    --citation-link-hover: #003f6b;
 
     --shadow: 0 1px 0 rgba(0,0,0,0.4);
     --overlay: rgba(0,0,0,0.55);

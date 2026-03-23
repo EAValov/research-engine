@@ -5,7 +5,7 @@
     overflow: hidden;
 
     background: var(--surface);
-    border: 1px solid var(--border);
+    border: 1px solid var(--popover-border);
     border-radius: 8px;
     box-shadow: 0 12px 40px rgba(0,0,0,0.18);
     padding: 8px 10px 10px;
@@ -30,12 +30,17 @@
 
 .x {
     border: 1px solid var(--border);
-    background: var(--surface2);
+    background: var(--button-bg);
     color: var(--text);
     border-radius: 6px;
     width: 32px;
     height: 32px;
     cursor: pointer;
+    transition: background-color 120ms ease, border-color 120ms ease;
+}
+.x:hover {
+    background: var(--button-bg-hover);
+    border-color: var(--button-border-hover);
 }
 .x:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 
@@ -45,7 +50,10 @@
 .dot { opacity: 0.6; }
 .muted { color: var(--muted); }
 
-.rep { color: var(--text); overflow-wrap: anywhere; }
+.rep {
+    color: var(--text);
+    overflow-wrap: anywhere;
+}
 
 .source-row {
     margin-top: 10px;
@@ -81,5 +89,9 @@
     background: var(--border-strong);
     color: var(--bg);
     cursor: pointer;
+    transition: box-shadow 120ms ease, border-color 120ms ease;
+}
+.primary:hover:not(:disabled) {
+    box-shadow: inset 0 0 0 999px var(--button-primary-hover-overlay);
 }
 .primary:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }

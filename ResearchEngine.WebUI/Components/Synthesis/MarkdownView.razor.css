@@ -13,15 +13,13 @@
 
 /* citation token rendered from markdown (needs ::deep with CSS isolation) */
 ::deep .lrn-cite {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    padding: 0.12em 0.52em;
-    margin: 0 0.12em;
+    display: inline-block;
+    padding: 0;
+    margin: 0 0 0 -0.06em;
     border: none;
-    border-radius: 999px !important;
-    background: rgba(0, 113, 193, 0.16);
-    color: #005d9f;
+    border-radius: 0 !important;
+    background: transparent;
+    color: var(--citation-link);
     text-decoration: none;
     font-weight: 700;
     font-size: 0.82em;
@@ -29,23 +27,27 @@
     vertical-align: baseline;
     cursor: pointer;
     font-family: inherit;
-    line-height: 1.15;
+    line-height: inherit;
     box-shadow: none;
     appearance: none;
     -webkit-appearance: none;
-    transition: background 120ms ease, color 120ms ease, transform 120ms ease;
+    transition: color 120ms ease, transform 120ms ease, text-decoration-color 120ms ease;
 }
 
 ::deep .lrn-cite:hover {
-    background: rgba(0, 113, 193, 0.26);
-    color: #004f86;
+    background: transparent;
+    color: var(--citation-link-hover);
+    text-decoration: underline;
+    text-underline-offset: 0.14em;
     transform: translateY(-1px);
 }
 
 ::deep .lrn-cite:focus-visible {
     outline: 2px solid var(--text);
     outline-offset: 2px;
-    background: rgba(0, 113, 193, 0.3);
+    background: transparent;
+    text-decoration: underline;
+    text-underline-offset: 0.14em;
 }
 
 /* keep markdown basics (if you already had them, keep/merge) */

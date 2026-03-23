@@ -83,17 +83,23 @@
 
 .toggle {
     border: 1px solid var(--border);
-    background: var(--surface);
+    background: var(--button-bg);
     color: var(--text);
     border-radius: 6px;
     padding: 3px 8px;
     font-size: 0.84rem;
     cursor: pointer;
+    transition: background-color 120ms ease, border-color 120ms ease;
+}
+
+.toggle:hover {
+    background: var(--button-bg-hover);
+    border-color: var(--button-border-hover);
 }
 
 .toggle.active {
     border-color: var(--border-strong);
-    background: var(--surface);
+    background: var(--button-bg-hover);
     font-weight: 700;
 }
 
@@ -104,12 +110,18 @@
 
 .ghost {
     border: 1px solid var(--border);
-    background: var(--surface);
+    background: var(--button-bg);
     color: var(--text);
     border-radius: 6px;
     padding: 3px 8px;
     font-size: 0.84rem;
     cursor: pointer;
+    transition: background-color 120ms ease, border-color 120ms ease;
+}
+
+.ghost:hover {
+    background: var(--button-bg-hover);
+    border-color: var(--button-border-hover);
 }
 
 .ghost:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
