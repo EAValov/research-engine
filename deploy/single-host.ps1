@@ -1,33 +1,60 @@
 <#
 .SYNOPSIS
-Manages the full single-host Podman deployment for Research Engine.
+Builds and manages the full single-host Podman deployment for Research Engine.
 
 .DESCRIPTION
-This script always manages the full local stack (app + crawl + model + edge).
-If you need to exclude components, deploy manifests manually with podman commands.
+This script manages the full local stack (app + crawl + llm + edge).
+For `up` and `restart`, it builds the local application images first, then
+deploys the manifests. You can also optionally install the local Caddy
+certificate into the Windows certificate store.
+
+If you need to exclude components, deploy manifests manually with `podman`.
 
 .PARAMETER Action
-Deployment action: up, down, restart, or status.
+Deployment action: up, down, restart, status, or build.
+
+.PARAMETER SkipBuild
+Skips the local image build step for `up` and `restart`.
+
+.PARAMETER InstallCaddyCertificate
+After a successful `up` or `restart`, exports the local Caddy CA certificate
+from the edge container and imports it into the selected Windows trust store.
+
+.PARAMETER CertificateStoreScope
+Certificate store scope used when `-InstallCaddyCertificate` is specified.
+Defaults to `CurrentUser`.
 
 .EXAMPLE
 .\Deploy\single-host.ps1 up
 
 .EXAMPLE
-.\Deploy\single-host.ps1 restart
+.\Deploy\single-host.ps1 up -InstallCaddyCertificate
+
+.EXAMPLE
+.\Deploy\single-host.ps1 restart -SkipBuild
 
 .NOTES
 Managed manifests (in apply order):
   app   -> 20-app.yaml
   crawl -> 30-crawl.yaml
-  model -> 40-model-vllm.yaml
+  llm   -> 40-llm.yaml
   edge  -> 10-edge.yaml
 #>
+[CmdletBinding()]
 param(
-    [ValidateSet("up", "down", "restart", "status")]
-    [string]$Action = "up"
+    [ValidateSet("up", "down", "restart", "status", "build")]
+    [string]$Action = "up",
+
+    [switch]$SkipBuild,
+
+    [switch]$InstallCaddyCertificate,
+
+    [ValidateSet("CurrentUser", "LocalMachine")]
+    [string]$CertificateStoreScope = "CurrentUser"
 )
 
 $ErrorActionPreference = "Stop"
+$script:RepoRoot = Split-Path -Parent $PSScriptRoot
 
 function Ensure-Command {
     param([string]$Name)
@@ -35,6 +62,34 @@ function Ensure-Command {
     if (-not (Get-Command $Name -ErrorAction SilentlyContinue)) {
         throw "Required command '$Name' is not available in PATH."
     }
+}
+
+function Invoke-ExternalCommand {
+    param(
+        [string]$FilePath,
+        [string[]]$Arguments,
+        [string]$FailureMessage
+    )
+
+    & $FilePath @Arguments | Out-Host
+    if ($LASTEXITCODE -ne 0) {
+        throw $FailureMessage
+    }
+}
+
+function Get-ImageDefinitions {
+    return @(
+        [pscustomobject]@{
+            Name        = "research-api"
+            Tag         = "localhost/research-api:latest"
+            ContextPath = Join-Path $script:RepoRoot "ResearchEngine.API"
+        },
+        [pscustomobject]@{
+            Name        = "research-webui"
+            Tag         = "localhost/research-webui:latest"
+            ContextPath = Join-Path $script:RepoRoot "ResearchEngine.WebUI"
+        }
+    )
 }
 
 function Get-ComponentDefinitions {
@@ -52,9 +107,9 @@ function Get-ComponentDefinitions {
             ManifestPath = Join-Path $base "30-crawl.yaml"
         },
         [pscustomobject]@{
-            Name         = "LLM"
-            PodName      = "research-LLM"
-            ManifestPath = Join-Path $base "40-LLM.yaml"
+            Name         = "llm"
+            PodName      = "research-llm"
+            ManifestPath = Join-Path $base "40-llm.yaml"
         },
         [pscustomobject]@{
             Name         = "edge"
@@ -64,15 +119,35 @@ function Get-ComponentDefinitions {
     )
 }
 
+function Invoke-Build {
+    param([object[]]$Images)
+
+    foreach ($image in $Images) {
+        if (-not (Test-Path -Path $image.ContextPath)) {
+            throw "Image build context '$($image.ContextPath)' does not exist."
+        }
+
+        Write-Host "Building image '$($image.Tag)' from '$($image.ContextPath)'..."
+        Invoke-ExternalCommand `
+            -FilePath "podman" `
+            -Arguments @("build", "-t", $image.Tag, $image.ContextPath) `
+            -FailureMessage "Failed to build image '$($image.Tag)'."
+    }
+}
+
 function Invoke-Up {
     param([object[]]$Definitions)
 
     foreach ($definition in $Definitions) {
-        Write-Host "Applying $(Split-Path $definition.ManifestPath -Leaf) [$($definition.Name)]..."
-        podman kube play --replace $definition.ManifestPath | Out-Host
-        if ($LASTEXITCODE -ne 0) {
-            throw "Failed to apply '$($definition.ManifestPath)'."
+        if (-not (Test-Path -Path $definition.ManifestPath)) {
+            throw "Manifest '$($definition.ManifestPath)' does not exist."
         }
+
+        Write-Host "Applying $(Split-Path $definition.ManifestPath -Leaf) [$($definition.Name)]..."
+        Invoke-ExternalCommand `
+            -FilePath "podman" `
+            -Arguments @("kube", "play", "--replace", $definition.ManifestPath) `
+            -FailureMessage "Failed to apply '$($definition.ManifestPath)'."
     }
 }
 
@@ -84,7 +159,7 @@ function Invoke-Down {
 
     foreach ($definition in $definitions) {
         Write-Host "Removing $(Split-Path $definition.ManifestPath -Leaf) [$($definition.Name)]..."
-        podman kube down $definition.ManifestPath | Out-Host
+        & podman kube down $definition.ManifestPath | Out-Host
         if ($LASTEXITCODE -ne 0) {
             Write-Warning "Unable to fully remove '$($definition.ManifestPath)'. It may not be deployed yet."
         }
@@ -137,9 +212,61 @@ function Invoke-Status {
     }
 }
 
+function Wait-ForContainer {
+    param(
+        [string]$ContainerName,
+        [int]$TimeoutSeconds = 30
+    )
+
+    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+
+    while ((Get-Date) -lt $deadline) {
+        $runningContainers = @(podman ps --format "{{.Names}}")
+        if ($LASTEXITCODE -ne 0) {
+            throw "Failed to query running containers."
+        }
+
+        if ($runningContainers -contains $ContainerName) {
+            return
+        }
+
+        Start-Sleep -Seconds 1
+    }
+
+    throw "Container '$ContainerName' did not become ready within $TimeoutSeconds seconds."
+}
+
+function Install-CaddyLocalCertificate {
+    param([string]$StoreScope)
+
+    $trustScript = Join-Path $PSScriptRoot "trust-caddy-local-ca.ps1"
+    if (-not (Test-Path -Path $trustScript)) {
+        throw "Certificate helper script '$trustScript' was not found."
+    }
+
+    Write-Host "Waiting for the edge Caddy container to be ready..."
+    Wait-ForContainer -ContainerName "research-edge-caddy" -TimeoutSeconds 30
+
+    Write-Host "Installing the local Caddy certificate into '$StoreScope'..."
+    & $trustScript -StoreScope $StoreScope
+}
+
 Ensure-Command -Name "podman"
 
+if ($InstallCaddyCertificate -and $Action -notin @("up", "restart")) {
+    throw "-InstallCaddyCertificate can only be used with the 'up' or 'restart' actions."
+}
+
+if ($SkipBuild -and $Action -eq "build") {
+    throw "-SkipBuild cannot be used with the 'build' action."
+}
+
 $definitions = Get-ComponentDefinitions
+$images = Get-ImageDefinitions
+
+if ($Action -in @("up", "restart", "build") -and -not $SkipBuild) {
+    Invoke-Build -Images $images
+}
 
 switch ($Action) {
     "up" {
@@ -155,12 +282,33 @@ switch ($Action) {
     "status" {
         Invoke-Status -Definitions $definitions
     }
+    "build" {
+        Write-Host ""
+        Write-Host "Local images built:"
+        foreach ($image in $images) {
+            Write-Host "  $($image.Tag)"
+        }
+        return
+    }
 }
 
 if ($Action -eq "up" -or $Action -eq "restart") {
+    if ($InstallCaddyCertificate) {
+        Install-CaddyLocalCertificate -StoreScope $CertificateStoreScope
+    }
+
     $started = @($definitions.Name)
 
     Write-Host ""
     Write-Host "Local stack started: $($started -join ', ')."
-    Write-Host "Open: https://research-webui.llm.local:8443/"
+    Write-Host "HTTP:  http://localhost:8080/"
+
+    if ($InstallCaddyCertificate) {
+        Write-Host "HTTPS: https://research-webui.llm.local:8443/"
+    }
+    else {
+        Write-Host "Optional HTTPS: https://research-webui.llm.local:8443/"
+        Write-Host "  To use it without browser warnings, add '127.0.0.1 research-webui.llm.local' to your hosts file"
+        Write-Host "  and rerun with -InstallCaddyCertificate, or run .\Deploy\trust-caddy-local-ca.ps1 later."
+    }
 }
