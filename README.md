@@ -22,7 +22,15 @@ Research Engine is built for individual researchers and small teams who want pri
 
 No subscription required. Your prompts, sources, and reports stay on infrastructure you control.
 
-## Why People Use It
+<p align="center">
+  <img src="./Docs/Images/MainAnimation.gif" alt="Research Engine Web UI" width="1000">
+</p>
+
+<p align="center">
+  The Web UI lets you start research jobs, track progress, inspect evidence, and work with cited reports from one workspace.
+</p>
+
+## Main features
 
 - **Local-first deep research** using locally hosted chat and embedding models
 - **Privacy-oriented by design** so prompts, sources, and generated reports remain under your control
@@ -142,7 +150,7 @@ Installing the Caddy certificate is optional, but recommended. It is safe in the
   </p>
 </details>
 
-## Why This Design?
+## How is it different?
 
 Cloud deep research systems usually rely on very large hosted models and very large context windows. That works well in a datacenter, but it does not translate cleanly to local models running on consumer hardware.
 
