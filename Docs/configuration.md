@@ -146,7 +146,7 @@ Usage:
 Notes:
 
 - PostgreSQL must support the `vector` extension
-- outside the `Testing` environment, migrations are applied automatically on startup
+- Migrations are applied automatically on startup
 
 Single-host deployment example:
 

@@ -4,22 +4,7 @@
 
 Research Engine is designed for a simple idea: research should not disappear the moment a report is generated.
 
-Instead of treating crawled pages as temporary prompt material, the system turns them into **structured learnings**, stores them, vectors them, groups near-duplicates, and reuses them across synthesis runs. The result is a workflow where the report is important, but the **evidence layer** is the real foundation.
-
-At a glance, the architecture has two halves:
-
-1. **collect evidence**
-2. **generate syntheses from that evidence**
-
-That split is what makes inspection, curation, and regeneration practical.
-
----
-
-## What makes this architecture different
-
-The key architectural bet is this:
-
-> **Research should become a reusable asset, not a temporary prompt.**
+Instead of treating crawled pages as temporary prompt material, the system turns them into **structured learnings**, stores them, vectors them, groups near-duplicates, and reuses them across synthesis runs. The result is a workflow where the report is important, but the **evidence layer** is the foundation.
 
 In practice, that means:
 
@@ -31,8 +16,6 @@ In practice, that means:
 - users can pin, exclude, review, and regenerate without repeating the crawl
 
 So the system is not only answering a question. It is building a **job-scoped evidence base** and then generating one or more syntheses from it.
-
----
 
 ## High-level runtime view
 
@@ -135,7 +118,7 @@ It:
 - writes and stores section outputs
 - assembles the final report
 
-This is what makes regeneration cheap: the system usually reuses the research phase and reruns only synthesis.
+**This is what makes regeneration cheap**: the system usually reuses the research phase and reruns only synthesis.
 
 ---
 
@@ -168,7 +151,7 @@ For each section it:
 - stores section markdown and summary
 
 ```mermaid
-flowchart TD
+flowchart LR
     A[Section plan] --> B[Build section prompt]
     B --> C[Retrieve similar learnings]
     C --> D[Apply overrides]
@@ -209,17 +192,16 @@ flowchart LR
 
 ## Main runtime components
 
-### Web UI
+### Web UI (Blazor WebAssembly)
 
-The Blazor WebAssembly frontend handles query setup, job views, live progress, report rendering, evidence review, synthesis history, and regeneration.
+The frontend handles query setup, job views, live progress, report rendering, evidence review, synthesis history, and regeneration.
 
-### API layer
+### API layer (ASP.NET Core)
 
-The ASP.NET Core backend exposes:
+The backend exposes:
 
-- **Native REST API** for jobs, evidence, syntheses, overrides, SSE, and runtime settings
+- **REST API** for jobs, evidence, syntheses, overrides, SSE, and runtime settings
 - **Protocol API** for clarifications and structured research setup
-- **OpenAI-compatible surface** for model-like integrations when needed
 
 ### Background processing
 
@@ -279,7 +261,3 @@ It is optimized for:
 - inspectable evidence and citations
 - low-cost regeneration
 - a user-controlled review loop
-
-If I had to summarize the design in one sentence, it would be this:
-
-> **The system keeps the research, not just the answer.**
