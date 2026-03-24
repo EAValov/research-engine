@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="./Docs/Images/README%20logo.png" alt="Research Engine" width="720">
+  <img src="./Docs/Images/Logo.png" alt="Research Engine" width="720">
 </p>
 
 <p align="center">
