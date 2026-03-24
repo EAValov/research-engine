@@ -45,12 +45,12 @@ The app is containerized. You don't need Linux or Mac - it will just work on you
 
 - CPU: AMD Ryzen 7940HX (16 cores)
 - RAM: 32 GB DDR5 5200
-- GPU: **Nvidia RTX 5090**
+- GPU: **Nvidia RTX 5090** *--works with less beefy GPU ofc!*
 - OS: Windows 11 with WSL2
 - Containers: Podman Desktop
 - [GPU container access](https://podman-desktop.io/docs/podman/gpu) is configured. 
 
-The main requirement is that system must be powerful enough to run at least 8b - 14B models with a decent speed and context window. 
+The main requirement is that system must be powerful enough to run at least 8-14B models with a decent speed and context window. 
 
 If your hardware is different, or you want HTTPS and a friendly local URL such as `https://research-webui.llm.local:8443`, see the [Deployment guide](./Docs/Deployment.md).
 
@@ -104,6 +104,8 @@ Installing the Caddy certificate is optional, but recommended. It is safe in the
 - [Most promising approaches to long-duration energy storage](<./Examples/Long-duration energy storage.md>)
 - [Market opportunities for launching an AI-powered consumer health app](<./Examples/Health app in the EU and US.md>)
 - [Why Bitcoin is still not widely adopted](<./Examples/Why Bitcoin still not widely adopted.md>)
+- [Will AI replace the traditional search engines?](<./Examples/AI and the traditional search engines.md>)
+- [Europe’s Housing Crisis explained](<./Examples/Europe’s Housing Crisis.md>)
 
 ## Screenshots
 
