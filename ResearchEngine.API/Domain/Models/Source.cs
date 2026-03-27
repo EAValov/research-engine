@@ -23,8 +23,15 @@ public sealed class Source
     public string ContentHash { get; set; } = null!; 
     public string? Title { get; set; }
     public string Content { get; set; } = null!;
+    public string? Domain { get; set; }
+    public string? SearchCategory { get; set; }
 
     public SourceKind Kind { get; set; } = SourceKind.Web;
+    public SourceClassification Classification { get; set; } = SourceClassification.Unknown;
+    public SourceReliabilityTier ReliabilityTier { get; set; } = SourceReliabilityTier.Low;
+    public double ReliabilityScore { get; set; }
+    public bool IsPrimarySource { get; set; }
+    public string ReliabilityRationale { get; set; } = string.Empty;
 
     public string? Language { get; set; }
     public string? Region { get; set; }
@@ -39,7 +46,13 @@ public sealed record SourceListItemDto(
     Guid SourceId,
     string Reference,
     string? Title,
+    string? Domain,
     string? Language,
     string? Region,
+    string Classification,
+    string ReliabilityTier,
+    double ReliabilityScore,
+    bool IsPrimarySource,
+    string ReliabilityRationale,
     DateTimeOffset CreatedAt,
     int LearningCount);

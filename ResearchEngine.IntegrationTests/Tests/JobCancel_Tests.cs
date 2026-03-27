@@ -68,12 +68,12 @@ public sealed class JobCancel_Tests : IntegrationTestBase
         private readonly TimeSpan _delay;
         public SlowSearchClient(TimeSpan delay) => _delay = delay;
 
-        public async Task<IReadOnlyList<SearchResult>> SearchAsync(string query, int limit, string? location = null, CancellationToken ct = default)
+        public async Task<IReadOnlyList<SearchResult>> SearchAsync(SearchRequest request, CancellationToken ct = default)
         {
             await Task.Delay(_delay, ct);
 
             // Return at least one URL so the pipeline progresses into URL processing (or not, depending on timing)
-            return [new SearchResult ("https://example.com",  "Example",  "Example snippet" ) ];
+            return [new SearchResult("https://example.com", "Example", "Example snippet", Domain: "example.com", Position: 1)];
         }
     }
 

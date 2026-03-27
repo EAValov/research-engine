@@ -348,6 +348,24 @@
                                 <span class="settings-field-error">@maxUrlsError</span>
                             }
                         </label>
+
+                        <label class="settings-field settings-field-full">
+                            <span class="settings-label-row">
+                                <span>Default discovery mode</span>
+                                <span class="settings-help" title="Controls the default source-quality policy for new jobs unless the composer overrides it.">Source policy</span>
+                            </span>
+                            <select class="@GetInputClass("ResearchOrchestratorConfig.DefaultDiscoveryMode")"
+                                    @bind="_draftResearchOptions.DefaultDiscoveryMode"
+                                    disabled="@IsRuntimeSettingsDisabled">
+                                <option value="Balanced">Balanced</option>
+                                <option value="ReliableOnly">Reliable only</option>
+                                <option value="AcademicOnly">Academic only</option>
+                            </select>
+                            @if (TryGetFieldError("ResearchOrchestratorConfig.DefaultDiscoveryMode", out var discoveryModeError))
+                            {
+                                <span class="settings-field-error">@discoveryModeError</span>
+                            }
+                        </label>
                     </div>
                 </section>
 

@@ -331,6 +331,7 @@ public static class OpenAiModelEndpoints
             clarifications,
             breadth: breadth,
             depth: depth,
+            discoveryMode: null,
             language: language,
             region: region,
             ct);

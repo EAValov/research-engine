@@ -8,13 +8,13 @@ namespace ResearchEngine.IntegrationTests.Infrastructure;
 
 public sealed class FakeSearchClient : ISearchClient
 {
-    public Task<IReadOnlyList<SearchResult>> SearchAsync(string query, int limit, string? location = null, CancellationToken ct = default)
+    public Task<IReadOnlyList<SearchResult>> SearchAsync(SearchRequest request, CancellationToken ct = default)
     {
         // Deterministic: always return 2 results.
         IReadOnlyList<SearchResult> results =
         [
-            new("https://example.test/a", "Example A", "snippet a"),
-            new("https://example.test/b", "Example B", "snippet b")
+            new("https://example.test/a", "Example A", "snippet a", Domain: "example.test", Position: 1),
+            new("https://example.test/b", "Example B", "snippet b", Domain: "example.test", Position: 2)
         ];
         return Task.FromResult(results);
     }

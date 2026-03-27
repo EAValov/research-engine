@@ -74,18 +74,18 @@ public sealed class Sources_DedupeAcrossSerpQueries_Tests : IntegrationTestBase
     {
         public const string SharedUrl = "https://example.test/overlap";
 
-        public Task<IReadOnlyList<SearchResult>> SearchAsync(string query, int limit, string? location = null, CancellationToken ct = default)
+        public Task<IReadOnlyList<SearchResult>> SearchAsync(SearchRequest request, CancellationToken ct = default)
         {
             // Always return the same URL (plus a second distinct URL so the job can progress).
             var results = new List<SearchResult>
             {
-                new(SharedUrl, "Overlap", "Overlap content"),
-                new("https://example.test/unique", "Unique", "Unique content")
+                new(SharedUrl, "Overlap", "Overlap content", Domain: "example.test", Position: 1),
+                new("https://example.test/unique", "Unique", "Unique content", Domain: "example.test", Position: 2)
             };
 
             // Respect limit if provided
-            if (limit > 0 && results.Count > limit)
-                results = results.Take(limit).ToList();
+            if (request.Limit > 0 && results.Count > request.Limit)
+                results = results.Take(request.Limit).ToList();
 
             return Task.FromResult((IReadOnlyList<SearchResult>)results);
         }

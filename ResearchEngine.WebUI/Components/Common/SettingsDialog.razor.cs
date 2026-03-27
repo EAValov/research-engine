@@ -36,6 +36,7 @@ public partial class SettingsDialog : ComponentBase
     {
         PropertyNameCaseInsensitive = true
     };
+    private static readonly string[] DiscoveryModeOptions = ["Balanced", "ReliableOnly", "AcademicOnly"];
 
     [Inject] private AppStateStore AppState { get; set; } = default!;
     [Inject] private ApiConnectionSettings ApiConnection { get; set; } = default!;
@@ -544,6 +545,7 @@ public partial class SettingsDialog : ComponentBase
         ValidateRange("ResearchOrchestratorConfig.LimitSearches", _draftResearchOptions.LimitSearches, 1, 1000);
         ValidateRange("ResearchOrchestratorConfig.MaxUrlParallelism", _draftResearchOptions.MaxUrlParallelism, 1, 1000);
         ValidateRange("ResearchOrchestratorConfig.MaxUrlsPerSerpQuery", _draftResearchOptions.MaxUrlsPerSerpQuery, 1, 1000);
+        ValidateDiscoveryMode("ResearchOrchestratorConfig.DefaultDiscoveryMode", _draftResearchOptions.DefaultDiscoveryMode);
 
         ValidateRange("LearningSimilarityOptions.MinImportance", _draftLearningOptions.MinImportance, 0f, 1f);
         ValidateRange("LearningSimilarityOptions.DiversityMaxPerUrl", _draftLearningOptions.DiversityMaxPerUrl, 1, 1000);
@@ -596,6 +598,12 @@ public partial class SettingsDialog : ComponentBase
     {
         if (value < min || value > max)
             SetFieldError(key, $"Value must be between {min:0.##} and {max:0.##}.");
+    }
+
+    private void ValidateDiscoveryMode(string key, string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value) || !DiscoveryModeOptions.Contains(value, StringComparer.Ordinal))
+            SetFieldError(key, "Choose Balanced, ReliableOnly, or AcademicOnly.");
     }
 
     private void SetFieldError(string key, string message)
@@ -693,7 +701,8 @@ public partial class SettingsDialog : ComponentBase
         ResearchOrchestratorConfigModel right)
         => left.LimitSearches == right.LimitSearches
             && left.MaxUrlParallelism == right.MaxUrlParallelism
-            && left.MaxUrlsPerSerpQuery == right.MaxUrlsPerSerpQuery;
+            && left.MaxUrlsPerSerpQuery == right.MaxUrlsPerSerpQuery
+            && string.Equals(left.DefaultDiscoveryMode, right.DefaultDiscoveryMode, StringComparison.Ordinal);
 
     private static bool LearningOptionsEqual(
         LearningSimilarityOptionsModel left,
@@ -1027,7 +1036,8 @@ public partial class SettingsDialog : ComponentBase
         {
             LimitSearches = source.LimitSearches,
             MaxUrlParallelism = source.MaxUrlParallelism,
-            MaxUrlsPerSerpQuery = source.MaxUrlsPerSerpQuery
+            MaxUrlsPerSerpQuery = source.MaxUrlsPerSerpQuery,
+            DefaultDiscoveryMode = source.DefaultDiscoveryMode
         };
 
     private static LearningSimilarityOptionsModel CloneLearningOptions(LearningSimilarityOptionsModel source)

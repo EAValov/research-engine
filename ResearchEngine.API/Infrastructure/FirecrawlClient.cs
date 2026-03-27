@@ -1,4 +1,3 @@
-using System.Net.Http.Json;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
@@ -30,16 +29,15 @@ public class FirecrawlClient : ISearchClient, ICrawlClient
     }
 
     public async Task<IReadOnlyList<SearchResult>> SearchAsync(
-        string query,
-        int limit,
-        string? location = null,
+        SearchRequest requestModel,
         CancellationToken ct = default)
     {
+        var query = requestModel.Query;
         if (string.IsNullOrWhiteSpace(query))
             return Array.Empty<SearchResult>();
 
         // Firecrawl rejects limit <= 0
-        limit = Math.Max(1, limit);
+        var limit = Math.Max(1, requestModel.Limit);
 
         var crawlConfig = await _runtimeSettings.GetCurrentAsync(ct);
         var baseUrl = crawlConfig.CrawlConfig.BaseUrl?.Trim();
@@ -49,81 +47,39 @@ public class FirecrawlClient : ISearchClient, ICrawlClient
             return Array.Empty<SearchResult>();
         }
 
-        var url = $"{baseUrl.TrimEnd('/')}/v1/search";
-
-        object payload = string.IsNullOrWhiteSpace(location) ?
-            new { query, limit } : 
-            new { query,
-                limit,
-                location,
-                ignoreInvalidURLs = true
-                };
-
-        var jsonPayload = JsonSerializer.Serialize(payload, _jsonOptions);
-
-        using var request = new HttpRequestMessage(HttpMethod.Post, url)
-        {
-            Content = new StringContent(jsonPayload, Encoding.UTF8, "application/json")
-        };
-        AddApiKeyHeaders(request, crawlConfig.CrawlConfig.ApiKey);
+        var payload = CreateSearchPayload(requestModel, limit);
 
         _logger.LogDebug(
-            "Firecrawl search: query='{Query}', limit={Limit}, location='{Location}'",
+            "Firecrawl search: query='{Query}', limit={Limit}, location='{Location}', discoveryMode='{DiscoveryMode}'",
             query,
             limit,
-            location);
+            requestModel.Location,
+            requestModel.DiscoveryMode);
 
         try
         {
-            using var response = await _httpClient.SendAsync(request, ct);
+            var v2Results = await SearchCoreAsync(
+                $"{baseUrl.TrimEnd('/')}/v2/search",
+                payload,
+                crawlConfig.CrawlConfig.ApiKey,
+                query,
+                ct);
 
-            if (!response.IsSuccessStatusCode)
-            {
-                var errorText = await response.Content.ReadAsStringAsync(ct);
-                _logger.LogWarning(
-                    "Firecrawl search error for query '{Query}': {StatusCode} {ReasonPhrase}. Body: {Body}",
-                    query,
-                    (int)response.StatusCode,
-                    response.ReasonPhrase,
-                    errorText);
-
-                return Array.Empty<SearchResult>();
-            }
-
-            var content = await response.Content.ReadAsStringAsync(ct);
-
-            FirecrawlSearchResponse? searchResponse;
-
-            try
-            {
-                searchResponse = JsonSerializer.Deserialize<FirecrawlSearchResponse>(content, _jsonOptions);
-            }
-            catch (JsonException ex)
-            {
-                _logger.LogError(ex,
-                    "Failed to deserialize Firecrawl search response for query '{Query}'. Raw: {Raw}",
-                    query,
-                    content);
-
-                return Array.Empty<SearchResult>();
-            }
-
-            if (searchResponse?.data == null || searchResponse.data.Length == 0)
-            {
-                _logger.LogInformation("Firecrawl search returned no data for query '{Query}'", query);
-                return Array.Empty<SearchResult>();
-            }
-
-            var results = searchResponse.data
-                .Select(d => new SearchResult(d.url, d.title, d.description))
-                .ToList();
+            if (v2Results.Success)
+                return v2Results.Results;
 
             _logger.LogInformation(
-                "Firecrawl search completed for query '{Query}': {Count} results",
-                query,
-                results.Count);
+                "Falling back to Firecrawl v1 search for query '{Query}' after v2 search was unavailable or incompatible.",
+                query);
 
-            return results;
+            var v1Results = await SearchCoreAsync(
+                $"{baseUrl.TrimEnd('/')}/v1/search",
+                CreateLegacySearchPayload(requestModel, limit),
+                crawlConfig.CrawlConfig.ApiKey,
+                query,
+                ct);
+
+            return v1Results.Results;
         }
         catch (OperationCanceledException oce) when (!ct.IsCancellationRequested)
         {
@@ -245,18 +201,6 @@ public class FirecrawlClient : ISearchClient, ICrawlClient
         }
     }
 
-    private sealed class FirecrawlSearchResponse
-    {
-        public FirecrawlSearchData[]? data { get; set; }
-    }
-
-    private sealed class FirecrawlSearchData
-    {
-        public required string url { get; set; }
-        public required string title { get; set; }
-        public required string description { get; set; }
-    }
-
     private sealed class FirecrawlScrapeResponse
     {
         public bool success { get; set; }
@@ -266,6 +210,159 @@ public class FirecrawlClient : ISearchClient, ICrawlClient
     private sealed class FirecrawlScrapeData
     {
         public string? markdown { get; set; }
+    }
+
+    private async Task<(bool Success, IReadOnlyList<SearchResult> Results)> SearchCoreAsync(
+        string url,
+        object payload,
+        string? apiKey,
+        string query,
+        CancellationToken ct)
+    {
+        var jsonPayload = JsonSerializer.Serialize(payload, _jsonOptions);
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, url)
+        {
+            Content = new StringContent(jsonPayload, Encoding.UTF8, "application/json")
+        };
+        AddApiKeyHeaders(request, apiKey);
+
+        using var response = await _httpClient.SendAsync(request, ct);
+        var content = await response.Content.ReadAsStringAsync(ct);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            _logger.LogWarning(
+                "Firecrawl search error for query '{Query}': {StatusCode} {ReasonPhrase}. Body: {Body}",
+                query,
+                (int)response.StatusCode,
+                response.ReasonPhrase,
+                content);
+
+            return (false, Array.Empty<SearchResult>());
+        }
+
+        if (!TryParseSearchResults(content, out var results))
+        {
+            _logger.LogWarning(
+                "Firecrawl search returned an unexpected payload for query '{Query}'. Raw: {Raw}",
+                query,
+                content);
+
+            return (false, Array.Empty<SearchResult>());
+        }
+
+        _logger.LogInformation(
+            "Firecrawl search completed for query '{Query}': {Count} results",
+            query,
+            results.Count);
+
+        return (true, results);
+    }
+
+    private object CreateSearchPayload(SearchRequest requestModel, int limit)
+    {
+        var payload = new Dictionary<string, object?>
+        {
+            ["query"] = requestModel.Query,
+            ["limit"] = limit,
+            ["sources"] = new[] { "web" },
+            ["ignoreInvalidURLs"] = true
+        };
+
+        if (!string.IsNullOrWhiteSpace(requestModel.Location))
+            payload["location"] = requestModel.Location;
+
+        if (requestModel.DiscoveryMode == SourceDiscoveryMode.AcademicOnly)
+            payload["categories"] = new[] { "research", "pdf" };
+
+        return payload;
+    }
+
+    private object CreateLegacySearchPayload(SearchRequest requestModel, int limit)
+        => string.IsNullOrWhiteSpace(requestModel.Location)
+            ? new
+            {
+                query = requestModel.Query,
+                limit,
+                ignoreInvalidURLs = true
+            }
+            : new
+            {
+                query = requestModel.Query,
+                limit,
+                location = requestModel.Location,
+                ignoreInvalidURLs = true
+            };
+
+    private bool TryParseSearchResults(string content, out IReadOnlyList<SearchResult> results)
+    {
+        results = Array.Empty<SearchResult>();
+
+        try
+        {
+            using var doc = JsonDocument.Parse(content);
+            var root = doc.RootElement;
+
+            if (!root.TryGetProperty("data", out var data))
+                return false;
+
+            if (data.ValueKind == JsonValueKind.Array)
+            {
+                results = data.EnumerateArray()
+                    .Select(ToSearchResult)
+                    .Where(static x => !string.IsNullOrWhiteSpace(x.Url))
+                    .ToList();
+                return true;
+            }
+
+            if (data.ValueKind == JsonValueKind.Object && data.TryGetProperty("web", out var web) && web.ValueKind == JsonValueKind.Array)
+            {
+                results = web.EnumerateArray()
+                    .Select(ToSearchResult)
+                    .Where(static x => !string.IsNullOrWhiteSpace(x.Url))
+                    .ToList();
+                return true;
+            }
+
+            return false;
+        }
+        catch (JsonException ex)
+        {
+            _logger.LogError(ex, "Failed to parse Firecrawl search response.");
+            return false;
+        }
+    }
+
+    private static SearchResult ToSearchResult(JsonElement item)
+    {
+        var url = GetString(item, "url") ?? string.Empty;
+        var title = GetString(item, "title") ?? string.Empty;
+        var description = GetString(item, "description")
+            ?? GetString(item, "snippet")
+            ?? string.Empty;
+        var category = GetString(item, "category");
+        var position = item.TryGetProperty("position", out var positionEl) && positionEl.ValueKind == JsonValueKind.Number
+            ? positionEl.GetInt32()
+            : (int?)null;
+        var publishedDate = GetString(item, "date");
+        var domain = NormalizeDomain(url);
+
+        return new SearchResult(url, title, description, domain, category, position, publishedDate);
+    }
+
+    private static string? GetString(JsonElement element, string propertyName)
+        => element.TryGetProperty(propertyName, out var value) && value.ValueKind == JsonValueKind.String
+            ? value.GetString()
+            : null;
+
+    private static string? NormalizeDomain(string? rawUrl)
+    {
+        if (!Uri.TryCreate(rawUrl, UriKind.Absolute, out var uri))
+            return null;
+
+        var host = uri.Host.Trim().ToLowerInvariant();
+        return host.StartsWith("www.", StringComparison.Ordinal) ? host[4..] : host;
     }
 
     private static void AddApiKeyHeaders(HttpRequestMessage request, string? apiKey)

@@ -12,6 +12,7 @@ public sealed class ResearchJob
     public int Breadth { get; set; }
     public int Depth { get; set; }
     public ResearchJobStatus Status { get; set; }
+    public SourceDiscoveryMode DiscoveryMode { get; set; } = SourceDiscoveryMode.Balanced;
 
     public string TargetLanguage { get; set; } = "en";
     public string? Region { get; set; }

@@ -36,7 +36,7 @@ public abstract class IntegrationTestBase
         }
     }
 
-    protected static async Task<Guid> CreateJobAsync(HttpClient client, string query)
+    protected static async Task<Guid> CreateJobAsync(HttpClient client, string query, string? discoveryMode = null)
     {
         var createReq = new
         {
@@ -45,7 +45,8 @@ public abstract class IntegrationTestBase
             breadth = 2,
             depth = 2,
             language = "en",
-            region = (string?)null
+            region = (string?)null,
+            discoveryMode
         };
 
         var resp = await client.PostAsJsonAsync("/api/research/jobs", createReq);

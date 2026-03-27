@@ -21,6 +21,7 @@ public sealed partial class PostgresResearchJobStore(
         IEnumerable<Clarification> clarifications,
         int breadth,
         int depth,
+        SourceDiscoveryMode discoveryMode,
         string language,
         string? region,
         CancellationToken ct = default)
@@ -36,6 +37,7 @@ public sealed partial class PostgresResearchJobStore(
             EmbeddingModelName = NormalizeModelName(embeddingOptions.Value.ModelId, nameof(EmbeddingConfig.ModelId)),
             Breadth = breadth,
             Depth = depth,
+            DiscoveryMode = discoveryMode,
             Status = ResearchJobStatus.Pending,
             TargetLanguage = language,
             Region = region,
@@ -281,6 +283,7 @@ public sealed partial class PostgresResearchJobStore(
         string? language,
         string? region,
         SourceKind kind,
+        SourceMetadata? metadata = null,
         CancellationToken ct = default)
     {
         await using var db = await dbContextFactory.CreateDbContextAsync(ct);
@@ -290,6 +293,8 @@ public sealed partial class PostgresResearchJobStore(
 
         var contentHash = ComputeSha256(content);
 
+        var effectiveMetadata = NormalizeMetadata(kind, metadata, reference);
+
         if (existing is not null)
         {
             var contentChanged = !string.Equals(existing.ContentHash, contentHash, StringComparison.Ordinal);
@@ -298,6 +303,13 @@ public sealed partial class PostgresResearchJobStore(
             existing.ContentHash = contentHash;
             existing.Content = content;
             existing.Title = title;
+            existing.Domain = effectiveMetadata.Domain;
+            existing.SearchCategory = effectiveMetadata.SearchCategory;
+            existing.Classification = effectiveMetadata.Classification;
+            existing.ReliabilityTier = effectiveMetadata.ReliabilityTier;
+            existing.ReliabilityScore = effectiveMetadata.ReliabilityScore;
+            existing.IsPrimarySource = effectiveMetadata.IsPrimarySource;
+            existing.ReliabilityRationale = effectiveMetadata.ReliabilityRationale;
             existing.Language = language;
             existing.Region = region;
 
@@ -324,6 +336,13 @@ public sealed partial class PostgresResearchJobStore(
             ContentHash = contentHash,
             Content = content,
             Title = title,
+            Domain = effectiveMetadata.Domain,
+            SearchCategory = effectiveMetadata.SearchCategory,
+            Classification = effectiveMetadata.Classification,
+            ReliabilityTier = effectiveMetadata.ReliabilityTier,
+            ReliabilityScore = effectiveMetadata.ReliabilityScore,
+            IsPrimarySource = effectiveMetadata.IsPrimarySource,
+            ReliabilityRationale = effectiveMetadata.ReliabilityRationale,
             Language = language,
             Region = region,
             CreatedAt = now
@@ -687,11 +706,53 @@ public sealed partial class PostgresResearchJobStore(
                 s.Id,
                 s.Reference,
                 s.Title,
+                s.Domain,
                 s.Language,
                 s.Region,
+                s.Classification.ToApiValue(),
+                s.ReliabilityTier.ToApiValue(),
+                s.ReliabilityScore,
+                s.IsPrimarySource,
+                s.ReliabilityRationale,
                 s.CreatedAt,
                 s.Learnings.Count))
             .ToListAsync(ct);
+    }
+
+    private static SourceMetadata NormalizeMetadata(SourceKind kind, SourceMetadata? metadata, string reference)
+    {
+        if (metadata is not null)
+            return metadata;
+
+        if (kind == SourceKind.User)
+        {
+            return new SourceMetadata(
+                Domain: NormalizeDomain(reference),
+                SearchCategory: null,
+                Classification: SourceClassification.UserProvided,
+                ReliabilityTier: SourceReliabilityTier.High,
+                ReliabilityScore: 1.0,
+                IsPrimarySource: true,
+                ReliabilityRationale: "User-provided evidence");
+        }
+
+        return new SourceMetadata(
+            Domain: NormalizeDomain(reference),
+            SearchCategory: null,
+            Classification: SourceClassification.Unknown,
+            ReliabilityTier: SourceReliabilityTier.Low,
+            ReliabilityScore: 0.45,
+            IsPrimarySource: false,
+            ReliabilityRationale: "Source metadata not classified");
+    }
+
+    private static string? NormalizeDomain(string? rawReference)
+    {
+        if (!Uri.TryCreate(rawReference, UriKind.Absolute, out var uri))
+            return null;
+
+        var host = uri.Host.Trim().ToLowerInvariant();
+        return host.StartsWith("www.", StringComparison.Ordinal) ? host[4..] : host;
     }
 
     public async Task<PagedResult<LearningListItemDto>> ListLearningsAsync(

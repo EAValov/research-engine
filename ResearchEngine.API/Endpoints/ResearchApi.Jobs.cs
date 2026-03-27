@@ -35,11 +35,26 @@ public static partial class ResearchApi
             (language, region) =
                 await protocolService.AutoSelectLanguageRegionAsync(request.Query, clarifications, ct);
 
+        SourceDiscoveryMode? discoveryMode = null;
+        if (!string.IsNullOrWhiteSpace(request.DiscoveryMode))
+        {
+            if (!SourceDiscoveryModeExtensions.TryParse(request.DiscoveryMode, out var parsedMode))
+            {
+                return Results.ValidationProblem(new Dictionary<string, string[]>
+                {
+                    [nameof(CreateResearchJobRequest.DiscoveryMode)] = ["DiscoveryMode must be Balanced, ReliableOnly, or AcademicOnly."]
+                });
+            }
+
+            discoveryMode = parsedMode;
+        }
+
         var jobId = await orchestrator.StartJobAsync(
             request.Query,
             clarifications,
             breadth ?? 2,
             depth ?? 2,
+            discoveryMode,
             language ?? "en",
             region,
             ct);
@@ -67,6 +82,7 @@ public static partial class ResearchApi
             EmbeddingModelName: j.EmbeddingModelName,
             Breadth: j.Breadth,
             Depth: j.Depth,
+            DiscoveryMode: j.DiscoveryMode.ToApiValue(),
             Status: j.Status.ToString(),
             TargetLanguage: j.TargetLanguage,
             Region: j.Region,
@@ -102,6 +118,7 @@ public static partial class ResearchApi
             EmbeddingModelName: job.EmbeddingModelName,
             Breadth: job.Breadth,
             Depth: job.Depth,
+            DiscoveryMode: job.DiscoveryMode.ToApiValue(),
             Status: job.Status.ToString(),
             TargetLanguage: job.TargetLanguage,
             Region: job.Region,

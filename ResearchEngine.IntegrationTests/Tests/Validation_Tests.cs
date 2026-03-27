@@ -73,6 +73,26 @@ public sealed class Validation_Tests : IntegrationTestBase
         Assert.Equal(HttpStatusCode.BadRequest, resp.StatusCode);
     }
 
+    [Fact]
+    public async Task CreateJob_WithInvalidDiscoveryMode_Returns400()
+    {
+        using var client = CreateClient();
+
+        var payload = new
+        {
+            query = "test",
+            clarifications = Array.Empty<object>(),
+            breadth = 2,
+            depth = 2,
+            language = "en",
+            region = (string?)null,
+            discoveryMode = "NotARealMode"
+        };
+
+        var resp = await client.PostAsJsonAsync("/api/research/jobs", payload);
+        Assert.Equal(HttpStatusCode.BadRequest, resp.StatusCode);
+    }
+
 
     [Theory]
     [InlineData(-1, 10)]

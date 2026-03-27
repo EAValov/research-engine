@@ -11,6 +11,7 @@ public sealed class RuntimeSettingsRecord
     public int LimitSearches { get; set; }
     public int MaxUrlParallelism { get; set; }
     public int MaxUrlsPerSerpQuery { get; set; }
+    public string DefaultDiscoveryMode { get; set; } = SourceDiscoveryMode.Balanced.ToApiValue();
 
     public float MinImportance { get; set; }
     public int DiversityMaxPerUrl { get; set; }
@@ -37,7 +38,8 @@ public sealed class RuntimeSettingsRecord
             {
                 LimitSearches = LimitSearches,
                 MaxUrlParallelism = MaxUrlParallelism,
-                MaxUrlsPerSerpQuery = MaxUrlsPerSerpQuery
+                MaxUrlsPerSerpQuery = MaxUrlsPerSerpQuery,
+                DefaultDiscoveryMode = DefaultDiscoveryMode
             },
             new LearningSimilarityOptions
             {
@@ -71,6 +73,7 @@ public sealed class RuntimeSettingsRecord
             LimitSearches = snapshot.ResearchOrchestratorConfig.LimitSearches,
             MaxUrlParallelism = snapshot.ResearchOrchestratorConfig.MaxUrlParallelism,
             MaxUrlsPerSerpQuery = snapshot.ResearchOrchestratorConfig.MaxUrlsPerSerpQuery,
+            DefaultDiscoveryMode = snapshot.ResearchOrchestratorConfig.DefaultDiscoveryMode,
             MinImportance = snapshot.LearningSimilarityOptions.MinImportance,
             DiversityMaxPerUrl = snapshot.LearningSimilarityOptions.DiversityMaxPerUrl,
             DiversityMaxTextSimilarity = snapshot.LearningSimilarityOptions.DiversityMaxTextSimilarity,
@@ -94,6 +97,7 @@ public sealed class RuntimeSettingsRecord
         LimitSearches = snapshot.ResearchOrchestratorConfig.LimitSearches;
         MaxUrlParallelism = snapshot.ResearchOrchestratorConfig.MaxUrlParallelism;
         MaxUrlsPerSerpQuery = snapshot.ResearchOrchestratorConfig.MaxUrlsPerSerpQuery;
+        DefaultDiscoveryMode = snapshot.ResearchOrchestratorConfig.DefaultDiscoveryMode;
 
         MinImportance = snapshot.LearningSimilarityOptions.MinImportance;
         DiversityMaxPerUrl = snapshot.LearningSimilarityOptions.DiversityMaxPerUrl;

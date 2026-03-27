@@ -21,5 +21,8 @@ public sealed record CreateResearchJobRequest(
     string? Language,
     
     [MaxLength(100)]
-    string? Region
+    string? Region,
+
+    [MaxLength(32)]
+    string? DiscoveryMode
 );

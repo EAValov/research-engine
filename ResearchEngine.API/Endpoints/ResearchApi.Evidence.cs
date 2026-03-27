@@ -25,8 +25,14 @@ public static partial class ResearchApi
             s.SourceId,
             s.Reference,
             s.Title,
+            s.Domain,
             s.Language,
             s.Region,
+            s.Classification,
+            s.ReliabilityTier,
+            s.ReliabilityScore,
+            s.IsPrimarySource,
+            s.ReliabilityRationale,
             s.CreatedAt,
             s.LearningCount
         )).ToList();

@@ -111,6 +111,14 @@ public static partial class ResearchApi
             ];
         }
 
+        if (!SourceDiscoveryModeExtensions.TryParse(
+                request.ResearchOrchestratorConfig.DefaultDiscoveryMode,
+                out _))
+        {
+            errors[$"{nameof(request.ResearchOrchestratorConfig)}.{nameof(ResearchOrchestratorConfig.DefaultDiscoveryMode)}"] =
+            ["DefaultDiscoveryMode must be Balanced, ReliableOnly, or AcademicOnly."];
+        }
+
         var existingSettings = await runtimeSettingsRepository.GetCurrentAsync(ct);
         var existingChatConfig = existingSettings.ChatConfig;
         var effectiveChatApiKey = string.IsNullOrWhiteSpace(request.ChatConfig.ApiKey)
@@ -334,7 +342,7 @@ public static partial class ResearchApi
 
     /// <summary>
     /// POST /api/research/settings/runtime/crawl-probe
-    /// Probes the configured crawl backend using a minimal /v1/search request.
+    /// Probes the configured crawl backend using a minimal search request.
     /// </summary>
     private static async Task<IResult> GetRuntimeCrawlProbeAsync(
         [FromBody] CrawlApiProbeRequest request,
@@ -384,34 +392,46 @@ public static partial class ResearchApi
         using var client = httpClientFactory.CreateClient();
         client.Timeout = TimeSpan.FromSeconds(8);
 
-        using var request = new HttpRequestMessage(
-            HttpMethod.Post,
-            $"{endpointUri.ToString().TrimEnd('/')}/v1/search");
-
-        AddApiKeyHeaders(request, apiKey);
-        request.Content = JsonContent.Create(new
+        var probePaths = new[] { "/v2/search", "/v1/search" };
+        var payloads = new object[]
         {
-            query = "research engine health check",
-            limit = 1
-        });
+            new
+            {
+                query = "research engine health check",
+                limit = 1,
+                sources = new[] { "web" },
+                ignoreInvalidURLs = true
+            },
+            new
+            {
+                query = "research engine health check",
+                limit = 1,
+                ignoreInvalidURLs = true
+            }
+        };
 
-        HttpResponseMessage response;
-        try
+        for (var i = 0; i < probePaths.Length; i++)
         {
-            response = await client.SendAsync(request, ct);
+            using var request = new HttpRequestMessage(
+                HttpMethod.Post,
+                $"{endpointUri.ToString().TrimEnd('/')}{probePaths[i]}");
+
+            AddApiKeyHeaders(request, apiKey);
+            request.Content = JsonContent.Create(payloads[i]);
+
+            try
+            {
+                using var response = await client.SendAsync(request, ct);
+                if (response.IsSuccessStatusCode)
+                    return errors;
+            }
+            catch (Exception)
+            {
+                // Try the next known endpoint shape before failing.
+            }
         }
-        catch (Exception)
-        {
-            errors["Endpoint"] = ["Could not reach the crawl backend /v1/search endpoint."];
-            return errors;
-        }
 
-        if (response.IsSuccessStatusCode)
-            return errors;
-
-        errors["Endpoint"] =
-        [$"Crawl backend /v1/search request failed with HTTP {(int)response.StatusCode} {response.StatusCode}."];
-
+        errors["Endpoint"] = ["Could not reach a compatible crawl backend search endpoint (/v2/search or /v1/search)."];
         return errors;
     }
 

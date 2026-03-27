@@ -7,6 +7,7 @@ public interface IResearchJobRepository
         IEnumerable<Clarification> clarifications,
         int breadth,
         int depth,
+        SourceDiscoveryMode discoveryMode,
         string language,
         string? region,
         CancellationToken ct = default);

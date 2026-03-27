@@ -10,6 +10,7 @@ public sealed class ResearchOrchestrator(
     IRuntimeSettingsAccessor runtimeSettings,
     ISearchClient searchClient,
     ICrawlClient crawlClient,
+    ISourceReliabilityEvaluator sourceReliabilityEvaluator,
     IResearchJobRepository jobRepository,
     IResearchEventRepository eventRepository,
     IResearchSourceRepository sourceRepository,
@@ -30,15 +31,23 @@ public sealed class ResearchOrchestrator(
         IEnumerable<Clarification> clarifications,
         int breadth,
         int depth,
+        SourceDiscoveryMode? discoveryMode,
         string language,
         string? region,
         CancellationToken ct = default)
     {
+        var settings = await runtimeSettings.GetCurrentAsync(ct);
+        var effectiveDiscoveryMode = discoveryMode
+            ?? SourceDiscoveryModeExtensions.ParseOrDefault(
+                settings.ResearchOrchestratorConfig.DefaultDiscoveryMode,
+                SourceDiscoveryMode.Balanced);
+
         var job = await jobRepository.CreateJobAsync(
             query: query,
             clarifications: clarifications,
             breadth: breadth,
             depth: depth,
+            discoveryMode: effectiveDiscoveryMode,
             language: language,
             region: region,
             ct: ct);
@@ -182,42 +191,48 @@ public sealed class ResearchOrchestrator(
         var settings = await runtimeSettings.GetCurrentAsync(ct);
         var options = settings.ResearchOrchestratorConfig;
         var searchResults = await searchClient.SearchAsync(
-            serpQuery,
-            options.LimitSearches,
-            location: job.Region,
-            ct: ct);
+            new SearchRequest(
+                Query: serpQuery,
+                Limit: options.LimitSearches,
+                Location: job.Region,
+                DiscoveryMode: job.DiscoveryMode),
+            ct);
 
         progress.SerpSearchCompleted(searchResults.Count);
 
-        var urls = searchResults
-            .Select(r => r.Url)
-            .Where(u => !string.IsNullOrWhiteSpace(u))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
+        var candidates = searchResults
+            .Select(r => new SearchCandidate(r, sourceReliabilityEvaluator.Evaluate(r)))
+            .Where(c => sourceReliabilityEvaluator.ShouldInclude(c.Assessment, job.DiscoveryMode))
+            .OrderByDescending(c => c.Assessment.Score)
+            .ThenBy(c => c.Result.Position ?? int.MaxValue)
+            .ThenBy(c => c.Result.Url, StringComparer.OrdinalIgnoreCase)
+            .GroupBy(c => c.Result.Url, StringComparer.OrdinalIgnoreCase)
+            .Select(g => g.First())
             .ToList();
 
-        if (urls.Count == 0)
+        if (candidates.Count == 0)
         {
             await progress.InfoAsync(
                 ResearchEventStage.Searching,
-                $"Processed SERP query '{serpQuery}' with 0 URLs.",
+                $"Processed SERP query '{serpQuery}' with 0 URLs after applying discovery mode {job.DiscoveryMode.ToApiValue()}.",
                 ct);
 
             return;
         }
 
-        if (urls.Count > options.MaxUrlsPerSerpQuery)
-            urls = urls.Take(options.MaxUrlsPerSerpQuery).ToList();
+        if (candidates.Count > options.MaxUrlsPerSerpQuery)
+            candidates = candidates.Take(options.MaxUrlsPerSerpQuery).ToList();
 
-        progress.UrlsQueued(urls.Count);
+        progress.UrlsQueued(candidates.Count);
 
         await progress.InfoAsync(
             ResearchEventStage.LearningExtraction,
-            $"Starting learning extraction for SERP query '{serpQuery}' ({urls.Count} URLs queued).",
+            $"Starting learning extraction for SERP query '{serpQuery}' ({candidates.Count} URLs queued, discovery mode {job.DiscoveryMode.ToApiValue()}).",
             ct);
 
         var semaphore = new SemaphoreSlim(options.MaxUrlParallelism);
 
-        var tasks = urls.Select(async url =>
+        var tasks = candidates.Select(async candidate =>
         {
             await semaphore.WaitAsync(ct);
             try
@@ -225,7 +240,7 @@ public sealed class ResearchOrchestrator(
                 var summary = await ProcessUrlAsync(
                     job,
                     serpQuery,
-                    url,
+                    candidate,
                     clarificationsText,
                     ct);
 
@@ -233,7 +248,7 @@ public sealed class ResearchOrchestrator(
 
                 await progress.ReportAsync(
                     ResearchEventStage.LearningExtraction,
-                    $"Processed URL {url}",
+                    $"Processed URL {candidate.Result.Url}",
                     ct);
             }
             finally
@@ -246,7 +261,7 @@ public sealed class ResearchOrchestrator(
 
         await progress.InfoAsync(
             ResearchEventStage.Searching,
-            $"Processed SERP query '{serpQuery}' with {urls.Count} URLs.",
+            $"Processed SERP query '{serpQuery}' with {candidates.Count} URLs.",
             ct);
     }
 
@@ -257,14 +272,17 @@ public sealed class ResearchOrchestrator(
     }
 
     private sealed record UrlProcessingSummary(bool UsedCache, bool HadError, int LearningCount);
+    private sealed record SearchCandidate(SearchResult Result, SourceReliabilityAssessment Assessment);
 
     private async Task<UrlProcessingSummary> ProcessUrlAsync(
         ResearchJob job,
         string serpQuery,
-        string url,
+        SearchCandidate candidate,
         string clarificationsText,
         CancellationToken ct)
     {
+        var url = candidate.Result.Url;
+
         // 1) Fetch content
         var content = await crawlClient.FetchContentAsync(url, ct);
 
@@ -275,14 +293,23 @@ public sealed class ResearchOrchestrator(
         }
 
         // 2) Upsert Source
+        var evaluated = sourceReliabilityEvaluator.Evaluate(candidate.Result, content, SourceKind.Web);
         var source = await sourceRepository.UpsertSourceAsync(
             jobId: job.Id,
             reference: url,
             kind: SourceKind.Web,
             content: content,
-            title: null,
+            title: string.IsNullOrWhiteSpace(candidate.Result.Title) ? null : candidate.Result.Title,
             language: job.TargetLanguage,
             region: job.Region,
+            metadata: new SourceMetadata(
+                Domain: evaluated.Domain,
+                SearchCategory: evaluated.SearchCategory,
+                Classification: evaluated.Classification,
+                ReliabilityTier: evaluated.Tier,
+                ReliabilityScore: evaluated.Score,
+                IsPrimarySource: evaluated.IsPrimarySource,
+                ReliabilityRationale: evaluated.Rationale),
             ct: ct);
 
         // 3) Reuse cached learnings for (source, queryHash)

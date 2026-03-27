@@ -97,13 +97,17 @@ The research pipeline is responsible for discovering and compressing information
 It:
 
 - generates search queries
+- applies the selected source-discovery mode
 - searches and scrapes pages
-- persists sources
+- classifies and filters candidate sources for reliability
+- persists sources together with discovery metadata
 - extracts compact learnings
 - generates embeddings
 - groups near-duplicate learnings
 
 The output of this phase is a **job-scoped evidence base**.
+
+Source reliability is evaluated deterministically rather than delegated to the LLM. Search results and scraped pages are classified into source types such as official, government, academic, journal, preprint, news, blog, forum, and social. That metadata is used both to support per-job discovery modes (`Balanced`, `ReliableOnly`, `AcademicOnly`) and to show reliability badges and rationale in the evidence UI.
 
 ### 2. Synthesis generation
 
@@ -194,7 +198,7 @@ flowchart LR
 
 ### Web UI (Blazor WebAssembly)
 
-The frontend handles query setup, job views, live progress, report rendering, evidence review, synthesis history, and regeneration.
+The frontend handles query setup, per-job source policy selection, job views, live progress, report rendering, evidence review, synthesis history, and regeneration.
 
 ### API layer (ASP.NET Core)
 

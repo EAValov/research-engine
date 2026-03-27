@@ -1401,6 +1401,7 @@ components:
         - depth
         - language
         - region
+        - discoveryMode
       type: object
       properties:
         query:
@@ -1430,6 +1431,10 @@ components:
             - 'null'
             - string
         region:
+          type:
+            - 'null'
+            - string
+        discoveryMode:
           type:
             - 'null'
             - string
@@ -1494,6 +1499,7 @@ components:
         - embeddingModelName
         - breadth
         - depth
+        - discoveryMode
         - status
         - targetLanguage
         - region
@@ -1527,6 +1533,8 @@ components:
             - integer
             - string
           format: int32
+        discoveryMode:
+          type: string
         status:
           type: string
         targetLanguage:
@@ -2038,6 +2046,7 @@ components:
         - embeddingModelName
         - breadth
         - depth
+        - discoveryMode
         - status
         - targetLanguage
         - region
@@ -2067,6 +2076,8 @@ components:
             - integer
             - string
           format: int32
+        discoveryMode:
+          type: string
         status:
           type: string
         targetLanguage:
@@ -2087,6 +2098,8 @@ components:
           type: string
           format: date-time
     ResearchOrchestratorConfig:
+      required:
+        - defaultDiscoveryMode
       type: object
       properties:
         limitSearches:
@@ -2113,6 +2126,9 @@ components:
             - integer
             - string
           format: int32
+        defaultDiscoveryMode:
+          maxLength: 32
+          type: string
     ResolvedLearningGroupDto:
       required:
         - learningId
@@ -2241,8 +2257,14 @@ components:
         - sourceId
         - reference
         - title
+        - domain
         - language
         - region
+        - classification
+        - reliabilityTier
+        - reliabilityScore
+        - isPrimarySource
+        - reliabilityRationale
         - createdAt
         - learningCount
       type: object
@@ -2256,6 +2278,10 @@ components:
           type:
             - 'null'
             - string
+        domain:
+          type:
+            - 'null'
+            - string
         language:
           type:
             - 'null'
@@ -2264,6 +2290,20 @@ components:
           type:
             - 'null'
             - string
+        classification:
+          type: string
+        reliabilityTier:
+          type: string
+        reliabilityScore:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
+          format: double
+        isPrimarySource:
+          type: boolean
+        reliabilityRationale:
+          type: string
         createdAt:
           type: string
           format: date-time

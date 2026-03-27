@@ -192,6 +192,7 @@ builder.Services.AddScoped<IResearchProtocolService, ResearchProtocolService>();
 builder.Services.AddScoped<ILearningIntelService, LearningIntelService>();
 builder.Services.AddScoped<IQueryPlanningService, QueryPlanningService>();
 builder.Services.AddScoped<IReportSynthesisService, ReportSynthesisService>();
+builder.Services.AddSingleton<ISourceReliabilityEvaluator, SourceReliabilityEvaluator>();
 builder.Services.AddSingleton<IJobSseTicketService, JobSseTicketService>();
 
 builder.Services.AddScoped<IResearchJobStore, PostgresResearchJobStore>();

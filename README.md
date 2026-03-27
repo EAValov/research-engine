@@ -34,8 +34,9 @@ No subscription required. Your prompts, sources, and reports stay on infrastruct
 
 - **Local-first deep research** using locally hosted chat and embedding models
 - **Privacy-oriented by design** so prompts, sources, and generated reports remain under your control
+- **Configurable source discovery modes** with `Balanced`, `Reliable only`, and `Academic only` policies
 - **Traceable citations** with source URLs and evidence popovers in the final report
-- **Interactive evidence review** for inspecting sources and learnings before accepting a synthesis
+- **Interactive evidence review** for inspecting sources, learnings, and reliability badges before accepting a synthesis
 - **Pin and exclude workflow** for curating evidence without restarting the full job
 - **Regeneration with extra instructions** to refine a report from the existing research set
 
@@ -93,11 +94,21 @@ Installing the Caddy certificate is optional, but recommended. It is safe in the
 ## How It Works
 
 1. Submit a research query.
-2. The system searches the web and collects source pages.
-3. Pages are compressed into structured learnings and stored in PostgreSQL with embeddings.
+2. The system searches the web using the selected source-discovery policy and collects source pages.
+3. Sources are classified for reliability, then pages are compressed into structured learnings and stored in PostgreSQL with embeddings.
 4. The LLM plans and writes the report section by section using retrieval.
 5. You review citations and evidence in the UI.
 6. You regenerate with pinned or excluded evidence and extra instructions.
+
+## Source Discovery Modes
+
+Research Engine can bias web discovery before pages are scraped.
+
+- **Balanced** mixes broad discovery with deterministic source-quality heuristics.
+- **Reliable only** keeps higher-trust sources such as official statements, government pages, academic material, journals, and established publications.
+- **Academic only** focuses discovery on research-oriented sources such as papers, journals, preprints, and PDFs.
+
+The default mode is set in the Settings dialog and can be overridden per job from the composer. Stored sources also keep reliability metadata so the evidence drawer can show source class, reliability tier, and rationale.
 
 ## Example Reports
 
@@ -117,7 +128,7 @@ Installing the Caddy certificate is optional, but recommended. It is safe in the
       <td align="center" width="50%">
         <strong>Main research workspace</strong><br><br>
         <img src="./Docs/Images/Screenshots/Main.png" alt="Main research workspace" width="100%"><br><br>
-        Start new research runs, tune scope, and monitor recent jobs from one workspace.
+        Start new research runs, tune scope and source policy, and monitor recent jobs from one workspace.
       </td>
       <td align="center" width="50%">
         <strong>Generated synthesis with citations</strong><br><br>
@@ -129,7 +140,7 @@ Installing the Caddy certificate is optional, but recommended. It is safe in the
       <td align="center" width="50%">
         <strong>Evidence drawer and curation workflow</strong><br><br>
         <img src="./Docs/Images/Screenshots/Evidence.png" alt="Evidence drawer and curation workflow" width="100%"><br><br>
-        Inspect sources and learnings, then pin or exclude evidence before generating the next synthesis iteration.
+        Inspect sources, reliability metadata, and learnings, then pin or exclude evidence before generating the next synthesis iteration.
       </td>
       <td align="center" width="50%">
         <strong>Regeneration UI</strong><br><br>

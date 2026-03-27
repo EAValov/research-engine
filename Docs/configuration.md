@@ -28,6 +28,7 @@ This guide is based on:
 | `FirecrawlOptions__BaseUrl` | search and scrape backend | env var |
 | `ChatConfig__Endpoint`, `ChatConfig__ModelId`, `ChatConfig__ApiKey` | chat backend for planning and synthesis | env var initially, then the runtime settings UI |
 | `EmbeddingConfig__Endpoint`, `EmbeddingConfig__ModelId`, `EmbeddingConfig__Dimension`, `EmbeddingConfig__ApiKey` | embeddings backend | env var |
+| `ResearchOrchestratorConfig__DefaultDiscoveryMode` | default source-discovery policy preselected in the composer | bootstrap config initially, then the runtime settings UI |
 | `AuthenticationOptions__ApiKeys__0` | API access key | secret |
 | `API_BASE_URL` | default API URL used by the Web UI container | env var |
 
@@ -119,7 +120,7 @@ The most commonly touched API sections are:
 | `FirecrawlOptions` | No | search and scraping backend |
 | `ChatConfig` | Yes | chat backend used for planning and synthesis |
 | `EmbeddingConfig` | No | embeddings backend and vector size |
-| `ResearchOrchestratorConfig` | Yes | search breadth and crawl parallelism |
+| `ResearchOrchestratorConfig` | Yes | search breadth, crawl parallelism, and default source-discovery policy |
 | `LearningSimilarityOptions` | Yes | evidence extraction, grouping, and retrieval heuristics |
 
 ### `ConnectionStrings`
@@ -317,7 +318,8 @@ env:
 "ResearchOrchestratorConfig": {
   "LimitSearches": 5,
   "MaxUrlParallelism": 1,
-  "MaxUrlsPerSerpQuery": 20
+  "MaxUrlsPerSerpQuery": 20,
+  "DefaultDiscoveryMode": "Balanced"
 }
 ```
 
@@ -328,6 +330,7 @@ Current validation:
 - `LimitSearches`: `1..1000`
 - `MaxUrlParallelism`: `1..1000`
 - `MaxUrlsPerSerpQuery`: `1..1000`
+- `DefaultDiscoveryMode`: one of `Balanced`, `ReliableOnly`, `AcademicOnly`
 
 Meaning:
 
@@ -337,6 +340,17 @@ Meaning:
   - maximum number of source URLs processed in parallel for one SERP query
 - `MaxUrlsPerSerpQuery`
   - maximum number of unique URLs processed from a SERP query
+- `DefaultDiscoveryMode`
+  - default source-discovery mode used to preselect the Web UI composer and to seed jobs that do not specify a per-job override
+
+Discovery modes:
+
+- `Balanced`
+  - general-purpose discovery that mixes broad web search with deterministic source-quality scoring
+- `ReliableOnly`
+  - filters discovery toward higher-trust sources such as official, government, academic, journal, and established publication domains
+- `AcademicOnly`
+  - restricts discovery toward research-oriented sources such as papers, journals, preprints, and PDFs
 
 These settings are loaded from the shared runtime-settings row in PostgreSQL and are exposed in the Web UI settings dialog.
 
@@ -631,7 +645,7 @@ The Web UI settings dialog allows the user to change:
 
 Those values are stored in browser local storage and override the startup defaults for that user.
 
-The same dialog also loads and updates the API runtime settings described above.
+The same dialog also loads and updates the API runtime settings described above. That includes `ResearchOrchestratorConfig.DefaultDiscoveryMode`, which is shared through PostgreSQL rather than stored in browser local storage. In the research composer, the `Sources` selector is prepopulated from that current default, and the user can still override it per job.
 
 ### Web UI Container Mapping
 
@@ -711,6 +725,7 @@ EmbeddingConfig__Dimension=1024
 ResearchOrchestratorConfig__LimitSearches=5
 ResearchOrchestratorConfig__MaxUrlParallelism=1
 ResearchOrchestratorConfig__MaxUrlsPerSerpQuery=20
+ResearchOrchestratorConfig__DefaultDiscoveryMode=Balanced
 LearningSimilarityOptions__MinImportance=0.65
 LearningSimilarityOptions__DiversityMaxPerUrl=3
 LearningSimilarityOptions__DiversityMaxTextSimilarity=0.85

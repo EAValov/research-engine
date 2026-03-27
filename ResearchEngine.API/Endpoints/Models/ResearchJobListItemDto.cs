@@ -7,6 +7,7 @@ public sealed record ResearchJobListItemDto(
     string EmbeddingModelName,
     int Breadth,
     int Depth,
+    string DiscoveryMode,
     string Status,
     string TargetLanguage,
     string? Region,

@@ -48,6 +48,19 @@
                         <div class="ref muted">@s.Reference</div>
                     }
 
+                    <div class="badges" title="@s.ReliabilityRationale">
+                        <span class="badge @GetTierClass(s.ReliabilityTier)">@FormatTier(s.ReliabilityTier)</span>
+                        <span class="badge">@FormatClassification(s.Classification)</span>
+                        @if (s.IsPrimarySource)
+                        {
+                            <span class="badge badge-primary">Primary</span>
+                        }
+                        @if (!string.IsNullOrWhiteSpace(s.Domain))
+                        {
+                            <span class="badge">@s.Domain</span>
+                        }
+                    </div>
+
                     <div class="meta muted">
                         <button type="button"
                                 class="link"
@@ -226,4 +239,32 @@
             _error = res.Error;
         }
     }
+
+    private static string FormatTier(string? tier)
+        => tier switch
+        {
+            "High" => "High trust",
+            "Medium" => "Medium trust",
+            "Low" => "Low trust",
+            "Blocked" => "Blocked",
+            _ => tier ?? "Unknown"
+        };
+
+    private static string FormatClassification(string? classification)
+        => classification switch
+        {
+            "UserProvided" => "User provided",
+            "Preprint" => "Preprint",
+            _ => string.IsNullOrWhiteSpace(classification) ? "Unknown" : classification
+        };
+
+    private static string GetTierClass(string? tier)
+        => tier switch
+        {
+            "High" => "badge-high",
+            "Medium" => "badge-medium",
+            "Low" => "badge-low",
+            "Blocked" => "badge-blocked",
+            _ => string.Empty
+        };
 }

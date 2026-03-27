@@ -10,6 +10,7 @@ public interface IResearchSourceRepository
         string? language,
         string? region,
         SourceKind kind,
+        SourceMetadata? metadata = null,
         CancellationToken ct = default);
 
     Task<bool> SoftDeleteSourceAsync(Guid jobId, Guid sourceId, CancellationToken ct = default);

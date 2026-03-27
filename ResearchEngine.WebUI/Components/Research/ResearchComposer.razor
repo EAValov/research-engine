@@ -1,7 +1,9 @@
 @using ResearchEngine.WebUI.Components.Common
 @using ResearchEngine.WebUI.Services
+@using ResearchEngine.WebUI.Api
 @inject ResearchProtocolFacade Protocol
 @inject JobCreationFacade Jobs
+@inject IResearchApiClient Api
 @inject NavigationManager Nav
 
 <div class="composer-wrap" aria-label="New research composer">
@@ -75,11 +77,6 @@
                         @(_showSettings ? "Hide settings" : "Settings")
                     </button>
 
-                    <label class="check">
-                        <input type="checkbox" @bind="_askClarifications" />
-                        Ask clarifying questions
-                    </label>
-
                     <div class="spacer"></div>
 
                     <button type="button"
@@ -94,8 +91,15 @@
                 {
                     <div class="settings-grid" role="group" aria-label="Research settings">
                         <div class="field field-compact">
-                            <div class="lbl">Breadth</div>
+                            <div class="lbl lbl-help"
+                                 tabindex="0">
+                                Breadth
+                                <span id="breadthHelp" role="tooltip" class="field-help-tip">
+                                    Breadth controls how many different search paths the research explores. Higher values cast a wider net, but usually take longer and may pull in more marginal sources.
+                                </span>
+                            </div>
                             <select class="input"
+                                    aria-describedby="breadthHelp"
                                     value="@(_breadth?.ToString() ?? string.Empty)"
                                     @onchange="e => SetBreadth(e.Value?.ToString())">
                                 <option value="">Auto</option>
@@ -107,8 +111,15 @@
                         </div>
 
                         <div class="field field-compact">
-                            <div class="lbl">Depth</div>
+                            <div class="lbl lbl-help"
+                                 tabindex="0">
+                                Depth
+                                <span id="depthHelp" role="tooltip" class="field-help-tip">
+                                    Depth controls how far the research follows leads and refines findings. Higher values do more iterative digging and cross-checking.
+                                </span>
+                            </div>
                             <select class="input"
+                                    aria-describedby="depthHelp"
                                     value="@(_depth?.ToString() ?? string.Empty)"
                                     @onchange="e => SetDepth(e.Value?.ToString())">
                                 <option value="">Auto</option>
@@ -119,12 +130,46 @@
                             </select>
                         </div>
 
+                        <div class="field field-mode">
+                            <div class="lbl lbl-help"
+                                 tabindex="0">
+                                Sources
+                                <span id="discoveryModeHelp" role="tooltip" class="field-help-tip">
+                                    Balanced mixes source types. Reliable only favors higher-trust sources like official statements and established publications. Academic only focuses on papers, journals, and preprints.
+                                </span>
+                            </div>
+                            <select class="input"
+                                    aria-label="Discovery mode"
+                                    aria-describedby="discoveryModeHelp"
+                                    value="@_discoveryModeOverride"
+                                    @onchange="e => _discoveryModeOverride = NormalizeDiscoveryMode(e.Value?.ToString())">
+                                <option value="Balanced">Balanced</option>
+                                <option value="ReliableOnly">Reliable only</option>
+                                <option value="AcademicOnly">Academic only</option>
+                            </select>
+                        </div>
+
                         <div class="field field-region">
-                            <div class="lbl">Region</div>
+                            <div class="lbl lbl-help"
+                                 tabindex="0">
+                                Region
+                                <span id="regionHelp" role="tooltip" class="field-help-tip">
+                                    Region biases search and source discovery toward a country or geographic area when local context matters. Leave it empty for a broader global search.
+                                </span>
+                            </div>
                             <input class="input"
+                                   aria-describedby="regionHelp"
                                    placeholder="Russia, Bavaria (Germany)…"
                                    value="@(_region ?? string.Empty)"
                                    @oninput="e => _region = e.Value?.ToString()" />
+                        </div>
+
+                        <div class="field field-toggle">
+                            <div class="lbl">Clarifications</div>
+                            <label class="check">
+                                <input type="checkbox" @bind="_askClarifications" />
+                                Ask clarifying questions
+                            </label>
                         </div>
                     </div>
                 }
@@ -151,12 +196,13 @@
     private ComposerState _state = ComposerState.Editing;
 
     private string _query = string.Empty;
-    private bool _askClarifications = true;
+    private bool _askClarifications = false;
     private bool _showSettings = false;
 
     private int? _breadth;
     private int? _depth;
     private string? _region;
+    private string _discoveryModeOverride = "Balanced";
 
     private bool _busy;
     private string _busyText = "Working…";
@@ -170,6 +216,11 @@
     private static readonly int[] DepthOptions = { 1, 2, 3, 4 };
 
     private bool CanRun => !string.IsNullOrWhiteSpace(_query);
+
+    protected override async Task OnInitializedAsync()
+    {
+        _discoveryModeOverride = await LoadDefaultDiscoveryModeAsync();
+    }
 
     private void ToggleSettings() => _showSettings = !_showSettings;
 
@@ -297,6 +348,7 @@
                 breadth: breadth,
                 depth: depth,
                 language: language,
+                discoveryMode: _discoveryModeOverride,
                 region: region,
                 ct: CancellationToken.None);
 
@@ -354,6 +406,33 @@
 
         var s = raw.Trim();
         return s.Length == 0 ? null : s;
+    }
+
+    private static string NormalizeDiscoveryMode(string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw))
+            return "Balanced";
+
+        return raw.Trim() switch
+        {
+            "Balanced" => "Balanced",
+            "ReliableOnly" => "ReliableOnly",
+            "AcademicOnly" => "AcademicOnly",
+            _ => "Balanced"
+        };
+    }
+
+    private async Task<string> LoadDefaultDiscoveryModeAsync()
+    {
+        try
+        {
+            var runtime = await Api.RuntimeGETAsync(CancellationToken.None);
+            return NormalizeDiscoveryMode(runtime?.ResearchOrchestratorConfig?.DefaultDiscoveryMode);
+        }
+        catch
+        {
+            return "Balanced";
+        }
     }
 
     private async Task OnQueryKeyDown(KeyboardEventArgs e)

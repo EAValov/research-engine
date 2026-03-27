@@ -73,6 +73,11 @@ public sealed class ResearchDbContext : DbContext
             .HasConversion<string>()
             .IsRequired();
 
+        entity.Property(j => j.DiscoveryMode)
+            .HasConversion<string>()
+            .IsRequired()
+            .HasMaxLength(50);
+
         entity.Property(j => j.TargetLanguage)
             .IsRequired()
             .HasMaxLength(20);
@@ -196,6 +201,33 @@ public sealed class ResearchDbContext : DbContext
 
         entity.Property(s => s.Content)
             .IsRequired();
+
+        entity.Property(s => s.Domain)
+            .HasMaxLength(500);
+
+        entity.Property(s => s.SearchCategory)
+            .HasMaxLength(100);
+
+        entity.Property(s => s.Classification)
+            .HasConversion<string>()
+            .IsRequired()
+            .HasMaxLength(50);
+
+        entity.Property(s => s.ReliabilityTier)
+            .HasConversion<string>()
+            .IsRequired()
+            .HasMaxLength(50);
+
+        entity.Property(s => s.ReliabilityScore)
+            .HasColumnType("double precision")
+            .IsRequired();
+
+        entity.Property(s => s.IsPrimarySource)
+            .IsRequired();
+
+        entity.Property(s => s.ReliabilityRationale)
+            .IsRequired()
+            .HasMaxLength(4000);
 
         entity.Property(s => s.Language)
             .HasMaxLength(20);
@@ -551,6 +583,9 @@ public sealed class ResearchDbContext : DbContext
         entity.ToTable("runtime_settings");
         entity.HasKey(x => x.Id);
         entity.Property(x => x.Id).ValueGeneratedNever();
+        entity.Property(x => x.DefaultDiscoveryMode)
+            .IsRequired()
+            .HasMaxLength(32);
 
         entity.Property(x => x.ChatEndpoint)
             .IsRequired()

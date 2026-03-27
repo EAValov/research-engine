@@ -4454,6 +4454,9 @@ namespace ResearchEngine.WebUI.Api
         [System.Text.Json.Serialization.JsonPropertyName("region")]
         public string? Region { get; set; } = default!;
 
+        [System.Text.Json.Serialization.JsonPropertyName("discoveryMode")]
+        public string? DiscoveryMode { get; set; } = default!;
+
         private System.Collections.Generic.IDictionary<string, object>? _additionalProperties;
 
         [System.Text.Json.Serialization.JsonExtensionData]
@@ -4701,6 +4704,10 @@ namespace ResearchEngine.WebUI.Api
         [System.ComponentModel.DataAnnotations.Required(AllowEmptyStrings = true)]
         [System.ComponentModel.DataAnnotations.RegularExpression(@"^-?(?:0|[1-9]\d*)$")]
         public int Depth { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("discoveryMode")]
+        [System.ComponentModel.DataAnnotations.Required(AllowEmptyStrings = true)]
+        public string DiscoveryMode { get; set; } = default!;
 
         [System.Text.Json.Serialization.JsonPropertyName("status")]
         [System.ComponentModel.DataAnnotations.Required(AllowEmptyStrings = true)]
@@ -5644,6 +5651,10 @@ namespace ResearchEngine.WebUI.Api
         [System.ComponentModel.DataAnnotations.RegularExpression(@"^-?(?:0|[1-9]\d*)$")]
         public int Depth { get; set; } = default!;
 
+        [System.Text.Json.Serialization.JsonPropertyName("discoveryMode")]
+        [System.ComponentModel.DataAnnotations.Required(AllowEmptyStrings = true)]
+        public string DiscoveryMode { get; set; } = default!;
+
         [System.Text.Json.Serialization.JsonPropertyName("status")]
         [System.ComponentModel.DataAnnotations.Required(AllowEmptyStrings = true)]
         public string Status { get; set; } = default!;
@@ -5711,6 +5722,11 @@ namespace ResearchEngine.WebUI.Api
         [System.ComponentModel.DataAnnotations.Range(1, 1000)]
         [System.ComponentModel.DataAnnotations.RegularExpression(@"^-?(?:0|[1-9]\d*)$")]
         public int MaxUrlsPerSerpQuery { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("defaultDiscoveryMode")]
+        [System.ComponentModel.DataAnnotations.Required(AllowEmptyStrings = true)]
+        [System.ComponentModel.DataAnnotations.StringLength(32)]
+        public string DefaultDiscoveryMode { get; set; } = default!;
 
         private System.Collections.Generic.IDictionary<string, object>? _additionalProperties;
 
@@ -6071,11 +6087,34 @@ namespace ResearchEngine.WebUI.Api
         [System.Text.Json.Serialization.JsonPropertyName("title")]
         public string? Title { get; set; } = default!;
 
+        [System.Text.Json.Serialization.JsonPropertyName("domain")]
+        public string? Domain { get; set; } = default!;
+
         [System.Text.Json.Serialization.JsonPropertyName("language")]
         public string? Language { get; set; } = default!;
 
         [System.Text.Json.Serialization.JsonPropertyName("region")]
         public string? Region { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("classification")]
+        [System.ComponentModel.DataAnnotations.Required(AllowEmptyStrings = true)]
+        public string Classification { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("reliabilityTier")]
+        [System.ComponentModel.DataAnnotations.Required(AllowEmptyStrings = true)]
+        public string ReliabilityTier { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("reliabilityScore")]
+        [System.ComponentModel.DataAnnotations.Required(AllowEmptyStrings = true)]
+        [System.ComponentModel.DataAnnotations.RegularExpression(@"^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$")]
+        public double ReliabilityScore { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("isPrimarySource")]
+        public bool IsPrimarySource { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("reliabilityRationale")]
+        [System.ComponentModel.DataAnnotations.Required(AllowEmptyStrings = true)]
+        public string ReliabilityRationale { get; set; } = default!;
 
         [System.Text.Json.Serialization.JsonPropertyName("createdAt")]
         [System.ComponentModel.DataAnnotations.Required(AllowEmptyStrings = true)]

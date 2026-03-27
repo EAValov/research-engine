@@ -22,6 +22,7 @@ public sealed class JobCreationFacade
         int breadth,
         int depth,
         string language,
+        string? discoveryMode,
         string? region,
         CancellationToken ct)
     {
@@ -36,6 +37,7 @@ public sealed class JobCreationFacade
                 Breadth = breadth,
                 Depth = depth,
                 Language = language,
+                DiscoveryMode = string.IsNullOrWhiteSpace(discoveryMode) ? null : discoveryMode.Trim(),
                 Region = region
             };
 

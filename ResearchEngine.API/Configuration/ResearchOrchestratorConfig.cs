@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using ResearchEngine.Domain;
 
 namespace ResearchEngine.Configuration;
 
@@ -21,4 +22,11 @@ public sealed record ResearchOrchestratorConfig
     /// </summary>
     [Range(1, 1000)]
     public int MaxUrlsPerSerpQuery { get; init; } = default!;
+
+    /// <summary>
+    /// Default discovery mode applied when a new job does not request a specific source policy.
+    /// </summary>
+    [Required]
+    [MaxLength(32)]
+    public string DefaultDiscoveryMode { get; init; } = SourceDiscoveryMode.Balanced.ToApiValue();
 };

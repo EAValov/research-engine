@@ -17,6 +17,14 @@ public static class RuntimeSettingsBootstrap
         ValidateObject(snapshot.ResearchOrchestratorConfig, nameof(ResearchOrchestratorConfig));
         ValidateObject(snapshot.LearningSimilarityOptions, nameof(LearningSimilarityOptions));
 
+        if (!SourceDiscoveryModeExtensions.TryParse(
+                snapshot.ResearchOrchestratorConfig.DefaultDiscoveryMode,
+                out _))
+        {
+            throw new InvalidOperationException(
+                $"{nameof(ResearchOrchestratorConfig.DefaultDiscoveryMode)} must be one of Balanced, ReliableOnly, or AcademicOnly.");
+        }
+
         if (snapshot.LearningSimilarityOptions.MinLearningsPerSegment >
             snapshot.LearningSimilarityOptions.MaxLearningsPerSegment)
         {

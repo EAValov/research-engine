@@ -47,7 +47,7 @@ public sealed class JobFailure_ProducesFailedDone_Tests : IntegrationTestBase
         private readonly Exception _ex;
         public ThrowingSearchClient(Exception ex) => _ex = ex;
 
-        public Task<IReadOnlyList<SearchResult>> SearchAsync(string query, int limit, string? location = null, CancellationToken ct = default)
+        public Task<IReadOnlyList<SearchResult>> SearchAsync(SearchRequest request, CancellationToken ct = default)
             => throw _ex;
     }
 }
