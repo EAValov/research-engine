@@ -13,7 +13,7 @@ using ResearchEngine.Infrastructure;
 namespace ResearchEngine.API.Migrations
 {
     [DbContext(typeof(ResearchDbContext))]
-    [Migration("20260322223450_InitialCreate")]
+    [Migration("20260329191018_InitialCreate")]
     partial class InitialCreate
     {
         /// <inheritdoc />
@@ -296,6 +296,11 @@ namespace ResearchEngine.API.Migrations
                     b.Property<int>("Depth")
                         .HasColumnType("integer");
 
+                    b.Property<string>("DiscoveryMode")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
                     b.Property<string>("EmbeddingModelName")
                         .IsRequired()
                         .HasMaxLength(500)
@@ -374,6 +379,11 @@ namespace ResearchEngine.API.Migrations
                     b.Property<int>("CrawlHttpClientTimeoutSeconds")
                         .HasColumnType("integer");
 
+                    b.Property<string>("DefaultDiscoveryMode")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
                     b.Property<int>("DiversityMaxPerUrl")
                         .HasColumnType("integer");
 
@@ -423,6 +433,11 @@ namespace ResearchEngine.API.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<string>("Classification")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
                     b.Property<string>("Content")
                         .IsRequired()
                         .HasColumnType("text");
@@ -439,6 +454,13 @@ namespace ResearchEngine.API.Migrations
 
                     b.Property<DateTimeOffset?>("DeletedAt")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Domain")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<bool>("IsPrimarySource")
+                        .HasColumnType("boolean");
 
                     b.Property<Guid>("JobId")
                         .HasColumnType("uuid");
@@ -458,6 +480,23 @@ namespace ResearchEngine.API.Migrations
                     b.Property<string>("Region")
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
+
+                    b.Property<string>("ReliabilityRationale")
+                        .IsRequired()
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)");
+
+                    b.Property<double>("ReliabilityScore")
+                        .HasColumnType("double precision");
+
+                    b.Property<string>("ReliabilityTier")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<string>("SearchCategory")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
 
                     b.Property<string>("Title")
                         .HasMaxLength(1000)
