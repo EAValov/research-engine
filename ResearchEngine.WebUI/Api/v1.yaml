@@ -5,26 +5,6 @@ info:
 servers:
   - url: http://localhost:8090/
 paths:
-  /v1/models:
-    get:
-      tags:
-        - OpenAiModelEndpoints
-      responses:
-        '200':
-          description: OK
-  /v1/chat/completions:
-    post:
-      tags:
-        - OpenAiModelEndpoints
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/ChatRequest'
-        required: true
-      responses:
-        '200':
-          description: OK
   /api/ping:
     get:
       tags:
@@ -1326,13 +1306,6 @@ components:
           format: uuid
         status:
           type: string
-    ChatMessage:
-      type: object
-      properties:
-        role:
-          type: string
-        content:
-          type: string
     ChatModelCatalogRequest:
       required:
         - endpoint
@@ -1357,17 +1330,6 @@ components:
           type: array
           items:
             type: string
-    ChatRequest:
-      type: object
-      properties:
-        model:
-          type: string
-        stream:
-          type: boolean
-        messages:
-          type: array
-          items:
-            $ref: '#/components/schemas/ChatMessage'
     ClarificationDto:
       required:
         - question
@@ -2614,6 +2576,5 @@ components:
             - string
           format: int32
 tags:
-  - name: OpenAiModelEndpoints
   - name: Research API
   - name: Research Protocol API

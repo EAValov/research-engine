@@ -9,7 +9,6 @@ using ResearchEngine.Domain;
 using ResearchEngine.Infrastructure;
 using ResearchEngine.API;
 using ResearchEngine.API.Authentication;
-using ResearchEngine.API.OpenAI;
 using Scalar.AspNetCore;
 using Serilog;
 using AspNetCoreRateLimit;
@@ -281,8 +280,6 @@ app.MapHealthChecks("/health/ready",
 
 // ---------- API ----------
 app.MapResearchApi();
-
-app.MapResearchModel();
 app.MapResearchProtocolApi();
 
 app.MapOpenApi();
