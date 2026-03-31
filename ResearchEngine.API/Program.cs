@@ -297,5 +297,4 @@ if (!app.Environment.IsEnvironment("Testing"))
     await runtimeSettingsRepository.EnsureInitializedAsync();
 }
 
-
 app.Run();
