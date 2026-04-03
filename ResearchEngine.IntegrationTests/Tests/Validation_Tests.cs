@@ -27,7 +27,7 @@ public sealed class Validation_Tests : IntegrationTestBase
             webhook = (object?)null
         };
 
-        var resp = await client.PostAsJsonAsync("/api/research/jobs", payload);
+        var resp = await client.PostAsJsonAsync("/api/jobs", payload);
         Assert.Equal(HttpStatusCode.BadRequest, resp.StatusCode);
     }
 
@@ -47,7 +47,7 @@ public sealed class Validation_Tests : IntegrationTestBase
             webhook = (object?)null
         };
 
-        var resp = await client.PostAsJsonAsync("/api/research/jobs", payload);
+        var resp = await client.PostAsJsonAsync("/api/jobs", payload);
         Assert.Equal(HttpStatusCode.BadRequest, resp.StatusCode);
     }
 
@@ -69,7 +69,7 @@ public sealed class Validation_Tests : IntegrationTestBase
             webhook = (object?)null
         };
 
-        var resp = await client.PostAsJsonAsync("/api/research/jobs", payload);
+        var resp = await client.PostAsJsonAsync("/api/jobs", payload);
         Assert.Equal(HttpStatusCode.BadRequest, resp.StatusCode);
     }
 
@@ -89,7 +89,7 @@ public sealed class Validation_Tests : IntegrationTestBase
             discoveryMode = "NotARealMode"
         };
 
-        var resp = await client.PostAsJsonAsync("/api/research/jobs", payload);
+        var resp = await client.PostAsJsonAsync("/api/jobs", payload);
         Assert.Equal(HttpStatusCode.BadRequest, resp.StatusCode);
     }
 
@@ -105,7 +105,7 @@ public sealed class Validation_Tests : IntegrationTestBase
         // Create a valid job so route exists.
         var jobId = await CreateJobAsync(client);
 
-        var url = $"/api/research/jobs/{jobId}/learnings?skip={skip}&take={take}";
+        var url = $"/api/jobs/{jobId}/learnings?skip={skip}&take={take}";
         var resp = await client.GetAsync(url);
 
         Assert.Equal(HttpStatusCode.BadRequest, resp.StatusCode);
@@ -124,7 +124,7 @@ public sealed class Validation_Tests : IntegrationTestBase
             webhook = (object?)null
         };
 
-        var createResp = await client.PostAsJsonAsync("/api/research/jobs", createReq);
+        var createResp = await client.PostAsJsonAsync("/api/jobs", createReq);
         createResp.EnsureSuccessStatusCode();
 
         var json = await createResp.Content.ReadFromJsonAsync<JsonElement>();

@@ -15,7 +15,7 @@ namespace ResearchEngine.API;
 public static partial class ResearchApi
 {
     /// <summary>
-    /// GET /api/research/settings/runtime
+    /// GET /api/settings/runtime
     /// Returns the currently effective runtime settings and active model ids.
     /// </summary>
     private static async Task<IResult> GetRuntimeSettings(
@@ -35,7 +35,7 @@ public static partial class ResearchApi
     }
 
     /// <summary>
-    /// POST /api/research/settings/runtime/chat-models
+    /// POST /api/settings/runtime/chat-models
     /// Loads available chat model ids from the selected chat backend /models endpoint.
     /// </summary>
     private static async Task<IResult> GetRuntimeChatModelsAsync(
@@ -76,7 +76,7 @@ public static partial class ResearchApi
     }
 
     /// <summary>
-    /// PUT /api/research/settings/runtime
+    /// PUT /api/settings/runtime
     /// Updates live runtime settings by writing them to appsettings.json and reloading configuration.
     /// </summary>
     private static async Task<IResult> UpdateRuntimeSettingsAsync(
@@ -341,7 +341,7 @@ public static partial class ResearchApi
     }
 
     /// <summary>
-    /// POST /api/research/settings/runtime/crawl-probe
+    /// POST /api/settings/runtime/crawl-probe
     /// Probes the configured crawl backend using a minimal search request.
     /// </summary>
     private static async Task<IResult> GetRuntimeCrawlProbeAsync(

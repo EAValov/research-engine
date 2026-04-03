@@ -28,7 +28,7 @@ public sealed class JobRun_EndToEnd_Tests : IntegrationTestBase
             webhook = (object?)null
         };
 
-        var createResp = await client.PostAsJsonAsync("/api/research/jobs", createReq);
+        var createResp = await client.PostAsJsonAsync("/api/jobs", createReq);
         createResp.EnsureSuccessStatusCode();
 
         var createJson = await createResp.Content.ReadFromJsonAsync<JsonElement>();
@@ -36,7 +36,7 @@ public sealed class JobRun_EndToEnd_Tests : IntegrationTestBase
         var jobId = jobIdEl.GetGuid();
         Assert.NotEqual(Guid.Empty, jobId);
 
-        using var tokenReq = new HttpRequestMessage(HttpMethod.Post, $"/api/research/jobs/{jobId}/events/stream-token");
+        using var tokenReq = new HttpRequestMessage(HttpMethod.Post, $"/api/jobs/{jobId}/events/stream-token");
 
         using var tokenResp = await client.SendAsync(tokenReq);
         tokenResp.EnsureSuccessStatusCode();
@@ -84,7 +84,7 @@ public sealed class JobRun_EndToEnd_Tests : IntegrationTestBase
         Assert.Contains("Searching", stages);
         Assert.Contains("LearningExtraction", stages);
 
-        var synResp = await client.GetAsync($"/api/research/jobs/{jobId}/syntheses/latest");
+        var synResp = await client.GetAsync($"/api/jobs/{jobId}/syntheses/latest");
         synResp.EnsureSuccessStatusCode();
 
         var synJson = await synResp.Content.ReadFromJsonAsync<JsonElement>();

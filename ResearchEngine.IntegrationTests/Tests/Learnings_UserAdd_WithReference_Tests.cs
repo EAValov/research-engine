@@ -33,7 +33,7 @@ public sealed class Learnings_UserAdd_WithReference_Tests : IntegrationTestBase
             region = (string?)null
         };
 
-        var addResp = await client.PostAsJsonAsync($"/api/research/jobs/{jobId}/learnings", addReq);
+        var addResp = await client.PostAsJsonAsync($"/api/jobs/{jobId}/learnings", addReq);
         addResp.EnsureSuccessStatusCode();
 
         var addJson = await addResp.Content.ReadFromJsonAsync<JsonElement>();
@@ -43,7 +43,7 @@ public sealed class Learnings_UserAdd_WithReference_Tests : IntegrationTestBase
         Assert.NotEqual(Guid.Empty, sourceId);
 
         // 3) Sources list should contain the reference string and matching sourceId
-        var sourcesResp = await client.GetAsync($"/api/research/jobs/{jobId}/sources");
+        var sourcesResp = await client.GetAsync($"/api/jobs/{jobId}/sources");
         sourcesResp.EnsureSuccessStatusCode();
 
         var sourcesJson = await sourcesResp.Content.ReadFromJsonAsync<JsonElement>();

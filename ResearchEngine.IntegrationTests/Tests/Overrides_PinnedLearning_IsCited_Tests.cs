@@ -25,7 +25,7 @@ public sealed class Overrides_PinnedLearning_IsCited_Tests : IntegrationTestBase
         Assert.True(doneId is null or > 0);
 
         // 2) fetch learnings, pick one to pin
-        var learningsResp = await client.GetAsync($"/api/research/jobs/{jobId}/learnings?skip=0&take=200");
+        var learningsResp = await client.GetAsync($"/api/jobs/{jobId}/learnings?skip=0&take=200");
         learningsResp.EnsureSuccessStatusCode();
 
         var learningsJson = await learningsResp.Content.ReadFromJsonAsync<JsonElement>();
@@ -59,7 +59,7 @@ public sealed class Overrides_PinnedLearning_IsCited_Tests : IntegrationTestBase
         };
 
         var ovResp = await client.PutAsJsonAsync(
-            $"/api/research/syntheses/{synthesisId}/overrides/learnings",
+            $"/api/syntheses/{synthesisId}/overrides/learnings",
             learningOverrides);
 
         ovResp.EnsureSuccessStatusCode();
@@ -71,7 +71,7 @@ public sealed class Overrides_PinnedLearning_IsCited_Tests : IntegrationTestBase
             ct: CancellationToken.None);
 
         // 6) pull synthesis and assert pinned citation exists
-        var synResp = await client.GetAsync($"/api/research/syntheses/{synthesisId}");
+        var synResp = await client.GetAsync($"/api/syntheses/{synthesisId}");
         synResp.EnsureSuccessStatusCode();
 
         var synDoc = await synResp.Content.ReadFromJsonAsync<JsonElement>();

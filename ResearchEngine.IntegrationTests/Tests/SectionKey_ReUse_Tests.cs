@@ -57,7 +57,7 @@ public sealed class SectionKey_ReUse_Tests : IntegrationTestBase
             instructions = "Test SectionKey matching."
         };
 
-        var createResp = await client.PostAsJsonAsync($"/api/research/jobs/{jobId}/syntheses", createReq);
+        var createResp = await client.PostAsJsonAsync($"/api/jobs/{jobId}/syntheses", createReq);
         createResp.EnsureSuccessStatusCode();
 
         var createJson = await createResp.Content.ReadFromJsonAsync<JsonElement>();
@@ -66,7 +66,7 @@ public sealed class SectionKey_ReUse_Tests : IntegrationTestBase
         Assert.NotEqual(s1Id, s2Id);
 
         // Run synthesis
-        var runResp = await client.PostAsync($"/api/research/syntheses/{s2Id}/run", content: null);
+        var runResp = await client.PostAsync($"/api/syntheses/{s2Id}/run", content: null);
         runResp.EnsureSuccessStatusCode();
 
         var s2 = await WaitForSynthesisCompletedAsync(client, s2Id, timeoutSeconds: 60);
@@ -97,7 +97,7 @@ public sealed class SectionKey_ReUse_Tests : IntegrationTestBase
         var deadline = DateTimeOffset.UtcNow.AddSeconds(timeoutSeconds);
         while (true)
         {
-            var resp = await client.GetAsync($"/api/research/syntheses/{synthesisId}");
+            var resp = await client.GetAsync($"/api/syntheses/{synthesisId}");
             resp.EnsureSuccessStatusCode();
 
             var syn = await resp.Content.ReadFromJsonAsync<JsonElement>();

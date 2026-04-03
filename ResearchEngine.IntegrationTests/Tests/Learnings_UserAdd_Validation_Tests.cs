@@ -27,7 +27,7 @@ public sealed class Learnings_UserAdd_Validation_Tests : IntegrationTestBase
             importanceScore = 0.5f
         };
 
-        var resp = await client.PostAsJsonAsync($"/api/research/jobs/{jobId}/learnings", addReq);
+        var resp = await client.PostAsJsonAsync($"/api/jobs/{jobId}/learnings", addReq);
         Assert.Equal(HttpStatusCode.BadRequest, resp.StatusCode);
 
         var body = await resp.Content.ReadFromJsonAsync<JsonElement>();
@@ -53,7 +53,7 @@ public sealed class Learnings_UserAdd_Validation_Tests : IntegrationTestBase
             importanceScore = 2.0f
         };
 
-        var resp = await client.PostAsJsonAsync($"/api/research/jobs/{jobId}/learnings", addReq);
+        var resp = await client.PostAsJsonAsync($"/api/jobs/{jobId}/learnings", addReq);
         Assert.Equal(HttpStatusCode.BadRequest, resp.StatusCode);
 
         var body = await resp.Content.ReadFromJsonAsync<JsonElement>();

@@ -27,7 +27,7 @@ public sealed class RateLimiting_Redis_Tests : IntegrationTestBase
             ["IpRateLimiting__HttpStatusCode"] = "429",
 
             // Rules
-            ["IpRateLimiting__GeneralRules__0__Endpoint"] = "POST:/api/research/jobs/*/learnings",
+            ["IpRateLimiting__GeneralRules__0__Endpoint"] = "POST:/api/jobs/*/learnings",
             ["IpRateLimiting__GeneralRules__0__Period"] = "1m",
             ["IpRateLimiting__GeneralRules__0__Limit"] = "3",
         });
@@ -56,7 +56,7 @@ public sealed class RateLimiting_Redis_Tests : IntegrationTestBase
 
         for (int i = 0; i < 20; i++)
         {
-            var resp = await client.PostAsJsonAsync($"/api/research/jobs/{jobId}/learnings", new
+            var resp = await client.PostAsJsonAsync($"/api/jobs/{jobId}/learnings", new
             {
                 text = $"rl-{i}",
                 importanceScore = 1.0f,

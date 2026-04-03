@@ -78,7 +78,7 @@ public sealed class Learnings_SourceFilter_And_Promotion_Tests : IntegrationTest
         float score,
         string reference)
     {
-        var addResp = await client.PostAsJsonAsync($"/api/research/jobs/{jobId}/learnings", new
+        var addResp = await client.PostAsJsonAsync($"/api/jobs/{jobId}/learnings", new
         {
             text,
             importanceScore = score,
@@ -110,7 +110,7 @@ public sealed class Learnings_SourceFilter_And_Promotion_Tests : IntegrationTest
         if (promoteLearningId is Guid promoted)
             query.Add($"promoteLearningId={promoted}");
 
-        var url = $"/api/research/jobs/{jobId}/learnings?{string.Join("&", query)}";
+        var url = $"/api/jobs/{jobId}/learnings?{string.Join("&", query)}";
         var resp = await client.GetAsync(url);
         resp.EnsureSuccessStatusCode();
 

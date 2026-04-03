@@ -17,7 +17,7 @@ public sealed class Sse_UnknownJob_Tests : IntegrationTestBase
 
         var unknown = Guid.NewGuid();
 
-        using var tokenReq = new HttpRequestMessage(HttpMethod.Post, $"/api/research/jobs/{unknown}/events/stream-token");
+        using var tokenReq = new HttpRequestMessage(HttpMethod.Post, $"/api/jobs/{unknown}/events/stream-token");
 
         using var tokenResp = await client.SendAsync(tokenReq);
         Assert.Equal(HttpStatusCode.NotFound, tokenResp.StatusCode);
@@ -29,7 +29,7 @@ public sealed class Sse_UnknownJob_Tests : IntegrationTestBase
         using var client = CreateClient();
 
         var unknown = Guid.NewGuid();
-        var resp = await client.GetAsync($"/api/research/jobs/{unknown}/events");
+        var resp = await client.GetAsync($"/api/jobs/{unknown}/events");
         Assert.Equal(HttpStatusCode.NotFound, resp.StatusCode);
     }
 }

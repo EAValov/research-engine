@@ -16,7 +16,7 @@ public sealed class Learnings_Grouping_SemanticThreshold_Tests : IntegrationTest
         using var client = CreateClient();
 
         // Create job + wait completion (so DB is initialized and stable)
-        var createResp = await client.PostAsJsonAsync("/api/research/jobs", new
+        var createResp = await client.PostAsJsonAsync("/api/jobs", new
         {
             query = "Grouping test: semantic paraphrase should NOT auto-merge at 0.93 threshold.",
             clarifications = Array.Empty<object>(),
@@ -39,7 +39,7 @@ public sealed class Learnings_Grouping_SemanticThreshold_Tests : IntegrationTest
         var textA = "Vector embeddings enable nearest neighbor search for retrieval in RAG systems.";
         var textB = "Nearest neighbor search for retrieval in RAG systems is enabled by vector embeddings.";
 
-        var r1 = await client.PostAsJsonAsync($"/api/research/jobs/{jobId}/learnings", new
+        var r1 = await client.PostAsJsonAsync($"/api/jobs/{jobId}/learnings", new
         {
             text = textA,
             importanceScore = 0.6f,
@@ -54,7 +54,7 @@ public sealed class Learnings_Grouping_SemanticThreshold_Tests : IntegrationTest
         var g1 = j1.GetProperty("learning").GetProperty("learningGroupId").GetGuid();
         Assert.NotEqual(Guid.Empty, g1);
 
-        var r2 = await client.PostAsJsonAsync($"/api/research/jobs/{jobId}/learnings", new
+        var r2 = await client.PostAsJsonAsync($"/api/jobs/{jobId}/learnings", new
         {
             text = textB,
             importanceScore = 0.7f,

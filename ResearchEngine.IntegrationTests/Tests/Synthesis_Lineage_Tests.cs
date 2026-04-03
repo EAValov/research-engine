@@ -43,7 +43,7 @@ public sealed class Synthesis_Lineage_Tests : IntegrationTestBase
             instructions = "Regenerate with lineage test"
         };
 
-        var createResp = await client.PostAsJsonAsync($"/api/research/jobs/{jobId}/syntheses", createReq);
+        var createResp = await client.PostAsJsonAsync($"/api/jobs/{jobId}/syntheses", createReq);
         createResp.EnsureSuccessStatusCode();
 
         var createJson = await createResp.Content.ReadFromJsonAsync<JsonElement>();
@@ -51,7 +51,7 @@ public sealed class Synthesis_Lineage_Tests : IntegrationTestBase
         Assert.NotEqual(Guid.Empty, syn2Id);
 
         // 5) verify syn2 exists and has correct parent set BEFORE running
-        var syn2BeforeRunResp = await client.GetAsync($"/api/research/syntheses/{syn2Id}");
+        var syn2BeforeRunResp = await client.GetAsync($"/api/syntheses/{syn2Id}");
         syn2BeforeRunResp.EnsureSuccessStatusCode();
 
         var syn2BeforeRun = await syn2BeforeRunResp.Content.ReadFromJsonAsync<JsonElement>();
@@ -63,7 +63,7 @@ public sealed class Synthesis_Lineage_Tests : IntegrationTestBase
         Assert.Equal(syn1Id, parentId);
 
         // 6) start the synthesis run (Hangfire enqueue)
-        var runResp = await client.PostAsync($"/api/research/syntheses/{syn2Id}/run", content: null);
+        var runResp = await client.PostAsync($"/api/syntheses/{syn2Id}/run", content: null);
         Assert.True(
             runResp.StatusCode is HttpStatusCode.Accepted or HttpStatusCode.OK,
             $"Expected 202 Accepted (or 200 OK if already terminal), got {(int)runResp.StatusCode} {runResp.StatusCode}");

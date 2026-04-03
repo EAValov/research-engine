@@ -8,7 +8,7 @@ namespace ResearchEngine.API;
 public static partial class ResearchApi
 {
     /// <summary>
-    /// GET /api/research/jobs/{jobId}/events
+    /// GET /api/jobs/{jobId}/events
     /// Lists persisted events for a job.
     /// </summary>
     private static async Task<IResult> ListEventsAsync(
@@ -29,7 +29,7 @@ public static partial class ResearchApi
     }
 
     /// <summary>
-    /// POST /api/research/jobs/{jobId}/events/stream-token
+    /// POST /api/jobs/{jobId}/events/stream-token
     /// Mints a short-lived ticket for opening the SSE stream via EventSource.
     /// </summary>
     private static async Task<IResult> CreateEventsStreamTokenAsync(
@@ -63,7 +63,7 @@ public static partial class ResearchApi
     }
 
     /// <summary>
-    /// GET /api/research/jobs/{jobId}/events/stream
+    /// GET /api/jobs/{jobId}/events/stream
     /// Server-sent events stream of job events (replay + live).
     /// </summary>
     private static async Task StreamEventsAsync(

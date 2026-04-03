@@ -24,7 +24,7 @@ public sealed class LearningGroups_Assignment_Dedup_Tests : IntegrationTestBase
 
         // 2) Add first learning
         var add1 = new { text, importanceScore = 0.6f, reference = (string?)null, evidenceText = (string?)null, language = (string?)null, region = (string?)null };
-        var r1 = await client.PostAsJsonAsync($"/api/research/jobs/{jobId}/learnings", add1);
+        var r1 = await client.PostAsJsonAsync($"/api/jobs/{jobId}/learnings", add1);
         r1.EnsureSuccessStatusCode();
 
         var j1 = await r1.Content.ReadFromJsonAsync<JsonElement>();
@@ -33,7 +33,7 @@ public sealed class LearningGroups_Assignment_Dedup_Tests : IntegrationTestBase
 
         // 3) Add second learning with identical text (deterministic embeddings => should re-use nearest group)
         var add2 = new { text, importanceScore = 0.7f, reference = (string?)null, evidenceText = (string?)null, language = (string?)null, region = (string?)null };
-        var r2 = await client.PostAsJsonAsync($"/api/research/jobs/{jobId}/learnings", add2);
+        var r2 = await client.PostAsJsonAsync($"/api/jobs/{jobId}/learnings", add2);
         r2.EnsureSuccessStatusCode();
 
         var j2 = await r2.Content.ReadFromJsonAsync<JsonElement>();

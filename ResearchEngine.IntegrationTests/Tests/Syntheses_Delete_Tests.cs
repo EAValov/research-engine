@@ -17,7 +17,7 @@ public sealed class Syntheses_Delete_Tests : IntegrationTestBase
 
         var jobId = await CreateJobAsync(client, "Test query: delete synthesis endpoint.");
 
-        var createResp = await client.PostAsJsonAsync($"/api/research/jobs/{jobId}/syntheses", new
+        var createResp = await client.PostAsJsonAsync($"/api/jobs/{jobId}/syntheses", new
         {
             parentSynthesisId = (Guid?)null,
             useLatestAsParent = false,
@@ -31,19 +31,19 @@ public sealed class Syntheses_Delete_Tests : IntegrationTestBase
         Assert.NotEqual(Guid.Empty, synthesisId);
 
         // sanity: synthesis exists
-        var getBefore = await client.GetAsync($"/api/research/syntheses/{synthesisId}");
+        var getBefore = await client.GetAsync($"/api/syntheses/{synthesisId}");
         getBefore.EnsureSuccessStatusCode();
 
         // delete synthesis
-        var delResp = await client.DeleteAsync($"/api/research/syntheses/{synthesisId}");
+        var delResp = await client.DeleteAsync($"/api/syntheses/{synthesisId}");
         Assert.Equal(HttpStatusCode.NoContent, delResp.StatusCode);
 
         // get by id should return 404
-        var getAfter = await client.GetAsync($"/api/research/syntheses/{synthesisId}");
+        var getAfter = await client.GetAsync($"/api/syntheses/{synthesisId}");
         Assert.Equal(HttpStatusCode.NotFound, getAfter.StatusCode);
 
         // list for job should not include deleted synthesis
-        var listResp = await client.GetAsync($"/api/research/jobs/{jobId}/syntheses?skip=0&take=50");
+        var listResp = await client.GetAsync($"/api/jobs/{jobId}/syntheses?skip=0&take=50");
         listResp.EnsureSuccessStatusCode();
         var listJson = await listResp.Content.ReadFromJsonAsync<JsonElement>();
         var syntheses = listJson.GetProperty("syntheses").EnumerateArray().ToList();
@@ -56,7 +56,7 @@ public sealed class Syntheses_Delete_Tests : IntegrationTestBase
     {
         using var client = CreateClient();
 
-        var resp = await client.DeleteAsync($"/api/research/syntheses/{Guid.NewGuid()}");
+        var resp = await client.DeleteAsync($"/api/syntheses/{Guid.NewGuid()}");
         Assert.Equal(HttpStatusCode.NotFound, resp.StatusCode);
     }
 }

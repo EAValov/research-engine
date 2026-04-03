@@ -45,11 +45,11 @@ public sealed class JobCancel_Tests : IntegrationTestBase
         Assert.True(started, "Job did not start within timeout.");
 
         // 3) cancel job
-        var cancelResp = await client.PostAsJsonAsync($"/api/research/jobs/{jobId}/cancel", new { reason = "test cancel" });
+        var cancelResp = await client.PostAsJsonAsync($"/api/jobs/{jobId}/cancel", new { reason = "test cancel" });
         Assert.Equal(HttpStatusCode.Accepted, cancelResp.StatusCode);
 
         // 4) ensure cancel requested event exists
-        var eventsResp = await client.GetAsync($"/api/research/jobs/{jobId}/events");
+        var eventsResp = await client.GetAsync($"/api/jobs/{jobId}/events");
         eventsResp.EnsureSuccessStatusCode();
         var eventsJson = await eventsResp.Content.ReadFromJsonAsync<JsonElement>();
         var events = eventsJson.EnumerateArray().ToList();
@@ -79,7 +79,7 @@ public sealed class JobCancel_Tests : IntegrationTestBase
 
     private static async Task<bool> WaitForAnyStageAsync(HttpClient client, Guid jobId, IReadOnlyCollection<string> anyOfStages, TimeSpan timeout)
     {
-        using var tokenReq = new HttpRequestMessage(HttpMethod.Post, $"/api/research/jobs/{jobId}/events/stream-token");
+        using var tokenReq = new HttpRequestMessage(HttpMethod.Post, $"/api/jobs/{jobId}/events/stream-token");
 
         using var tokenResp = await client.SendAsync(tokenReq);
         tokenResp.EnsureSuccessStatusCode();

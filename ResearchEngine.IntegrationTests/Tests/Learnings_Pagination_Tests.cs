@@ -58,7 +58,7 @@ public sealed class Learnings_Pagination_Tests : IntegrationTestBase
 
     private static async Task<LearningsPage> GetLearningsPageAsync(HttpClient client, Guid jobId, int skip, int take)
     {
-        var resp = await client.GetAsync($"/api/research/jobs/{jobId}/learnings?skip={skip}&take={take}");
+        var resp = await client.GetAsync($"/api/jobs/{jobId}/learnings?skip={skip}&take={take}");
         resp.EnsureSuccessStatusCode();
 
         var json = await resp.Content.ReadFromJsonAsync<JsonElement>();

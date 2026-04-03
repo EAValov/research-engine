@@ -7,7 +7,7 @@ namespace ResearchEngine.API;
 public static partial class ResearchApi
 {
     /// <summary>
-    /// POST /api/research/jobs
+    /// POST /api/jobs
     /// Creates a research job and enqueues the initial deep-research run.
     /// </summary>
     private static async Task<IResult> CreateJobAsync(
@@ -63,7 +63,7 @@ public static partial class ResearchApi
     }
 
     /// <summary>
-    /// GET /api/research/jobs
+    /// GET /api/jobs
     /// Lists jobs for the UX sidebar.
     /// </summary>
     private static async Task<IResult> ListJobsAsync(
@@ -95,7 +95,7 @@ public static partial class ResearchApi
     }
 
     /// <summary>
-    /// GET /api/research/jobs/{jobId}
+    /// GET /api/jobs/{jobId}
     /// Returns job details + counts + latest synthesis summary.
     /// </summary>
     private static async Task<IResult> GetJobAsync(
@@ -143,7 +143,7 @@ public static partial class ResearchApi
     }
 
     /// <summary>
-    /// POST /api/research/jobs/{jobId}/archive
+    /// POST /api/jobs/{jobId}/archive
     /// Archives a job, hiding it from the default recent jobs list.
     /// </summary>
     private static async Task<IResult> ArchiveJobAsync(
@@ -172,7 +172,7 @@ public static partial class ResearchApi
     }
 
     /// <summary>
-    /// POST /api/research/jobs/{jobId}/unarchive
+    /// POST /api/jobs/{jobId}/unarchive
     /// Restores a job back to the default recent jobs list.
     /// </summary>
     private static async Task<IResult> UnarchiveJobAsync(
@@ -201,7 +201,7 @@ public static partial class ResearchApi
     }
 
     /// <summary>
-    /// POST /api/research/jobs/{jobId}/cancel
+    /// POST /api/jobs/{jobId}/cancel
     /// Requests job cancellation (best-effort) and deletes queued Hangfire job if not yet running.
     /// </summary>
     private static async Task<IResult> CancelJobAsync(
@@ -233,7 +233,7 @@ public static partial class ResearchApi
     }
 
     /// <summary>
-    /// DELETE /api/research/jobs/{jobId}
+    /// DELETE /api/jobs/{jobId}
     /// Soft-deletes a job (and prevents queued Hangfire job from starting).
     /// </summary>
     private static async Task<IResult> SoftDeleteJobAsync(

@@ -19,13 +19,13 @@ public sealed class Jobs_SoftDelete_Tests : IntegrationTestBase
         Assert.NotEqual(Guid.Empty, jobId);
 
         // sanity: job exists
-        var getBefore = await client.GetAsync($"/api/research/jobs/{jobId}");
+        var getBefore = await client.GetAsync($"/api/jobs/{jobId}");
         getBefore.EnsureSuccessStatusCode();
 
         // delete
         using var delReq = new HttpRequestMessage(
             HttpMethod.Delete,
-            $"/api/research/jobs/{jobId}")
+            $"/api/jobs/{jobId}")
         {
             Content = JsonContent.Create(new { reason = "test delete" })
         };
@@ -42,11 +42,11 @@ public sealed class Jobs_SoftDelete_Tests : IntegrationTestBase
         Assert.DoesNotContain(archivedJobs, j => j.GetProperty("id").GetGuid() == jobId);
 
         // get should 404 due to query filter
-        var getAfter = await client.GetAsync($"/api/research/jobs/{jobId}");
+        var getAfter = await client.GetAsync($"/api/jobs/{jobId}");
         Assert.Equal(HttpStatusCode.NotFound, getAfter.StatusCode);
 
         // events should also 404 because the job is soft deleted
-        var eventsAfter = await client.GetAsync($"/api/research/jobs/{jobId}/events");
+        var eventsAfter = await client.GetAsync($"/api/jobs/{jobId}/events");
         Assert.Equal(HttpStatusCode.NotFound, eventsAfter.StatusCode);
     }
 
@@ -58,7 +58,7 @@ public sealed class Jobs_SoftDelete_Tests : IntegrationTestBase
         var jobId = await CreateJobAsync(client, "Test query: archive then soft delete job.");
         Assert.NotEqual(Guid.Empty, jobId);
 
-        var archiveResp = await client.PostAsync($"/api/research/jobs/{jobId}/archive", content: null);
+        var archiveResp = await client.PostAsync($"/api/jobs/{jobId}/archive", content: null);
         Assert.Equal(HttpStatusCode.NoContent, archiveResp.StatusCode);
 
         var archivedJobsBeforeDelete = await GetJobsAsync(client, archived: true);
@@ -66,7 +66,7 @@ public sealed class Jobs_SoftDelete_Tests : IntegrationTestBase
 
         using var delReq = new HttpRequestMessage(
             HttpMethod.Delete,
-            $"/api/research/jobs/{jobId}")
+            $"/api/jobs/{jobId}")
         {
             Content = JsonContent.Create(new { reason = "test delete archived job" })
         };
@@ -80,17 +80,17 @@ public sealed class Jobs_SoftDelete_Tests : IntegrationTestBase
         var archivedJobsAfterDelete = await GetJobsAsync(client, archived: true);
         Assert.DoesNotContain(archivedJobsAfterDelete, j => j.GetProperty("id").GetGuid() == jobId);
 
-        var getAfterDelete = await client.GetAsync($"/api/research/jobs/{jobId}");
+        var getAfterDelete = await client.GetAsync($"/api/jobs/{jobId}");
         Assert.Equal(HttpStatusCode.NotFound, getAfterDelete.StatusCode);
 
-        var eventsAfterDelete = await client.GetAsync($"/api/research/jobs/{jobId}/events");
+        var eventsAfterDelete = await client.GetAsync($"/api/jobs/{jobId}/events");
         Assert.Equal(HttpStatusCode.NotFound, eventsAfterDelete.StatusCode);
     }
 
     private static async Task<List<JsonElement>> GetJobsAsync(HttpClient client, bool archived)
     {
         var suffix = archived ? "?archived=true" : string.Empty;
-        var listResp = await client.GetAsync($"/api/research/jobs{suffix}");
+        var listResp = await client.GetAsync($"/api/jobs{suffix}");
         listResp.EnsureSuccessStatusCode();
 
         var listJson = await listResp.Content.ReadFromJsonAsync<JsonElement>();

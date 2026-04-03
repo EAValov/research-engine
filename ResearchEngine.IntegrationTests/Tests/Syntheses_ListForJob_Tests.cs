@@ -34,7 +34,7 @@ public sealed class Syntheses_ListForJob_Tests : IntegrationTestBase
             instructions = "Create second synthesis for list endpoint"
         };
 
-        var createResp = await client.PostAsJsonAsync($"/api/research/jobs/{jobId}/syntheses", createReq);
+        var createResp = await client.PostAsJsonAsync($"/api/jobs/{jobId}/syntheses", createReq);
         createResp.EnsureSuccessStatusCode();
         var createJson = await createResp.Content.ReadFromJsonAsync<JsonElement>();
         var syn2Id = createJson.GetProperty("synthesisId").GetGuid();
@@ -42,7 +42,7 @@ public sealed class Syntheses_ListForJob_Tests : IntegrationTestBase
 
         var checkpoint = await SseTestHelpers.GetMaxEventIdAsync(client, jobId);
 
-        var runResp = await client.PostAsync($"/api/research/syntheses/{syn2Id}/run", content: null);
+        var runResp = await client.PostAsync($"/api/syntheses/{syn2Id}/run", content: null);
         Assert.True(runResp.StatusCode is HttpStatusCode.Accepted or HttpStatusCode.OK);
 
         var (status2, doneSynId, _) =  await SseTestHelpers.WaitForDoneAfterAsync(client, jobId, checkpoint, TimeSpan.FromSeconds(60));
@@ -51,7 +51,7 @@ public sealed class Syntheses_ListForJob_Tests : IntegrationTestBase
         Assert.Equal(syn2Id, doneSynId.Value);
 
         // 3) list syntheses
-        var listResp = await client.GetAsync($"/api/research/jobs/{jobId}/syntheses?skip=0&take=50");
+        var listResp = await client.GetAsync($"/api/jobs/{jobId}/syntheses?skip=0&take=50");
         listResp.EnsureSuccessStatusCode();
 
         var listJson = await listResp.Content.ReadFromJsonAsync<JsonElement>();

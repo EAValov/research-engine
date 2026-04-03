@@ -21,7 +21,7 @@ public sealed class LearningGroups_Resolve_Batch_Tests : IntegrationTestBase
 
         async Task<Guid> Add(string text)
         {
-            var r = await client.PostAsJsonAsync($"/api/research/jobs/{jobId}/learnings", new
+            var r = await client.PostAsJsonAsync($"/api/jobs/{jobId}/learnings", new
             {
                 text,
                 importanceScore = 1.0f,
@@ -38,7 +38,7 @@ public sealed class LearningGroups_Resolve_Batch_Tests : IntegrationTestBase
         var b = await Add("BBBBBBBBBBBBBBBBBBB");
         var missing = Guid.NewGuid();
 
-        var batchResp = await client.PostAsJsonAsync("/api/research/learnings/groups/resolve", new
+        var batchResp = await client.PostAsJsonAsync("/api/learnings/groups/resolve", new
         {
             learningIds = new[] { a, missing, b, a }
         });

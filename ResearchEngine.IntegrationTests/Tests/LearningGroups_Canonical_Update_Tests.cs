@@ -33,7 +33,7 @@ public sealed class LearningGroups_Canonical_Update_Tests : IntegrationTestBase
 
         // 2) Add first learning low score
         var add1 = new { text, importanceScore = 0.2f, reference = (string?)null, evidenceText = (string?)null, language = (string?)null, region = (string?)null };
-        var r1 = await client.PostAsJsonAsync($"/api/research/jobs/{jobId}/learnings", add1);
+        var r1 = await client.PostAsJsonAsync($"/api/jobs/{jobId}/learnings", add1);
         r1.EnsureSuccessStatusCode();
 
         var j1 = await r1.Content.ReadFromJsonAsync<JsonElement>();
@@ -42,7 +42,7 @@ public sealed class LearningGroups_Canonical_Update_Tests : IntegrationTestBase
 
         // 3) Add second learning with same text but higher score => canonical importance should update
         var add2 = new { text, importanceScore = 0.95f, reference = (string?)null, evidenceText = (string?)null, language = (string?)null, region = (string?)null };
-        var r2 = await client.PostAsJsonAsync($"/api/research/jobs/{jobId}/learnings", add2);
+        var r2 = await client.PostAsJsonAsync($"/api/jobs/{jobId}/learnings", add2);
         r2.EnsureSuccessStatusCode();
 
         // 4) Load group from DB and assert canonical score updated

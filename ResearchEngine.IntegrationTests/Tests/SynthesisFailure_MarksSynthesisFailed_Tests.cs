@@ -44,7 +44,7 @@ public sealed class SynthesisFailure_MarksSynthesisFailed_Tests : IntegrationTes
         Assert.True(status is "Completed" or "Failed");
 
         // Now ensure the latest synthesis is Failed (since tool-based section writing will throw)
-        var synResp = await client.GetAsync($"/api/research/jobs/{jobId}/syntheses/latest");
+        var synResp = await client.GetAsync($"/api/jobs/{jobId}/syntheses/latest");
         synResp.EnsureSuccessStatusCode();
 
         var synJson = await synResp.Content.ReadFromJsonAsync<JsonElement>();

@@ -22,7 +22,7 @@ public static class SseTestHelpers
         TimeSpan timeout)
     {
         // 1) Mint ticket (authorized call)
-        using var tokenReq = new HttpRequestMessage(HttpMethod.Post, $"/api/research/jobs/{jobId}/events/stream-token");
+        using var tokenReq = new HttpRequestMessage(HttpMethod.Post, $"/api/jobs/{jobId}/events/stream-token");
 
         using var tokenResp = await client.SendAsync(tokenReq);
         tokenResp.EnsureSuccessStatusCode();
@@ -71,7 +71,7 @@ public static class SseTestHelpers
 
     public static async Task<int> GetMaxEventIdAsync(HttpClient client, Guid jobId)
     {
-        var resp = await client.GetAsync($"/api/research/jobs/{jobId}/events");
+        var resp = await client.GetAsync($"/api/jobs/{jobId}/events");
         resp.EnsureSuccessStatusCode();
 
         var json = await resp.Content.ReadFromJsonAsync<JsonElement>();

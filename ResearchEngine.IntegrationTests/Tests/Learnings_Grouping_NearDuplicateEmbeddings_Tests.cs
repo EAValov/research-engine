@@ -29,7 +29,7 @@ public sealed class Learnings_Grouping_NearDuplicateEmbeddings_Tests : Integrati
 
         using var client = factory.CreateClient();
 
-        var createResp = await client.PostAsJsonAsync("/api/research/jobs", new
+        var createResp = await client.PostAsJsonAsync("/api/jobs", new
         {
             query = "Grouping test: near-duplicate texts should merge at 0.93 threshold.",
             clarifications = Array.Empty<object>(),
@@ -52,7 +52,7 @@ public sealed class Learnings_Grouping_NearDuplicateEmbeddings_Tests : Integrati
         var textA = "Base editing reduces double-strand breaks compared to classical CRISPR editing.";
         var textB = "Compared to classical CRISPR editing, base editing reduces double-strand breaks.";
 
-        var r1 = await client.PostAsJsonAsync($"/api/research/jobs/{jobId}/learnings", new
+        var r1 = await client.PostAsJsonAsync($"/api/jobs/{jobId}/learnings", new
         {
             text = textA,
             importanceScore = 0.6f,
@@ -67,7 +67,7 @@ public sealed class Learnings_Grouping_NearDuplicateEmbeddings_Tests : Integrati
         var g1 = j1.GetProperty("learning").GetProperty("learningGroupId").GetGuid();
         Assert.NotEqual(Guid.Empty, g1);
 
-        var r2 = await client.PostAsJsonAsync($"/api/research/jobs/{jobId}/learnings", new
+        var r2 = await client.PostAsJsonAsync($"/api/jobs/{jobId}/learnings", new
         {
             text = textB,
             importanceScore = 0.7f,

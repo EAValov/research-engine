@@ -9,11 +9,6 @@ public static partial class ResearchApi
         MapRoutes(app.MapGroup("/api")
             .WithTags("Research API")
             .RequireAuthorization());
-
-        MapRoutes(app.MapGroup("/api/research")
-            .WithTags("Research Jobs API")
-            .RequireAuthorization()
-            .ExcludeFromDescription());
     }
 
     private static void MapRoutes(RouteGroupBuilder api)

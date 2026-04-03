@@ -6,7 +6,7 @@ namespace ResearchEngine.API;
 public static partial class ResearchApi
 {
     /// <summary>
-    /// POST /api/research/jobs/{jobId}/syntheses
+    /// POST /api/jobs/{jobId}/syntheses
     /// Creates a synthesis row (no long-running work).
     /// </summary>
     private static async Task<IResult> CreateSynthesisAsync(
@@ -61,7 +61,7 @@ public static partial class ResearchApi
     }
 
     /// <summary>
-    /// POST /api/research/syntheses/{synthesisId}/run
+    /// POST /api/syntheses/{synthesisId}/run
     /// Enqueues an existing synthesis run via Hangfire.
     /// </summary>
     private static async Task<IResult> RunSynthesisAsync(
@@ -100,7 +100,7 @@ public static partial class ResearchApi
     }
 
     /// <summary>
-    /// GET /api/research/jobs/{jobId}/syntheses
+    /// GET /api/jobs/{jobId}/syntheses
     /// Lists syntheses for a job (paged).
     /// </summary>
     private static async Task<IResult> ListSynthesesAsync(
@@ -142,7 +142,7 @@ public static partial class ResearchApi
     }
 
     /// <summary>
-    /// GET /api/research/jobs/{jobId}/syntheses/latest
+    /// GET /api/jobs/{jobId}/syntheses/latest
     /// Returns the latest synthesis for a job including sections.
     /// </summary>
     private static async Task<IResult> GetLatestSynthesisAsync(
@@ -194,7 +194,7 @@ public static partial class ResearchApi
     }
 
     /// <summary>
-    /// GET /api/research/syntheses/{synthesisId}
+    /// GET /api/syntheses/{synthesisId}
     /// Returns a synthesis by id including sections.
     /// </summary>
     private static async Task<IResult> GetSynthesisAsync(
@@ -238,7 +238,7 @@ public static partial class ResearchApi
     }
 
     /// <summary>
-    /// DELETE /api/research/syntheses/{synthesisId}
+    /// DELETE /api/syntheses/{synthesisId}
     /// Deletes a synthesis row and its related sections/overrides.
     /// </summary>
     private static async Task<IResult> DeleteSynthesisAsync(
@@ -251,7 +251,7 @@ public static partial class ResearchApi
     }
 
     /// <summary>
-    /// PUT /api/research/syntheses/{synthesisId}/overrides/sources
+    /// PUT /api/syntheses/{synthesisId}/overrides/sources
     /// Upserts source-level overrides for a synthesis.
     /// </summary>
     private static async Task<IResult> UpsertSynthesisSourceOverridesAsync(
@@ -274,7 +274,7 @@ public static partial class ResearchApi
     }
 
     /// <summary>
-    /// PUT /api/research/syntheses/{synthesisId}/overrides/learnings
+    /// PUT /api/syntheses/{synthesisId}/overrides/learnings
     /// Upserts learning-level overrides for a synthesis.
     /// </summary>
     private static async Task<IResult> UpsertSynthesisLearningOverridesAsync(

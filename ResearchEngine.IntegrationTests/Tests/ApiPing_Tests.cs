@@ -10,14 +10,12 @@ public sealed class ApiPing_Tests : IntegrationTestBase
 {
     public ApiPing_Tests(ContainersFixture containers) : base(containers) { }
 
-    [Theory]
-    [InlineData("/api/ping")]
-    [InlineData("/api/research/ping")]
-    public async Task Ping_ReturnsOk(string route)
+    [Fact]
+    public async Task Ping_ReturnsOk()
     {
         using var client = CreateClient();
 
-        var resp = await client.GetAsync(route);
+        var resp = await client.GetAsync("/api/ping");
         Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
         Assert.True(resp.Headers.TryGetValues("X-Correlation-ID", out var correlationIds));
         Assert.False(string.IsNullOrWhiteSpace(correlationIds.Single()));

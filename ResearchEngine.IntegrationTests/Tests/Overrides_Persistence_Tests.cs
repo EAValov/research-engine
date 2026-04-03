@@ -61,7 +61,7 @@ public sealed class Overrides_Persistence_Tests : IntegrationTestBase
             learningOverrides
         };
 
-        var createResp = await client.PostAsJsonAsync($"/api/research/jobs/{jobId}/syntheses", createReq);
+        var createResp = await client.PostAsJsonAsync($"/api/jobs/{jobId}/syntheses", createReq);
         createResp.EnsureSuccessStatusCode();
 
         var createJson = await createResp.Content.ReadFromJsonAsync<JsonElement>();
@@ -69,7 +69,7 @@ public sealed class Overrides_Persistence_Tests : IntegrationTestBase
         Assert.NotEqual(Guid.Empty, synthesisId);
 
         // 5) Run synthesis (Hangfire enqueue) AFTER overrides are saved
-        var runResp = await client.PostAsync($"/api/research/syntheses/{synthesisId}/run", content: null);
+        var runResp = await client.PostAsync($"/api/syntheses/{synthesisId}/run", content: null);
         runResp.EnsureSuccessStatusCode();
 
         // 6) Wait for NEXT done and ensure it matches this synthesis

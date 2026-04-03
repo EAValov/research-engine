@@ -21,7 +21,7 @@ public sealed class Sources_SoftDelete_Tests : IntegrationTestBase
         Assert.Equal("Completed", status);
 
         // Add learning WITH reference so it's observable in sources list (not user:manual)
-        var addResp = await client.PostAsJsonAsync($"/api/research/jobs/{jobId}/learnings", new
+        var addResp = await client.PostAsJsonAsync($"/api/jobs/{jobId}/learnings", new
         {
             text = "Learning under deletable source",
             importanceScore = 1.0f,
@@ -36,11 +36,11 @@ public sealed class Sources_SoftDelete_Tests : IntegrationTestBase
         var sourceId = addJson.GetProperty("learning").GetProperty("sourceId").GetGuid();
 
         // Delete source
-        var delResp = await client.DeleteAsync($"/api/research/jobs/{jobId}/sources/{sourceId}");
+        var delResp = await client.DeleteAsync($"/api/jobs/{jobId}/sources/{sourceId}");
         Assert.Equal(HttpStatusCode.NoContent, delResp.StatusCode);
 
         // Sources list: sourceId should be absent
-        var sourcesResp = await client.GetAsync($"/api/research/jobs/{jobId}/sources");
+        var sourcesResp = await client.GetAsync($"/api/jobs/{jobId}/sources");
         sourcesResp.EnsureSuccessStatusCode();
         var sourcesJson = await sourcesResp.Content.ReadFromJsonAsync<JsonElement>();
         var sources = sourcesJson.GetProperty("sources").EnumerateArray().ToList();
@@ -48,7 +48,7 @@ public sealed class Sources_SoftDelete_Tests : IntegrationTestBase
         Assert.DoesNotContain(sources, s => s.GetProperty("sourceId").GetGuid() == sourceId);
 
         // Learnings list: learningId should be absent
-        var learnResp = await client.GetAsync($"/api/research/jobs/{jobId}/learnings?skip=0&take=500");
+        var learnResp = await client.GetAsync($"/api/jobs/{jobId}/learnings?skip=0&take=500");
         learnResp.EnsureSuccessStatusCode();
         var learnJson = await learnResp.Content.ReadFromJsonAsync<JsonElement>();
         var learnings = learnJson.GetProperty("learnings").EnumerateArray().ToList();

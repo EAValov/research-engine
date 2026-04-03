@@ -21,7 +21,7 @@ public sealed class Synthesis_Run_Idempotency_Tests : IntegrationTestBase
         Assert.Equal("Completed", status1);
 
         // create new synthesis
-        var createResp = await client.PostAsJsonAsync($"/api/research/jobs/{jobId}/syntheses", new
+        var createResp = await client.PostAsJsonAsync($"/api/jobs/{jobId}/syntheses", new
         {
             useLatestAsParent = true,
             instructions = "Idempotent run test"
@@ -31,11 +31,11 @@ public sealed class Synthesis_Run_Idempotency_Tests : IntegrationTestBase
         var synId = createJson.GetProperty("synthesisId").GetGuid();
 
         // run #1
-        var run1 = await client.PostAsync($"/api/research/syntheses/{synId}/run", null);
+        var run1 = await client.PostAsync($"/api/syntheses/{synId}/run", null);
         Assert.True(run1.StatusCode is HttpStatusCode.Accepted or HttpStatusCode.OK);
 
         // run #2 immediately (should still be Accepted/OK, but not 500)
-        var run2 = await client.PostAsync($"/api/research/syntheses/{synId}/run", null);
+        var run2 = await client.PostAsync($"/api/syntheses/{synId}/run", null);
         Assert.True(run2.StatusCode is HttpStatusCode.Accepted or HttpStatusCode.OK);
     }
 }

@@ -21,7 +21,7 @@ public sealed class Learnings_SoftDelete_Tests : IntegrationTestBase
         Assert.Equal("Completed", status);
 
         // Add learning
-        var addResp = await client.PostAsJsonAsync($"/api/research/jobs/{jobId}/learnings", new
+        var addResp = await client.PostAsJsonAsync($"/api/jobs/{jobId}/learnings", new
         {
             text = "Learning to delete",
             importanceScore = 1.0f,
@@ -33,11 +33,11 @@ public sealed class Learnings_SoftDelete_Tests : IntegrationTestBase
         var learningId = addJson.GetProperty("learning").GetProperty("learningId").GetGuid();
 
         // Delete
-        var delResp = await client.DeleteAsync($"/api/research/jobs/{jobId}/learnings/{learningId}");
+        var delResp = await client.DeleteAsync($"/api/jobs/{jobId}/learnings/{learningId}");
         Assert.Equal(HttpStatusCode.NoContent, delResp.StatusCode);
 
         // List learnings and ensure it's gone
-        var listResp = await client.GetAsync($"/api/research/jobs/{jobId}/learnings?skip=0&take=500");
+        var listResp = await client.GetAsync($"/api/jobs/{jobId}/learnings?skip=0&take=500");
         listResp.EnsureSuccessStatusCode();
 
         var listJson = await listResp.Content.ReadFromJsonAsync<JsonElement>();

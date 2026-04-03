@@ -11,11 +11,6 @@ public static class ResearchProtocolApi
             .WithTags("Research Protocol API")
             .RequireAuthorization());
 
-        MapRoutes(app.MapGroup("/api/research/protocol")
-            .WithTags("Research Protocol API")
-            .RequireAuthorization()
-            .ExcludeFromDescription());
-
         static void MapRoutes(RouteGroupBuilder api)
         {
             api.MapPost("/clarifications", GenerateClarificationsAsync)
@@ -35,7 +30,7 @@ public static class ResearchProtocolApi
     }
 
     /// <summary>
-    /// POST /api/research/protocol/clarifications
+    /// POST /api/protocol/clarifications
     /// Generates clarification questions for a research query.
     /// </summary>
     /// <param name="request">Clarification request payload.</param>
@@ -55,7 +50,7 @@ public static class ResearchProtocolApi
     }
 
     /// <summary>
-    /// POST /api/research/protocol/parameters
+    /// POST /api/protocol/parameters
     /// Selects or auto-computes protocol parameters (breadth, depth, language, region).
     /// </summary>
     /// <param name="request">Protocol parameters request.</param>

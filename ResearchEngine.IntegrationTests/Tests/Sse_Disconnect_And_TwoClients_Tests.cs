@@ -20,7 +20,7 @@ public sealed class Sse_Disconnect_And_TwoClients_Tests : IntegrationTestBase
 
         var jobId = await CreateJobAsync(client);
 
-        using var tokenReq = new HttpRequestMessage(HttpMethod.Post, $"/api/research/jobs/{jobId}/events/stream-token");
+        using var tokenReq = new HttpRequestMessage(HttpMethod.Post, $"/api/jobs/{jobId}/events/stream-token");
 
         using var tokenResp = await client.SendAsync(tokenReq);
         tokenResp.EnsureSuccessStatusCode();
@@ -106,7 +106,7 @@ public sealed class Sse_Disconnect_And_TwoClients_Tests : IntegrationTestBase
             webhook = (object?)null
         };
 
-        var createResp = await client.PostAsJsonAsync("/api/research/jobs", createReq);
+        var createResp = await client.PostAsJsonAsync("/api/jobs", createReq);
         createResp.EnsureSuccessStatusCode();
 
         var createJson = await createResp.Content.ReadFromJsonAsync<JsonElement>();

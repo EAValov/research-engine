@@ -23,7 +23,7 @@ public sealed class Overrides_ScoreOverride_AffectsCitationOrder_Tests : Integra
         Assert.Equal("Completed", status);
 
         // 2) pick two learnings
-        var learningsResp = await client.GetAsync($"/api/research/jobs/{jobId}/learnings?skip=0&take=200");
+        var learningsResp = await client.GetAsync($"/api/jobs/{jobId}/learnings?skip=0&take=200");
         learningsResp.EnsureSuccessStatusCode();
 
         var learningsJson = await learningsResp.Content.ReadFromJsonAsync<JsonElement>();
@@ -59,7 +59,7 @@ public sealed class Overrides_ScoreOverride_AffectsCitationOrder_Tests : Integra
         };
 
         var ovResp = await client.PutAsJsonAsync(
-            $"/api/research/syntheses/{synthesisId}/overrides/learnings",
+            $"/api/syntheses/{synthesisId}/overrides/learnings",
             learningOverrides);
 
         ovResp.EnsureSuccessStatusCode();
@@ -71,7 +71,7 @@ public sealed class Overrides_ScoreOverride_AffectsCitationOrder_Tests : Integra
             ct: CancellationToken.None);
 
         // 6) pull synthesis and compare citation positions
-        var synResp = await client.GetAsync($"/api/research/syntheses/{synthesisId}");
+        var synResp = await client.GetAsync($"/api/syntheses/{synthesisId}");
         synResp.EnsureSuccessStatusCode();
 
         var synDoc = await synResp.Content.ReadFromJsonAsync<JsonElement>();

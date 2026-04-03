@@ -146,7 +146,7 @@ public sealed class SourceDiscoveryMode_Tests : IntegrationTestBase
 
         var jobId = await CreateJobWithModeAsync(client, "Auto");
 
-        var jobResp = await client.GetAsync($"/api/research/jobs/{jobId}");
+        var jobResp = await client.GetAsync($"/api/jobs/{jobId}");
         jobResp.EnsureSuccessStatusCode();
 
         var json = await jobResp.Content.ReadFromJsonAsync<JsonElement>();
@@ -212,7 +212,7 @@ public sealed class SourceDiscoveryMode_Tests : IntegrationTestBase
             discoveryMode
         };
 
-        var createResp = await client.PostAsJsonAsync("/api/research/jobs", createReq);
+        var createResp = await client.PostAsJsonAsync("/api/jobs", createReq);
         createResp.EnsureSuccessStatusCode();
 
         var json = await createResp.Content.ReadFromJsonAsync<JsonElement>();

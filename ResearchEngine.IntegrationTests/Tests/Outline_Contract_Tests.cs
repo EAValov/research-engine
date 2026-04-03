@@ -46,7 +46,7 @@ public sealed class Outline_Contract_Tests : IntegrationTestBase
             instructions = "Use the outline strictly."
         };
 
-        var createResp = await client.PostAsJsonAsync($"/api/research/jobs/{jobId}/syntheses", createReq);
+        var createResp = await client.PostAsJsonAsync($"/api/jobs/{jobId}/syntheses", createReq);
         createResp.EnsureSuccessStatusCode();
 
         var createJson = await createResp.Content.ReadFromJsonAsync<JsonElement>();
@@ -54,7 +54,7 @@ public sealed class Outline_Contract_Tests : IntegrationTestBase
         Assert.NotEqual(Guid.Empty, synthesisId);
 
         // 5) Run the synthesis (Hangfire enqueue)
-        var runResp = await client.PostAsync($"/api/research/syntheses/{synthesisId}/run", content: null);
+        var runResp = await client.PostAsync($"/api/syntheses/{synthesisId}/run", content: null);
         runResp.EnsureSuccessStatusCode();
 
         // 6) Wait for NEXT "done" after checkpoint and ensure it's the synthesis we started
@@ -66,7 +66,7 @@ public sealed class Outline_Contract_Tests : IntegrationTestBase
         Assert.Equal(synthesisId, doneSynthesisId.Value);
 
         // 7) Pull synthesis directly by id
-        var synResp = await client.GetAsync($"/api/research/syntheses/{doneSynthesisId.Value}");
+        var synResp = await client.GetAsync($"/api/syntheses/{doneSynthesisId.Value}");
         synResp.EnsureSuccessStatusCode();
 
         var synJson = await synResp.Content.ReadFromJsonAsync<JsonElement>();

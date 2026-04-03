@@ -54,7 +54,7 @@ public sealed class VectorSearch_RespectsOverrides_Tests : IntegrationTestBase
         };
 
         var ovResp = await client.PutAsJsonAsync(
-            $"/api/research/syntheses/{synthesisId}/overrides/learnings",
+            $"/api/syntheses/{synthesisId}/overrides/learnings",
             learningOverrides);
 
         ovResp.EnsureSuccessStatusCode();
@@ -66,7 +66,7 @@ public sealed class VectorSearch_RespectsOverrides_Tests : IntegrationTestBase
             ct: CancellationToken.None);
 
         // 6) fetch synthesis and ensure none of the sections contain the excluded citation
-        var synResp = await client.GetAsync($"/api/research/syntheses/{synthesisId}");
+        var synResp = await client.GetAsync($"/api/syntheses/{synthesisId}");
         synResp.EnsureSuccessStatusCode();
 
         var synJson = await synResp.Content.ReadFromJsonAsync<JsonElement>();

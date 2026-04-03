@@ -21,7 +21,7 @@ public sealed class LearningGroups_Resolve_Single_Tests : IntegrationTestBase
         Assert.Equal("Completed", status);
 
         // Add learning
-        var addResp = await client.PostAsJsonAsync($"/api/research/jobs/{jobId}/learnings", new
+        var addResp = await client.PostAsJsonAsync($"/api/jobs/{jobId}/learnings", new
         {
             text = "User learning: CRISPR base editors can reduce DSB-associated toxicity in some contexts.",
             importanceScore = 1.0f,
@@ -37,7 +37,7 @@ public sealed class LearningGroups_Resolve_Single_Tests : IntegrationTestBase
         Assert.NotEqual(Guid.Empty, learningId);
 
         // Resolve group
-        var groupResp = await client.GetAsync($"/api/research/learnings/{learningId}/group");
+        var groupResp = await client.GetAsync($"/api/learnings/{learningId}/group");
         groupResp.EnsureSuccessStatusCode();
 
         var card = await groupResp.Content.ReadFromJsonAsync<JsonElement>();

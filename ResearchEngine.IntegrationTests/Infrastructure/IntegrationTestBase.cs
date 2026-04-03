@@ -49,7 +49,7 @@ public abstract class IntegrationTestBase
             discoveryMode
         };
 
-        var resp = await client.PostAsJsonAsync("/api/research/jobs", createReq);
+        var resp = await client.PostAsJsonAsync("/api/jobs", createReq);
         resp.EnsureSuccessStatusCode();
 
         var json = await resp.Content.ReadFromJsonAsync<JsonElement>();
@@ -61,7 +61,7 @@ public abstract class IntegrationTestBase
         var deadline = DateTimeOffset.UtcNow.AddSeconds(timeoutSeconds);
         while (true)
         {
-            var evResp = await client.GetAsync($"/api/research/jobs/{jobId}/events");
+            var evResp = await client.GetAsync($"/api/jobs/{jobId}/events");
             evResp.EnsureSuccessStatusCode();
 
             var events = await evResp.Content.ReadFromJsonAsync<JsonElement>();
@@ -77,7 +77,7 @@ public abstract class IntegrationTestBase
 
     protected static async Task<List<JsonElement>> ListSourcesAsync(HttpClient client, Guid jobId)
     {
-        var resp = await client.GetAsync($"/api/research/jobs/{jobId}/sources");
+        var resp = await client.GetAsync($"/api/jobs/{jobId}/sources");
         resp.EnsureSuccessStatusCode();
 
         var json = await resp.Content.ReadFromJsonAsync<JsonElement>();
@@ -86,7 +86,7 @@ public abstract class IntegrationTestBase
 
     protected static async Task<List<JsonElement>> ListLearningsAsync(HttpClient client, Guid jobId)
     {
-        var resp = await client.GetAsync($"/api/research/jobs/{jobId}/learnings?skip=0&take=200");
+        var resp = await client.GetAsync($"/api/jobs/{jobId}/learnings?skip=0&take=200");
         resp.EnsureSuccessStatusCode();
 
         var json = await resp.Content.ReadFromJsonAsync<JsonElement>();
@@ -95,7 +95,7 @@ public abstract class IntegrationTestBase
 
     protected static async Task<JsonElement> GetLatestSynthesisAsync(HttpClient client, Guid jobId)
     {
-        var resp = await client.GetAsync($"/api/research/jobs/{jobId}/syntheses/latest");
+        var resp = await client.GetAsync($"/api/jobs/{jobId}/syntheses/latest");
         resp.EnsureSuccessStatusCode();
 
         var json = await resp.Content.ReadFromJsonAsync<JsonElement>();

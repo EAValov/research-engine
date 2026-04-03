@@ -40,7 +40,7 @@ public sealed class Sources_DedupeAcrossSerpQueries_Tests : IntegrationTestBase
         Assert.Equal("Completed", status);
 
         // Assert sources are unique
-        var sourcesResp = await client.GetAsync($"/api/research/jobs/{jobId}/sources");
+        var sourcesResp = await client.GetAsync($"/api/jobs/{jobId}/sources");
         sourcesResp.EnsureSuccessStatusCode();
 
         var sourcesJson = await sourcesResp.Content.ReadFromJsonAsync<JsonElement>();
@@ -60,7 +60,7 @@ public sealed class Sources_DedupeAcrossSerpQueries_Tests : IntegrationTestBase
         Assert.Equal(1, urls.Count(u => string.Equals(u, overlapUrl, StringComparison.OrdinalIgnoreCase)));
 
         // Optional: learnings should be non-zero and should not explode
-        var learningsResp = await client.GetAsync($"/api/research/jobs/{jobId}/learnings?skip=0&take=200");
+        var learningsResp = await client.GetAsync($"/api/jobs/{jobId}/learnings?skip=0&take=200");
         learningsResp.EnsureSuccessStatusCode();
 
         var learningsJson = await learningsResp.Content.ReadFromJsonAsync<JsonElement>();

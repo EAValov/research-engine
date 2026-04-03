@@ -38,7 +38,7 @@ public sealed class LearningGroups_Canonical_Importance_Update_Tests : Integrati
             region = (string?)null
         };
 
-        var r1 = await client.PostAsJsonAsync($"/api/research/jobs/{jobId}/learnings", add1);
+        var r1 = await client.PostAsJsonAsync($"/api/jobs/{jobId}/learnings", add1);
         r1.EnsureSuccessStatusCode();
 
         var j1 = await r1.Content.ReadFromJsonAsync<JsonElement>();
@@ -56,7 +56,7 @@ public sealed class LearningGroups_Canonical_Importance_Update_Tests : Integrati
             region = (string?)null
         };
 
-        var r2 = await client.PostAsJsonAsync($"/api/research/jobs/{jobId}/learnings", add2);
+        var r2 = await client.PostAsJsonAsync($"/api/jobs/{jobId}/learnings", add2);
         r2.EnsureSuccessStatusCode();
 
         // 4) Read group from DB and assert canonical + stats updated

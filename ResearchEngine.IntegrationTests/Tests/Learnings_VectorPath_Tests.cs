@@ -25,7 +25,7 @@ public sealed class Learnings_VectorPath_Tests : IntegrationTestBase
             webhook = (object?)null
         };
 
-        var createResp = await client.PostAsJsonAsync("/api/research/jobs", createReq);
+        var createResp = await client.PostAsJsonAsync("/api/jobs", createReq);
         createResp.EnsureSuccessStatusCode();
 
         var createJson = await createResp.Content.ReadFromJsonAsync<JsonElement>();
@@ -34,7 +34,7 @@ public sealed class Learnings_VectorPath_Tests : IntegrationTestBase
         var deadline = DateTimeOffset.UtcNow.AddSeconds(60);
         while (true)
         {
-            var evResp = await client.GetAsync($"/api/research/jobs/{jobId}/events");
+            var evResp = await client.GetAsync($"/api/jobs/{jobId}/events");
             evResp.EnsureSuccessStatusCode();
 
             var events = await evResp.Content.ReadFromJsonAsync<JsonElement>();
@@ -52,7 +52,7 @@ public sealed class Learnings_VectorPath_Tests : IntegrationTestBase
             await Task.Delay(300);
         }
 
-        var learningsResp = await client.GetAsync($"/api/research/jobs/{jobId}/learnings?skip=0&take=200");
+        var learningsResp = await client.GetAsync($"/api/jobs/{jobId}/learnings?skip=0&take=200");
         learningsResp.EnsureSuccessStatusCode();
 
         var learningsJson = await learningsResp.Content.ReadFromJsonAsync<JsonElement>();
@@ -76,7 +76,7 @@ public sealed class Learnings_VectorPath_Tests : IntegrationTestBase
             Assert.False(string.IsNullOrWhiteSpace(l.GetProperty("text").GetString()));
         }
 
-        var sourcesResp = await client.GetAsync($"/api/research/jobs/{jobId}/sources");
+        var sourcesResp = await client.GetAsync($"/api/jobs/{jobId}/sources");
         sourcesResp.EnsureSuccessStatusCode();
 
         var sourcesJson = await sourcesResp.Content.ReadFromJsonAsync<JsonElement>();

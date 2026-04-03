@@ -20,7 +20,7 @@ public sealed class Sources_Dedup_Tests : IntegrationTestBase
         var (status, _, _) = await SseTestHelpers.WaitForDoneAsync(client, jobId, TimeSpan.FromSeconds(60));
         Assert.Equal("Completed", status);
 
-        var sourcesResp = await client.GetAsync($"/api/research/jobs/{jobId}/sources");
+        var sourcesResp = await client.GetAsync($"/api/jobs/{jobId}/sources");
         sourcesResp.EnsureSuccessStatusCode();
 
         var sourcesJson = await sourcesResp.Content.ReadFromJsonAsync<JsonElement>();

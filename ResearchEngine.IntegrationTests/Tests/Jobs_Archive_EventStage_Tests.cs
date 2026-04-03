@@ -26,7 +26,7 @@ public sealed class Jobs_Archive_EventStage_Tests : IntegrationTestBase
 
         await WaitForJobCompletionAsync(client, jobId, timeoutSeconds: 60);
 
-        var archiveResp = await client.PostAsync($"/api/research/jobs/{jobId}/archive", content: null);
+        var archiveResp = await client.PostAsync($"/api/jobs/{jobId}/archive", content: null);
         Assert.Equal(HttpStatusCode.NoContent, archiveResp.StatusCode);
 
         var mainListAfterArchive = await GetJobsAsync(client, archived: false);
@@ -39,7 +39,7 @@ public sealed class Jobs_Archive_EventStage_Tests : IntegrationTestBase
         var archivedEvent = FindLastByMessage(eventsAfterArchive, "Job archived by user");
         Assert.Equal("Completed", GetStageName(archivedEvent));
 
-        var unarchiveResp = await client.PostAsync($"/api/research/jobs/{jobId}/unarchive", content: null);
+        var unarchiveResp = await client.PostAsync($"/api/jobs/{jobId}/unarchive", content: null);
         Assert.Equal(HttpStatusCode.NoContent, unarchiveResp.StatusCode);
 
         var mainListAfterUnarchive = await GetJobsAsync(client, archived: false);
@@ -70,13 +70,13 @@ public sealed class Jobs_Archive_EventStage_Tests : IntegrationTestBase
         var jobId = await CreateJobAsync(client, "Test query: archive/unarchive pending stage mapping.");
         Assert.NotEqual(Guid.Empty, jobId);
 
-        var jobResp = await client.GetAsync($"/api/research/jobs/{jobId}");
+        var jobResp = await client.GetAsync($"/api/jobs/{jobId}");
         jobResp.EnsureSuccessStatusCode();
 
         var jobJson = await jobResp.Content.ReadFromJsonAsync<JsonElement>();
         Assert.Equal("Pending", jobJson.GetProperty("status").GetString());
 
-        var archiveResp = await client.PostAsync($"/api/research/jobs/{jobId}/archive", content: null);
+        var archiveResp = await client.PostAsync($"/api/jobs/{jobId}/archive", content: null);
         Assert.Equal(HttpStatusCode.NoContent, archiveResp.StatusCode);
 
         var mainListAfterArchive = await GetJobsAsync(client, archived: false);
@@ -89,7 +89,7 @@ public sealed class Jobs_Archive_EventStage_Tests : IntegrationTestBase
         var archivedEvent = FindLastByMessage(eventsAfterArchive, "Job archived by user");
         Assert.Equal("Planning", GetStageName(archivedEvent));
 
-        var unarchiveResp = await client.PostAsync($"/api/research/jobs/{jobId}/unarchive", content: null);
+        var unarchiveResp = await client.PostAsync($"/api/jobs/{jobId}/unarchive", content: null);
         Assert.Equal(HttpStatusCode.NoContent, unarchiveResp.StatusCode);
 
         var mainListAfterUnarchive = await GetJobsAsync(client, archived: false);
@@ -105,7 +105,7 @@ public sealed class Jobs_Archive_EventStage_Tests : IntegrationTestBase
 
     private static async Task<List<JsonElement>> GetEventsAsync(HttpClient client, Guid jobId)
     {
-        var eventsResp = await client.GetAsync($"/api/research/jobs/{jobId}/events");
+        var eventsResp = await client.GetAsync($"/api/jobs/{jobId}/events");
         eventsResp.EnsureSuccessStatusCode();
 
         var eventsJson = await eventsResp.Content.ReadFromJsonAsync<JsonElement>();
@@ -115,7 +115,7 @@ public sealed class Jobs_Archive_EventStage_Tests : IntegrationTestBase
     private static async Task<List<JsonElement>> GetJobsAsync(HttpClient client, bool archived)
     {
         var suffix = archived ? "?archived=true" : string.Empty;
-        var listResp = await client.GetAsync($"/api/research/jobs{suffix}");
+        var listResp = await client.GetAsync($"/api/jobs{suffix}");
         listResp.EnsureSuccessStatusCode();
 
         var listJson = await listResp.Content.ReadFromJsonAsync<JsonElement>();

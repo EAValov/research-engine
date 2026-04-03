@@ -6,7 +6,7 @@ namespace ResearchEngine.API;
 public static partial class ResearchApi
 {
     /// <summary>
-    /// GET /api/research/jobs/{jobId}/sources
+    /// GET /api/jobs/{jobId}/sources
     /// Lists sources for a job.
     /// </summary>
     private static async Task<IResult> ListSourcesAsync(
@@ -41,7 +41,7 @@ public static partial class ResearchApi
     }
 
     /// <summary>
-    /// GET /api/research/jobs/{jobId}/learnings
+    /// GET /api/jobs/{jobId}/learnings
     /// Lists learnings for a job (paged).
     /// </summary>
     private static async Task<IResult> ListLearningsAsync(
@@ -82,7 +82,7 @@ public static partial class ResearchApi
     }
 
     /// <summary>
-    /// POST /api/research/jobs/{jobId}/learnings
+    /// POST /api/jobs/{jobId}/learnings
     /// Adds a user learning (creates/uses user source, computes embedding, assigns a group).
     /// </summary>
     private static async Task<IResult> AddLearningAsync(
@@ -125,7 +125,7 @@ public static partial class ResearchApi
     }
 
     /// <summary>
-    /// DELETE /api/research/jobs/{jobId}/learnings/{learningId}
+    /// DELETE /api/jobs/{jobId}/learnings/{learningId}
     /// Soft-deletes a learning.
     /// </summary>
     private static async Task<IResult> SoftDeleteLearningAsync(
@@ -144,7 +144,7 @@ public static partial class ResearchApi
     }
 
     /// <summary>
-    /// GET /api/research/learnings/{learningId}/group
+    /// GET /api/learnings/{learningId}/group
     /// Returns a group card for the learning group.
     /// </summary>
     private static async Task<IResult> GetLearningGroupByLearningIdAsync(
@@ -157,7 +157,7 @@ public static partial class ResearchApi
     }
 
     /// <summary>
-    /// POST /api/research/learnings/groups/resolve
+    /// POST /api/learnings/groups/resolve
     /// Resolves groups for multiple learning IDs in one request.
     /// </summary>
     private static async Task<IResult> ResolveLearningGroupsBatchAsync(
@@ -173,7 +173,7 @@ public static partial class ResearchApi
     }
 
     /// <summary>
-    /// DELETE /api/research/jobs/{jobId}/sources/{sourceId}
+    /// DELETE /api/jobs/{jobId}/sources/{sourceId}
     /// Soft-deletes a source.
     /// </summary>
     private static async Task<IResult> SoftDeleteSourceAsync(
