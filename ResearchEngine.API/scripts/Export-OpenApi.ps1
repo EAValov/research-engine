@@ -52,13 +52,20 @@ $stderrLog = [System.IO.Path]::GetTempFileName()
 
 $process = $null
 try {
-    $process = Start-Process `
-        -FilePath "dotnet" `
-        -ArgumentList @("run", "--project", $projectFilePath, "--configuration", $BuildConfiguration, "--no-build", "--no-restore", "--no-launch-profile") `
-        -WorkingDirectory $projectDirPath `
-        -PassThru `
-        -RedirectStandardOutput $stdoutLog `
-        -RedirectStandardError $stderrLog
+    $startProcessParameters = @{
+        FilePath = "dotnet"
+        ArgumentList = @("run", "--project", $projectFilePath, "--configuration", $BuildConfiguration, "--no-build", "--no-restore", "--no-launch-profile")
+        WorkingDirectory = $projectDirPath
+        PassThru = $true
+        RedirectStandardOutput = $stdoutLog
+        RedirectStandardError = $stderrLog
+    }
+
+    if ($IsWindows) {
+        $startProcessParameters.WindowStyle = "Hidden"
+    }
+
+    $process = Start-Process @startProcessParameters
 
     $openApiUri = "$baseUrl/openapi/$DocumentName.yaml"
     $deadline = (Get-Date).AddSeconds($StartupTimeoutSeconds)
