@@ -1,3 +1,5 @@
+ARG APP_VERSION=dev
+
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 
@@ -7,6 +9,7 @@ RUN dotnet publish ResearchEngine.API.csproj -c Release -o /app/publish /p:UseAp
 
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS final
+ARG APP_VERSION
 WORKDIR /app
 
 RUN apt-get update \
@@ -15,6 +18,7 @@ RUN apt-get update \
 
 COPY --from=build /app/publish .
 
+ENV AppVersion=$APP_VERSION
 ENV ASPNETCORE_URLS=http://0.0.0.0:8080
 
 EXPOSE 8080

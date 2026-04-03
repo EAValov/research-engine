@@ -14,6 +14,7 @@ using Serilog;
 using AspNetCoreRateLimit;
 using StackExchange.Redis;
 using Microsoft.AspNetCore.HttpOverrides;
+using System.Net.Http.Headers;
 
 var builder = WebApplication.CreateBuilder(args);
 var runtimeSettingsBootstrap = RuntimeSettingsBootstrap.LoadValidated(builder.Configuration);
@@ -82,6 +83,23 @@ if (enableHangfireServer && !builder.Environment.IsEnvironment("Testing"))
 
 // ---------- Http ----------
 builder.Services.AddHttpClient();
+builder.Services.AddMemoryCache();
+
+builder.Services
+    .AddOptions<ReleaseCheckOptions>()
+    .Bind(builder.Configuration.GetSection(nameof(ReleaseCheckOptions)));
+
+builder.Services.AddHttpClient(GitHubReleaseUpdateService.HttpClientName, client =>
+{
+    client.BaseAddress = new Uri("https://api.github.com/");
+    client.Timeout = TimeSpan.FromSeconds(10);
+    client.DefaultRequestHeaders.Accept.Add(
+        new MediaTypeWithQualityHeaderValue("application/vnd.github+json"));
+    client.DefaultRequestHeaders.Add("X-GitHub-Api-Version", "2022-11-28");
+    client.DefaultRequestHeaders.UserAgent.ParseAdd("ResearchEngine-UpdateCheck");
+});
+
+builder.Services.AddSingleton<IReleaseUpdateService, GitHubReleaseUpdateService>();
 
 // ---------- Options ----------
 builder.Services
@@ -136,7 +154,6 @@ var ipRateLimitingEnabled =
 if (ipRateLimitingEnabled)
 {   
     builder.Services.AddOptions();
-    builder.Services.AddMemoryCache();
 
     builder.Services.AddStackExchangeRedisCache(options =>
     {
@@ -274,6 +291,8 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 // ---------- Health endpoints ----------
+app.MapAppMetaApi();
+
 app.MapHealthChecks("/health/live",
     new HealthCheckOptions { Predicate = check => check.Name == "self" });
 

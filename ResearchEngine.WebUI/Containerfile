@@ -1,3 +1,5 @@
+ARG APP_VERSION=dev
+
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 
@@ -10,6 +12,7 @@ RUN dotnet restore ResearchEngine.WebUI.csproj /p:GenerateApiClientOnBuild=false
 RUN dotnet publish ResearchEngine.WebUI.csproj -c Release -o /app/publish /p:GenerateApiClientOnBuild=false
 
 FROM caddy:2.9-alpine AS final
+ARG APP_VERSION
 WORKDIR /srv
 
 RUN apk add --no-cache curl
@@ -22,6 +25,7 @@ RUN chmod +x /usr/local/bin/entrypoint.sh
 
 ENV WEBUI_PORT=8081
 ENV API_BASE_URL=http://localhost:8090
+ENV APP_VERSION=$APP_VERSION
 
 EXPOSE 8081
 

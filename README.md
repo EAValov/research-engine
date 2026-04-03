@@ -16,6 +16,8 @@
   <a href="./Docs/Deployment.md">Deployment</a>
   ·
   <a href="./Docs/Configuration.md">Configuration</a>
+  ·
+  <a href="#development-workflow">Development Workflow</a>
 </p>
 
 Research Engine is built for individual researchers and small teams who want private, inspectable, and controllable research workflows on local infrastructure instead of cloud-only systems.
@@ -182,6 +184,45 @@ For the deeper architecture walkthrough, see the [Architecture guide](./Docs/Arc
 - [Architecture](./Docs/Architecture.md) - how evidence collection and synthesis fit together
 - [Deployment](./Docs/Deployment.md) - single-host setup, pod layout, and backend choices
 - [Configuration](./Docs/Configuration.md) - runtime settings, environment variables, and live-editable options
+
+## Development Workflow
+
+This repository uses a simple two-branch workflow:
+
+- `develop` is the integration branch. All feature and fix pull requests should target `develop`.
+- `main` is the release branch. Only the maintainer merges `develop` into `main`, creates the release tag, and publishes the GitHub release.
+
+This app uses [Semantic Versioning](https://semver.org/): MAJOR.MINOR.PATCH.
+
+- 1.0.0: first stable public release
+- 1.0.1: bug fixes only
+- 1.1.0: new backward-compatible features
+- 2.0.0: breaking changes
+
+If you are opening a pull request:
+
+1. Branch from `develop`.
+2. Keep the pull request focused on one feature or fix.
+3. Open the pull request into `develop`.
+4. Run these checks locally before opening or updating the pull request:
+
+```powershell
+dotnet build ResearchEngine.slnx
+dotnet test ResearchEngine.IntegrationTests/ResearchEngine.IntegrationTests.csproj
+```
+
+5. Please do not create or move release tags in feature branches or pull requests. Release tags are created by the maintainer on `main`.
+
+For cleaner GitHub release notes, label pull requests when possible:
+
+- `breaking-change`
+- `feature`
+- `enhancement`
+- `bug`
+- `fix`
+- `documentation`
+- `dependencies`
+- `ignore-for-release`
 
 ## License
 

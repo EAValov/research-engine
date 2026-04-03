@@ -26,6 +26,8 @@ builder.Services.AddScoped<JobEventsClient>();
 builder.Services.AddScoped<OverridesStore>();
 builder.Services.AddScoped<ResearchProtocolFacade>();
 builder.Services.AddScoped<JobCreationFacade>();
+builder.Services.AddScoped<UpdateStatusService>();
+builder.Services.AddSingleton<AppRuntimeInfo>();
 
 builder.Services.AddScoped(sp =>
 {

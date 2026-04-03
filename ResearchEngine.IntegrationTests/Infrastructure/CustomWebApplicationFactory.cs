@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using ResearchEngine.API;
 using ResearchEngine.Domain;
 using StackExchange.Redis;
 
@@ -27,6 +28,7 @@ public sealed class CustomWebApplicationFactory : WebApplicationFactory<Program>
             services.RemoveAll<IChatModel>();
             services.RemoveAll<IEmbeddingModel>();
             services.RemoveAll<ITokenizer>();
+            services.RemoveAll<IReleaseUpdateService>();
 
             services.AddSingleton<ISearchClient, FakeSearchClient>();
             services.AddSingleton<ICrawlClient, FakeCrawlClient>();
@@ -35,6 +37,8 @@ public sealed class CustomWebApplicationFactory : WebApplicationFactory<Program>
 
             services.AddSingleton<FakeChatModel>();
             services.AddSingleton<IChatModel>(sp => sp.GetRequiredService<FakeChatModel>());
+            services.AddSingleton<FakeReleaseUpdateService>();
+            services.AddSingleton<IReleaseUpdateService>(sp => sp.GetRequiredService<FakeReleaseUpdateService>());
 
             // Redis multiplexer (single DB)
             services.RemoveAll<IConnectionMultiplexer>();

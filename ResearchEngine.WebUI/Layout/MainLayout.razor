@@ -1,10 +1,14 @@
 @inherits LayoutComponentBase
 @implements IAsyncDisposable
 @using ResearchEngine.WebUI.State
+@using ResearchEngine.WebUI.Services
 @inject AppStateStore AppState
 @inject HttpClient Http
 @inject NavigationManager Nav
 @inject IJSRuntime JS
+@inject LocalStorageService LocalStorage
+@inject UpdateStatusService UpdateStatus
+@inject AppRuntimeInfo RuntimeInfo
 
 <div class="app" data-theme="@_applied">
     <header class="header">
@@ -13,6 +17,35 @@
             <div class="api-health" aria-label="API health indicators">
                 <span class="@GetIndicatorClass(_liveStatus)" title="@GetIndicatorTitle("Live", _liveStatus)">Live</span>
                 <span class="@GetIndicatorClass(_readyStatus)" title="@GetIndicatorTitle("Ready", _readyStatus)">Ready</span>
+                @if (ShouldShowUpdateNotice && _updateStatus is not null)
+                {
+                    <span class="update-notice" role="status" aria-live="polite">
+                        @if (HasUpdateLink)
+                        {
+                            <a class="update-badge"
+                               href="@_updateStatus.ReleaseUrl"
+                               target="_blank"
+                               rel="noreferrer"
+                               title="@GetUpdateNoticeTitle(_updateStatus)">
+                                Update v@_updateStatus.LatestVersion
+                            </a>
+                        }
+                        else
+                        {
+                            <span class="update-badge" title="@GetUpdateNoticeTitle(_updateStatus)">
+                                Update v@_updateStatus.LatestVersion
+                            </span>
+                        }
+
+                        <button type="button"
+                                class="update-dismiss"
+                                @onclick="DismissUpdateNoticeAsync"
+                                aria-label="Dismiss update notification"
+                                title="Dismiss this update notification until a newer version is released.">
+                            ×
+                        </button>
+                    </span>
+                }
             </div>
         </div>
 
@@ -53,6 +86,7 @@
     }
 
     private readonly record struct ProbeResult(ApiProbeStatus Status, int? StatusCode = null);
+    private const string DismissedUpdateVersionStorageKey = "researchEngine:updateNotice:dismissedVersion";
 
     // Stored preference: "light" | "dark" | (null/empty/"system") => follow system
     private string _applied = string.Empty; // actual applied (light|dark)
@@ -61,7 +95,10 @@
     private ApiProbeStatus _readyStatus = ApiProbeStatus.Unknown;
     private CancellationTokenSource? _healthPollCts;
     private Task? _healthPollTask;
+    private Task? _updatePollTask;
     private string _currentLocation = string.Empty;
+    private UpdateStatusResult? _updateStatus;
+    private string? _dismissedUpdateVersion;
 
     private string ThemeLabel => _applied == "dark" ? "Dark" : "Light";
     private string ThemeGlyph => _applied == "dark" ? "🌙" : "☀️";
@@ -76,6 +113,13 @@
     private string ArchiveToggleAriaLabel => IsArchiveRoute
         ? "Open recent jobs"
         : "Open archived jobs";
+    private bool HasUpdateLink => !string.IsNullOrWhiteSpace(_updateStatus?.ReleaseUrl);
+    private bool ShouldShowUpdateNotice
+        => _updateStatus is { CheckEnabled: true, UpdateAvailable: true, LatestVersion: { Length: > 0 } latestVersion }
+           && !string.Equals(
+               NormalizeVersion(latestVersion),
+               NormalizeVersion(_dismissedUpdateVersion),
+               StringComparison.OrdinalIgnoreCase);
 
     protected override void OnInitialized()
     {
@@ -106,6 +150,11 @@
         catch
         {
             _applied = (pref == "dark") ? "dark" : "light";
+        }
+
+        if (RuntimeInfo.IsStableRelease && _healthPollCts is not null)
+        {
+            _updatePollTask = PollUpdateLoopAsync(_healthPollCts.Token);
         }
 
         StateHasChanged();
@@ -178,6 +227,54 @@
         });
     }
 
+    private async Task PollUpdateLoopAsync(CancellationToken ct)
+    {
+        try
+        {
+            _dismissedUpdateVersion = NormalizeVersion(await LocalStorage.GetAsync(DismissedUpdateVersionStorageKey));
+
+            if (!await RefreshUpdateStatusAsync(ct))
+                return;
+
+            using var timer = new PeriodicTimer(TimeSpan.FromHours(6));
+            while (await timer.WaitForNextTickAsync(ct))
+            {
+                if (!await RefreshUpdateStatusAsync(ct))
+                    return;
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // expected on layout disposal
+        }
+    }
+
+    private async Task<bool> RefreshUpdateStatusAsync(CancellationToken ct)
+    {
+        var status = await UpdateStatus.GetStatusAsync(ct);
+        if (status is null)
+            return true;
+
+        await InvokeAsync(() =>
+        {
+            _updateStatus = status;
+            StateHasChanged();
+        });
+
+        return status.CheckEnabled;
+    }
+
+    private async Task DismissUpdateNoticeAsync()
+    {
+        var latestVersion = NormalizeVersion(_updateStatus?.LatestVersion);
+        if (string.IsNullOrWhiteSpace(latestVersion))
+            return;
+
+        _dismissedUpdateVersion = latestVersion;
+        await LocalStorage.SetAsync(DismissedUpdateVersionStorageKey, latestVersion);
+        await InvokeAsync(StateHasChanged);
+    }
+
     private async Task<ProbeResult> ProbeCurrentApiEndpointAsync(string relativePath, CancellationToken ct)
     {
         using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
@@ -220,6 +317,32 @@
             _ => $"{name}: checking"
         };
 
+    private static string GetUpdateNoticeTitle(UpdateStatusResult status)
+    {
+        var latestVersion = string.IsNullOrWhiteSpace(status.LatestVersion)
+            ? "latest"
+            : $"v{status.LatestVersion}";
+        var currentVersion = string.IsNullOrWhiteSpace(status.CurrentVersion)
+            ? "current version"
+            : $"v{status.CurrentVersion}";
+
+        return string.IsNullOrWhiteSpace(status.ReleaseTitle)
+            ? $"A newer version is available. You are on {currentVersion}. Open release {latestVersion}."
+            : $"A newer version is available. You are on {currentVersion}. Open release {latestVersion}: {status.ReleaseTitle}.";
+    }
+
+    private static string NormalizeVersion(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return string.Empty;
+
+        var normalized = value.Trim();
+        if (normalized.StartsWith("v", StringComparison.OrdinalIgnoreCase))
+            normalized = normalized[1..];
+
+        return normalized;
+    }
+
     public async ValueTask DisposeAsync()
     {
         Nav.LocationChanged -= OnLocationChanged;
@@ -234,6 +357,18 @@
             try
             {
                 await _healthPollTask;
+            }
+            catch (OperationCanceledException)
+            {
+                // expected
+            }
+        }
+
+        if (_updatePollTask is not null)
+        {
+            try
+            {
+                await _updatePollTask;
             }
             catch (OperationCanceledException)
             {
