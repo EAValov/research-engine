@@ -73,8 +73,11 @@
 
                 <div class="settings-bar">
                     <button type="button" class="settings"
-                            @onclick="ToggleSettings">
-                        @(_showSettings ? "Hide settings" : "Settings")
+                            @onclick="ToggleSettings"
+                            aria-expanded="@_showSettings"
+                            aria-controls="researchParameters"
+                            title="@ParametersToggleTitle">
+                        @ParametersToggleLabel
                     </button>
 
                     <div class="spacer"></div>
@@ -89,7 +92,7 @@
 
                 @if (_showSettings)
                 {
-                    <div class="settings-grid" role="group" aria-label="Research settings">
+                    <div id="researchParameters" class="settings-grid" role="group" aria-label="Research parameters">
                         <div class="field field-compact">
                             <div class="lbl lbl-help"
                                  tabindex="0">
@@ -216,6 +219,10 @@
     private static readonly int[] DepthOptions = { 1, 2, 3, 4 };
 
     private bool CanRun => !string.IsNullOrWhiteSpace(_query);
+    private string ParametersToggleLabel => _showSettings ? "Hide parameters" : "Parameters";
+    private string ParametersToggleTitle => _showSettings
+        ? "Hide research parameters"
+        : "Show research parameters";
 
     protected override async Task OnInitializedAsync()
     {

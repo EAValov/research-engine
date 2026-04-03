@@ -15,7 +15,7 @@
 
 <section class="jobs" aria-label="@(IsArchiveView ? "Archived jobs" : "Existing jobs")">
     <div class="jobs-head">
-        <h2 class="h2">@(IsArchiveView ? "Archive" : "Recent")</h2>
+        <h2 class="h2">@(IsArchiveView ? "Archived jobs" : "Recent jobs")</h2>
         <div class="jobs-actions">
             <button type="button" class="secondary" @onclick="ReloadAsync" disabled="@_loading">
                 @(_loading ? "Refreshing…" : "Refresh")

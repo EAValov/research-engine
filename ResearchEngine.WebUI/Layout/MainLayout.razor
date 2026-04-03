@@ -72,9 +72,9 @@
 
     private bool IsArchiveRoute => IsArchivePath(_currentLocation);
 
-    private string ArchiveToggleLabel => IsArchiveRoute ? "Back" : "Archive";
+    private string ArchiveToggleLabel => IsArchiveRoute ? "Recent jobs" : "Archived jobs";
     private string ArchiveToggleAriaLabel => IsArchiveRoute
-        ? "Back to recent jobs"
+        ? "Open recent jobs"
         : "Open archived jobs";
 
     protected override void OnInitialized()

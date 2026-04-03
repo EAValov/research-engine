@@ -115,7 +115,7 @@ else
                         type="button"
                         disabled="@_archiveInFlight"
                         @onclick="UnarchiveAsync">
-                    @(_archiveInFlight ? "Unarchiving…" : "Unarchive")
+                    @(_archiveInFlight ? "Restoring…" : "Restore to recent")
                 </button>
 
                 <button class="dangerbtn"
@@ -131,7 +131,7 @@ else
                         type="button"
                         disabled="@_archiveInFlight"
                         @onclick="RequestArchiveConfirm">
-                    @(_archiveInFlight ? "Archiving…" : "Archive")
+                    @(_archiveInFlight ? "Moving…" : "Move to archive")
                 </button>
             }
         </div>
@@ -492,21 +492,21 @@ else
 
     private string ConfirmTitle => _pendingConfirm switch
     {
-        JobConfirmAction.Archive => "Archive job?",
+        JobConfirmAction.Archive => "Move job to archive?",
         JobConfirmAction.DeleteArchived => "Delete archived job?",
         _ => string.Empty
     };
 
     private string ConfirmMessage => _pendingConfirm switch
     {
-        JobConfirmAction.Archive => "This job will be moved out of Recent and shown in Archive.",
+        JobConfirmAction.Archive => "This job will be removed from Recent jobs and shown under Archived jobs.",
         JobConfirmAction.DeleteArchived => "This will soft-delete the archived job and hide it from the app lists.",
         _ => string.Empty
     };
 
     private string ConfirmAcceptLabel => _pendingConfirm switch
     {
-        JobConfirmAction.Archive => "Archive",
+        JobConfirmAction.Archive => "Move to archive",
         JobConfirmAction.DeleteArchived => "Delete",
         _ => "Confirm"
     };
