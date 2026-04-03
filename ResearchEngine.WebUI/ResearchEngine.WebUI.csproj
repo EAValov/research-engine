@@ -14,26 +14,18 @@
 
   <ItemGroup>
     <PackageReference Include="HtmlSanitizer" Version="9.0.892" />
-    <PackageReference Include="Markdig" Version="1.1.1" />
-    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly" Version="10.0.3" />
-    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.DevServer" Version="10.0.3" PrivateAssets="all" />
-    <PackageReference Include="Microsoft.Extensions.Http.Polly" Version="10.0.3" />
+    <PackageReference Include="Markdig" Version="1.1.2" />
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly" Version="10.0.5" />
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.DevServer" Version="10.0.5" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.Extensions.Http.Polly" Version="10.0.5" />
   </ItemGroup>
 
-  <Target Name="GenerateResearchApiClient"
-          BeforeTargets="CoreCompile"
-          DependsOnTargets="BuildBackendBeforeApiClientGeneration"
-          Condition="'$(GenerateApiClientOnBuild)' == 'true' and '$(DesignTimeBuild)' != 'true'"
-          Inputs="$(MSBuildProjectDirectory)\$(NswagConfigFile);$(MSBuildProjectDirectory)\$(OpenApiSpecFile)"
-          Outputs="$(MSBuildProjectDirectory)\$(GeneratedApiClientFile)">
+  <Target Name="GenerateResearchApiClient" BeforeTargets="CoreCompile" DependsOnTargets="BuildBackendBeforeApiClientGeneration" Condition="'$(GenerateApiClientOnBuild)' == 'true' and '$(DesignTimeBuild)' != 'true'" Inputs="$(MSBuildProjectDirectory)\$(NswagConfigFile);$(MSBuildProjectDirectory)\$(OpenApiSpecFile)" Outputs="$(MSBuildProjectDirectory)\$(GeneratedApiClientFile)">
     <Exec Command="$(NswagCommand) run &quot;$(NswagConfigFile)&quot; /variables:OpenApiSpecFile=$([System.IO.Path]::GetFileName('$(OpenApiSpecFile)'))" WorkingDirectory="$(MSBuildProjectDirectory)" />
   </Target>
 
-  <Target Name="BuildBackendBeforeApiClientGeneration"
-          Condition="'$(GenerateApiClientOnBuild)' == 'true' and '$(DesignTimeBuild)' != 'true' and '$(BuildingSolutionFile)' != 'true'">
-    <MSBuild Projects="$(MSBuildProjectDirectory)\..\ResearchEngine.API\ResearchEngine.API.csproj"
-             Targets="Build"
-             Properties="GenerateOpenApiSpecOnBuild=true;DesignTimeBuild=false;Restore=false" />
+  <Target Name="BuildBackendBeforeApiClientGeneration" Condition="'$(GenerateApiClientOnBuild)' == 'true' and '$(DesignTimeBuild)' != 'true' and '$(BuildingSolutionFile)' != 'true'">
+    <MSBuild Projects="$(MSBuildProjectDirectory)\..\ResearchEngine.API\ResearchEngine.API.csproj" Targets="Build" Properties="GenerateOpenApiSpecOnBuild=true;DesignTimeBuild=false;Restore=false" />
   </Target>
 
 </Project>
