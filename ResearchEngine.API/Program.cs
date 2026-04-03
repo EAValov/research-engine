@@ -134,7 +134,7 @@ var ipRateLimitingEnabled =
     ipRateLimitingSection.GetSection("GeneralRules").GetChildren().Any();
 
 if (ipRateLimitingEnabled)
-{
+{   
     builder.Services.AddOptions();
     builder.Services.AddMemoryCache();
 
@@ -266,6 +266,8 @@ if (ipRateLimitingEnabled)
     app.UseForwardedHeaders(options);
     app.UseIpRateLimiting();
 }
+
+app.UseResearchEngineRequestLogging();
 
 app.UseCors("WebUIDev");  
 app.UseAuthentication();

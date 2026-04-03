@@ -7,6 +7,7 @@ using Microsoft.Extensions.AI;
 using ResearchEngine.Application;
 using ResearchEngine.Domain;
 using ResearchEngine.Prompts;
+using Serilog.Context;
 
 namespace ResearchEngine.Infrastructure;
 
@@ -53,8 +54,12 @@ public sealed class ReportSynthesisService(
         
     public async Task RunSynthesisAsync(Guid synthesisId, ResearchProgressTracker? progress, CancellationToken ct)
     {
+        using var synthesisScope = LogContext.PushProperty("SynthesisId", synthesisId);
+
         var synthesis = await synthesisRepository.GetSynthesisAsync(synthesisId, ct)
             ?? throw new InvalidOperationException($"Synthesis {synthesisId} not found.");
+
+        using var jobScope = LogContext.PushProperty("JobId", synthesis.JobId);
 
         // Idempotency / retry safety
         if (synthesis.Status is SynthesisStatus.Completed or SynthesisStatus.Failed)

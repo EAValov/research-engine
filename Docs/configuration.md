@@ -588,7 +588,6 @@ Logging is configured through the `Serilog` section.
 The current sample configuration writes logs to:
 
 - console
-- `logs/app.log` with hourly rolling files
 
 </details>
 

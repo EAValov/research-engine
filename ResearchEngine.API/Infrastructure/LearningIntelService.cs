@@ -280,7 +280,7 @@ public sealed class LearningIntelService(
             };
         }
 
-        logger.LogInformation("Generated embeddings for {Count} learnings.", count);
+        logger.LogDebug("Generated embeddings for {Count} learnings.", count);
         return toEmbed;
     }
 

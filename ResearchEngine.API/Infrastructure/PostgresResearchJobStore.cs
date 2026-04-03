@@ -234,7 +234,7 @@ public sealed partial class PostgresResearchJobStore(
         entity.Region = job.Region;
         entity.UpdatedAt = DateTimeOffset.UtcNow;
 
-        logger.LogInformation("Job {Id} updated", entity.Id);
+        logger.LogDebug("Job {Id} updated", entity.Id);
 
         return await db.SaveChangesAsync(ct);
     }
@@ -257,7 +257,7 @@ public sealed partial class PostgresResearchJobStore(
         ev.JobId = jobId;
         await db.ResearchEvents.AddAsync(ev, ct);
 
-        logger.LogInformation("Job {JobId} [{Stage}] {Message}", jobId, ev.Stage, ev.Message);
+        logger.Log(MapEventLogLevel(ev.Stage), "Job {JobId} [{Stage}] {Message}", jobId, ev.Stage, ev.Message);
 
         await db.SaveChangesAsync(ct);
 
@@ -601,10 +601,20 @@ public sealed partial class PostgresResearchJobStore(
 
         await db.SaveChangesAsync(ct);
 
-        logger.LogInformation(
+        logger.LogDebug(
             "Persisted {Count} learnings for Job {JobId} and Source {SourceId}.",
             list.Count, jobId, sourceId);
     }
+
+    private static LogLevel MapEventLogLevel(ResearchEventStage stage)
+        => stage switch
+        {
+            ResearchEventStage.Completed => LogLevel.Information,
+            ResearchEventStage.Created => LogLevel.Information,
+            ResearchEventStage.Canceled => LogLevel.Warning,
+            ResearchEventStage.Failed => LogLevel.Warning,
+            _ => LogLevel.Debug
+        };
 
     public async Task AddOrUpdateSynthesisSourceOverridesAsync(
         Guid synthesisId,

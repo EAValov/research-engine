@@ -19,6 +19,8 @@ public sealed class ApiPing_Tests : IntegrationTestBase
 
         var resp = await client.GetAsync(route);
         Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
+        Assert.True(resp.Headers.TryGetValues("X-Correlation-ID", out var correlationIds));
+        Assert.False(string.IsNullOrWhiteSpace(correlationIds.Single()));
 
         var payload = await resp.Content.ReadFromJsonAsync<JsonElement>();
         Assert.Equal("ok", payload.GetProperty("status").GetString());

@@ -4,6 +4,7 @@ using Hangfire.PostgreSql.Factories;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
 using Npgsql;
 using ResearchEngine.Infrastructure;
 using StackExchange.Redis;
@@ -38,11 +39,13 @@ public sealed class ContainersFixture : IAsyncLifetime
     {
         Postgres = new PostgreSqlBuilder("pgvector/pgvector:pg17")
             .WithDatabase("research")   // container default, we create our own DBs inside
+            .WithLogger(NullLogger.Instance)
             .WithUsername("postgres")
             .WithPassword("postgres")
             .Build();
 
         Redis = new RedisBuilder("redis:7-alpine")
+            .WithLogger(NullLogger.Instance)
             .Build();
     }
 

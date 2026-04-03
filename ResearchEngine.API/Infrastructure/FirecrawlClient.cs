@@ -171,7 +171,7 @@ public class FirecrawlClient : ISearchClient, ICrawlClient
 
             var markdown = scrapeResponse?.data?.markdown ?? string.Empty;
 
-            _logger.LogInformation(
+            _logger.LogDebug(
                 "Fetched markdown content from URL {Url} with length {Length}",
                 url,
                 markdown.Length);
@@ -252,7 +252,7 @@ public class FirecrawlClient : ISearchClient, ICrawlClient
             return (false, Array.Empty<SearchResult>());
         }
 
-        _logger.LogInformation(
+        _logger.LogDebug(
             "Firecrawl search completed for query '{Query}': {Count} results",
             query,
             results.Count);

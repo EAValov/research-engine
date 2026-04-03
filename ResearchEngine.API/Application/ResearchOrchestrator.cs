@@ -4,6 +4,7 @@ using ResearchEngine.Infrastructure;
 using System.Text;
 using Hangfire;
 using Hangfire.States;
+using Serilog.Context;
 
 namespace ResearchEngine.Application;
 
@@ -78,6 +79,8 @@ public sealed class ResearchOrchestrator(
     /// </summary>
     private async Task RunJobAsync(Guid jobId, CancellationToken ct = default)
     {
+        using var _ = LogContext.PushProperty("JobId", jobId);
+
         if (await jobRepository.IsJobDeletedAsync(jobId, CancellationToken.None))
             return;
 
@@ -313,7 +316,7 @@ public sealed class ResearchOrchestrator(
         var evaluated = sourceReliabilityEvaluator.Evaluate(candidate.Result, trustPolicy, content, SourceKind.Web);
         if (!sourceReliabilityEvaluator.ShouldInclude(evaluated, job.DiscoveryMode, SourceSelectionStage.Final))
         {
-            logger.LogInformation(
+            logger.LogDebug(
                 "Skipping URL {Url} after final trust evaluation for discovery mode {DiscoveryMode}. Tier={Tier}, Classification={Classification}.",
                 url,
                 job.DiscoveryMode,
@@ -345,7 +348,7 @@ public sealed class ResearchOrchestrator(
         var cached = await learningRepository.GetLearningsForSourceAndQueryAsync(source.Id, serpQuery, ct);
         if (cached.Count > 0)
         {
-            logger.LogInformation("Reusing {Count} cached learnings for URL {Url} (SourceId={SourceId}).", cached.Count, url, source.Id);
+            logger.LogDebug("Reusing {Count} cached learnings for URL {Url} (SourceId={SourceId}).", cached.Count, url, source.Id);
             return new UrlProcessingSummary(UsedCache: true, HadError: false, LearningCount: cached.Count);
         }
 
