@@ -58,6 +58,12 @@
     align-items: center;
 }
 
+.rationale {
+    font-size: 0.84rem;
+    line-height: 1.45;
+    overflow-wrap: break-word;
+}
+
 .badge {
     display: inline-flex;
     align-items: center;

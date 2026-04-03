@@ -61,6 +61,11 @@
                         }
                     </div>
 
+                    @if (!string.IsNullOrWhiteSpace(s.ReliabilityRationale))
+                    {
+                        <div class="rationale muted">@s.ReliabilityRationale</div>
+                    }
+
                     <div class="meta muted">
                         <button type="button"
                                 class="link"

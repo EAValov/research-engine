@@ -13,7 +13,7 @@ using ResearchEngine.Infrastructure;
 namespace ResearchEngine.API.Migrations
 {
     [DbContext(typeof(ResearchDbContext))]
-    [Migration("20260329191018_InitialCreate")]
+    [Migration("20260403123640_InitialCreate")]
     partial class InitialCreate
     {
         /// <inheritdoc />

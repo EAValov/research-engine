@@ -1,5 +1,6 @@
 using ResearchEngine.Configuration;
 using ResearchEngine.Domain;
+using ResearchEngine.Infrastructure;
 using System.Text;
 using Hangfire;
 using Hangfire.States;
@@ -15,6 +16,7 @@ public sealed class ResearchOrchestrator(
     IResearchEventRepository eventRepository,
     IResearchSourceRepository sourceRepository,
     IResearchLearningRepository learningRepository,
+    IResearchProtocolService protocolService,
     IQueryPlanningService queryPlanningService,
     ILearningIntelService learningIntelService,
     IReportSynthesisService reportSynthesisService,
@@ -37,14 +39,18 @@ public sealed class ResearchOrchestrator(
         CancellationToken ct = default)
     {
         var settings = await runtimeSettings.GetCurrentAsync(ct);
+        var clarificationList = clarifications.ToList();
         var effectiveDiscoveryMode = discoveryMode
             ?? SourceDiscoveryModeExtensions.ParseOrDefault(
                 settings.ResearchOrchestratorConfig.DefaultDiscoveryMode,
                 SourceDiscoveryMode.Balanced);
 
+        if (effectiveDiscoveryMode == SourceDiscoveryMode.Auto)
+            effectiveDiscoveryMode = await protocolService.AutoSelectDiscoveryModeAsync(query, clarificationList, ct);
+
         var job = await jobRepository.CreateJobAsync(
             query: query,
-            clarifications: clarifications,
+            clarifications: clarificationList,
             breadth: breadth,
             depth: depth,
             discoveryMode: effectiveDiscoveryMode,
@@ -86,6 +92,13 @@ public sealed class ResearchOrchestrator(
         try
         {
             await progress.InfoAsync(ResearchEventStage.Planning, "Starting research planning", ct);
+            var trustPolicy = SourceTrustRuleCatalog.BuildPolicy(job.Region, job.TargetLanguage);
+            logger.LogInformation(
+                "Using source trust packs {ActivePacks} for job {JobId} (language={Language}, region={Region}).",
+                string.Join(", ", trustPolicy.ActivePackNames),
+                job.Id,
+                job.TargetLanguage,
+                job.Region ?? "<none>");
 
             var clarifications = job.Clarifications ?? new List<Clarification>();
             var clarificationsText = FormatClarifications(clarifications);
@@ -119,6 +132,7 @@ public sealed class ResearchOrchestrator(
                     serpQuery,
                     clarificationsText,
                     progress,
+                    trustPolicy,
                     ct);
             }
 
@@ -186,6 +200,7 @@ public sealed class ResearchOrchestrator(
         string serpQuery,
         string clarificationsText,
         ResearchProgressTracker progress,
+        AppliedSourceTrustPolicy trustPolicy,
         CancellationToken ct)
     {
         var settings = await runtimeSettings.GetCurrentAsync(ct);
@@ -201,8 +216,8 @@ public sealed class ResearchOrchestrator(
         progress.SerpSearchCompleted(searchResults.Count);
 
         var candidates = searchResults
-            .Select(r => new SearchCandidate(r, sourceReliabilityEvaluator.Evaluate(r)))
-            .Where(c => sourceReliabilityEvaluator.ShouldInclude(c.Assessment, job.DiscoveryMode))
+            .Select(r => new SearchCandidate(r, sourceReliabilityEvaluator.Evaluate(r, trustPolicy)))
+            .Where(c => sourceReliabilityEvaluator.ShouldInclude(c.Assessment, job.DiscoveryMode, SourceSelectionStage.Candidate))
             .OrderByDescending(c => c.Assessment.Score)
             .ThenBy(c => c.Result.Position ?? int.MaxValue)
             .ThenBy(c => c.Result.Url, StringComparer.OrdinalIgnoreCase)
@@ -242,6 +257,7 @@ public sealed class ResearchOrchestrator(
                     serpQuery,
                     candidate,
                     clarificationsText,
+                    trustPolicy,
                     ct);
 
                 progress.UrlProcessed(summary.UsedCache, summary.HadError, summary.LearningCount);
@@ -279,6 +295,7 @@ public sealed class ResearchOrchestrator(
         string serpQuery,
         SearchCandidate candidate,
         string clarificationsText,
+        AppliedSourceTrustPolicy trustPolicy,
         CancellationToken ct)
     {
         var url = candidate.Result.Url;
@@ -293,7 +310,19 @@ public sealed class ResearchOrchestrator(
         }
 
         // 2) Upsert Source
-        var evaluated = sourceReliabilityEvaluator.Evaluate(candidate.Result, content, SourceKind.Web);
+        var evaluated = sourceReliabilityEvaluator.Evaluate(candidate.Result, trustPolicy, content, SourceKind.Web);
+        if (!sourceReliabilityEvaluator.ShouldInclude(evaluated, job.DiscoveryMode, SourceSelectionStage.Final))
+        {
+            logger.LogInformation(
+                "Skipping URL {Url} after final trust evaluation for discovery mode {DiscoveryMode}. Tier={Tier}, Classification={Classification}.",
+                url,
+                job.DiscoveryMode,
+                evaluated.Tier,
+                evaluated.Classification);
+
+            return new UrlProcessingSummary(UsedCache: false, HadError: false, LearningCount: 0);
+        }
+
         var source = await sourceRepository.UpsertSourceAsync(
             jobId: job.Id,
             reference: url,

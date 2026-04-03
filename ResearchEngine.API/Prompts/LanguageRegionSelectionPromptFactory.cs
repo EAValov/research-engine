@@ -34,6 +34,8 @@ public static class LanguageRegionSelectionPromptFactory
         sb.AppendLine("  you MUST use that language code if possible.");
         sb.AppendLine("- If the user explicitly mentions a country or region focus (e.g. \"in Germany\", \"for the US market\",");
         sb.AppendLine("  \"in the EU\"), choose a matching region string.");
+        sb.AppendLine("- Prefer region strings that explicitly include the country name whenever there is one");
+        sb.AppendLine("  (for example \"Moscow,Russia\" instead of just \"Moscow\") so downstream regional source rules can activate correctly.");
         sb.AppendLine("- If the topic is clearly about Germany (e.g., \"Bayern\", \"Deutschland\", \"Bundesland\"), strongly prefer:");
         sb.AppendLine("    language = \"de\", region = \"Germany\".");
         sb.AppendLine("- If the topic is clearly about a specific German state (e.g., Bayern), you MAY use a more specific region like:");

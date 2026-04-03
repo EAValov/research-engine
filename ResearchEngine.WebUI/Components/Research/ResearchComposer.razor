@@ -138,7 +138,7 @@
                                  tabindex="0">
                                 Sources
                                 <span id="discoveryModeHelp" role="tooltip" class="field-help-tip">
-                                    Balanced mixes source types. Reliable only favors higher-trust sources like official statements and established publications. Academic only focuses on papers, journals, and preprints.
+                                    Auto lets the protocol choose the best source mode for this query. Balanced mixes source types. Reliable only keeps only high-trust sources such as official documentation, institutions, and established publications. Academic only keeps papers, journals, and preprints, and may exclude official docs that are not academic.
                                 </span>
                             </div>
                             <select class="input"
@@ -146,6 +146,7 @@
                                     aria-describedby="discoveryModeHelp"
                                     value="@_discoveryModeOverride"
                                     @onchange="e => _discoveryModeOverride = NormalizeDiscoveryMode(e.Value?.ToString())">
+                                <option value="Auto">Auto</option>
                                 <option value="Balanced">Balanced</option>
                                 <option value="ReliableOnly">Reliable only</option>
                                 <option value="AcademicOnly">Academic only</option>
@@ -205,7 +206,7 @@
     private int? _breadth;
     private int? _depth;
     private string? _region;
-    private string _discoveryModeOverride = "Balanced";
+    private string _discoveryModeOverride = "Auto";
 
     private bool _busy;
     private string _busyText = "Working…";
@@ -418,14 +419,15 @@
     private static string NormalizeDiscoveryMode(string? raw)
     {
         if (string.IsNullOrWhiteSpace(raw))
-            return "Balanced";
+            return "Auto";
 
         return raw.Trim() switch
         {
+            "Auto" => "Auto",
             "Balanced" => "Balanced",
             "ReliableOnly" => "ReliableOnly",
             "AcademicOnly" => "AcademicOnly",
-            _ => "Balanced"
+            _ => "Auto"
         };
     }
 
@@ -438,7 +440,7 @@
         }
         catch
         {
-            return "Balanced";
+            return "Auto";
         }
     }
 

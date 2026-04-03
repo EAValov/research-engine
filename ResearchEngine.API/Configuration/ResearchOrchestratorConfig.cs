@@ -28,5 +28,5 @@ public sealed record ResearchOrchestratorConfig
     /// </summary>
     [Required]
     [MaxLength(32)]
-    public string DefaultDiscoveryMode { get; init; } = SourceDiscoveryMode.Balanced.ToApiValue();
+    public string DefaultDiscoveryMode { get; init; } = SourceDiscoveryMode.Auto.ToApiValue();
 };

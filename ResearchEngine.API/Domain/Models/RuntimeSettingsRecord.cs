@@ -11,7 +11,7 @@ public sealed class RuntimeSettingsRecord
     public int LimitSearches { get; set; }
     public int MaxUrlParallelism { get; set; }
     public int MaxUrlsPerSerpQuery { get; set; }
-    public string DefaultDiscoveryMode { get; set; } = SourceDiscoveryMode.Balanced.ToApiValue();
+    public string DefaultDiscoveryMode { get; set; } = SourceDiscoveryMode.Auto.ToApiValue();
 
     public float MinImportance { get; set; }
     public int DiversityMaxPerUrl { get; set; }

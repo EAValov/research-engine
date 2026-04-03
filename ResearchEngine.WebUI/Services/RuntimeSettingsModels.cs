@@ -34,7 +34,7 @@ public sealed class ResearchOrchestratorConfigModel
     public int LimitSearches { get; set; }
     public int MaxUrlParallelism { get; set; }
     public int MaxUrlsPerSerpQuery { get; set; }
-    public string DefaultDiscoveryMode { get; set; } = "Balanced";
+    public string DefaultDiscoveryMode { get; set; } = "Auto";
 }
 
 public sealed class LearningSimilarityOptionsModel

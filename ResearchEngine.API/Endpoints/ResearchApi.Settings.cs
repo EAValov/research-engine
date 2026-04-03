@@ -116,7 +116,7 @@ public static partial class ResearchApi
                 out _))
         {
             errors[$"{nameof(request.ResearchOrchestratorConfig)}.{nameof(ResearchOrchestratorConfig.DefaultDiscoveryMode)}"] =
-            ["DefaultDiscoveryMode must be Balanced, ReliableOnly, or AcademicOnly."];
+            ["DefaultDiscoveryMode must be Auto, Balanced, ReliableOnly, or AcademicOnly."];
         }
 
         var existingSettings = await runtimeSettingsRepository.GetCurrentAsync(ct);

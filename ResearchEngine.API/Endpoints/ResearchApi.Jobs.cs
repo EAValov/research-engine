@@ -42,7 +42,7 @@ public static partial class ResearchApi
             {
                 return Results.ValidationProblem(new Dictionary<string, string[]>
                 {
-                    [nameof(CreateResearchJobRequest.DiscoveryMode)] = ["DiscoveryMode must be Balanced, ReliableOnly, or AcademicOnly."]
+                    [nameof(CreateResearchJobRequest.DiscoveryMode)] = ["DiscoveryMode must be Auto, Balanced, ReliableOnly, or AcademicOnly."]
                 });
             }
 

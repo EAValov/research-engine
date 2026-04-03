@@ -163,6 +163,48 @@ public class ResearchProtocolService : IResearchProtocolService
         return (language!, region);
     }
 
+    public async Task<SourceDiscoveryMode> AutoSelectDiscoveryModeAsync(
+        string query,
+        IReadOnlyList<Clarification> clarifications,
+        CancellationToken ct = default)
+    {
+        const SourceDiscoveryMode fallback = SourceDiscoveryMode.Balanced;
+
+        var prompt = SelectDiscoveryModePromptFactory.Build(query, clarifications);
+
+        var jsonOptions = new JsonSerializerOptions
+        {
+            PropertyNameCaseInsensitive = true
+        };
+
+        var responseFormat = DiscoveryModeSelectionResponse.JsonResponseSchema(jsonOptions);
+
+        var raw = await _chatModel.ChatAsync(
+            prompt,
+            tools: null,
+            responseFormat: responseFormat,
+            cancellationToken: ct);
+
+        if (string.IsNullOrWhiteSpace(raw.Text))
+            return fallback;
+
+        var rawText = _chatModel.StripThinkBlock(raw.Text).Trim();
+
+        DiscoveryModeSelectionResponse? parsed;
+        try
+        {
+            parsed = JsonSerializer.Deserialize<DiscoveryModeSelectionResponse>(rawText, jsonOptions);
+        }
+        catch
+        {
+            return fallback;
+        }
+
+        return SourceDiscoveryModeExtensions.TryParse(parsed?.DiscoveryMode, out var mode) && mode != SourceDiscoveryMode.Auto
+            ? mode
+            : fallback;
+    }
+
     private sealed class BreadthDepthSelection
     {
         [Description("How many distinct directions / subtopics to explore (1–8).")]
@@ -211,6 +253,22 @@ public class ResearchProtocolService : IResearchProtocolService
             var jsonElement = AIJsonUtilities.CreateJsonSchema(
                 typeof(LanguageRegionSelectionResponse),
                 description: "Selected language and region for web research",
+                serializerOptions: jsonSerializerOptions);
+
+            return new ChatResponseFormatJson(jsonElement);
+        }
+    }
+
+    private sealed class DiscoveryModeSelectionResponse
+    {
+        [Description("Selected source discovery mode. Must be one of: Balanced, ReliableOnly, AcademicOnly.")]
+        public required string DiscoveryMode { get; init; }
+
+        public static ChatResponseFormat JsonResponseSchema(JsonSerializerOptions? jsonSerializerOptions = default)
+        {
+            var jsonElement = AIJsonUtilities.CreateJsonSchema(
+                typeof(DiscoveryModeSelectionResponse),
+                description: "Selected source discovery mode for deep research",
                 serializerOptions: jsonSerializerOptions);
 
             return new ChatResponseFormatJson(jsonElement);

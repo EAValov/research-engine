@@ -28,7 +28,7 @@ This guide is based on:
 | `FirecrawlOptions__BaseUrl` | search and scrape backend | env var |
 | `ChatConfig__Endpoint`, `ChatConfig__ModelId`, `ChatConfig__ApiKey` | chat backend for planning and synthesis | env var initially, then the runtime settings UI |
 | `EmbeddingConfig__Endpoint`, `EmbeddingConfig__ModelId`, `EmbeddingConfig__Dimension`, `EmbeddingConfig__ApiKey` | embeddings backend | env var |
-| `ResearchOrchestratorConfig__DefaultDiscoveryMode` | default source-discovery policy preselected in the composer | bootstrap config initially, then the runtime settings UI |
+| `ResearchOrchestratorConfig__DefaultDiscoveryMode` | default source-discovery policy preselected in the composer, including `Auto` | bootstrap config initially, then the runtime settings UI |
 | `AuthenticationOptions__ApiKeys__0` | API access key | secret |
 | `API_BASE_URL` | default API URL used by the Web UI container | env var |
 
@@ -319,7 +319,7 @@ env:
   "LimitSearches": 5,
   "MaxUrlParallelism": 1,
   "MaxUrlsPerSerpQuery": 20,
-  "DefaultDiscoveryMode": "Balanced"
+  "DefaultDiscoveryMode": "Auto"
 }
 ```
 
@@ -330,7 +330,7 @@ Current validation:
 - `LimitSearches`: `1..1000`
 - `MaxUrlParallelism`: `1..1000`
 - `MaxUrlsPerSerpQuery`: `1..1000`
-- `DefaultDiscoveryMode`: one of `Balanced`, `ReliableOnly`, `AcademicOnly`
+- `DefaultDiscoveryMode`: one of `Auto`, `Balanced`, `ReliableOnly`, `AcademicOnly`
 
 Meaning:
 
@@ -345,12 +345,22 @@ Meaning:
 
 Discovery modes:
 
+- `Auto`
+  - asks the protocol layer to choose `Balanced`, `ReliableOnly`, or `AcademicOnly` per query
 - `Balanced`
   - general-purpose discovery that mixes broad web search with deterministic source-quality scoring
 - `ReliableOnly`
   - filters discovery toward higher-trust sources such as official, government, academic, journal, and established publication domains
 - `AcademicOnly`
-  - restricts discovery toward research-oriented sources such as papers, journals, preprints, and PDFs
+  - restricts discovery toward research-oriented sources such as academic domains, journals, and preprints
+
+Source trust rules:
+
+- trust rules are currently code-defined in `ResearchEngine.API/Infrastructure/SourceTrustRuleCatalog.cs`
+- the global pack is always active
+- regional packs are activated automatically when the job language or human-readable region string matches a known pack
+- the built-in regional packs currently include `Russia` and `China`
+- trust rules are not stored in PostgreSQL and are not currently editable through the Settings dialog
 
 These settings are loaded from the shared runtime-settings row in PostgreSQL and are exposed in the Web UI settings dialog.
 

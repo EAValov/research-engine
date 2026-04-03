@@ -107,7 +107,12 @@ It:
 
 The output of this phase is a **job-scoped evidence base**.
 
-Source reliability is evaluated deterministically rather than delegated to the LLM. Search results and scraped pages are classified into source types such as official, government, academic, journal, preprint, news, blog, forum, and social. That metadata is used both to support per-job discovery modes (`Balanced`, `ReliableOnly`, `AcademicOnly`) and to show reliability badges and rationale in the evidence UI.
+Source reliability is evaluated deterministically rather than delegated to the LLM. Search results and scraped pages are classified into source types such as official, government, academic, journal, preprint, news, blog, forum, and social. The evaluator applies a code-defined global trust pack and can extend it with regional packs selected from the job language and region string. That metadata is used both to support per-job discovery modes (`Auto`, `Balanced`, `ReliableOnly`, `AcademicOnly`) and to show reliability badges and rationale in the evidence UI.
+
+The reliability pass happens in two stages:
+
+- a candidate-stage pass on search results before scraping, used to keep or reject URLs for the selected discovery mode
+- a final pass after content is fetched, so content signals such as journal or academic structure can affect the stored source metadata and final filtering
 
 ### 2. Synthesis generation
 

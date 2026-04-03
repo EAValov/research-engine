@@ -34,7 +34,8 @@ No subscription required. Your prompts, sources, and reports stay on infrastruct
 
 - **Local-first deep research** using locally hosted chat and embedding models
 - **Privacy-oriented by design** so prompts, sources, and generated reports remain under your control
-- **Configurable source discovery modes** with `Balanced`, `Reliable only`, and `Academic only` policies
+- **Configurable source discovery modes** with `Auto`, `Balanced`, `Reliable only`, and `Academic only` policies
+- **Deterministic source reliability** using a global trust pack plus region-aware rule packs selected from the job language and region
 - **Traceable citations** with source URLs and evidence popovers in the final report
 - **Interactive evidence review** for inspecting sources, learnings, and reliability badges before accepting a synthesis
 - **Pin and exclude workflow** for curating evidence without restarting the full job
@@ -95,7 +96,7 @@ Installing the Caddy certificate is optional, but recommended. It is safe in the
 
 1. Submit a research query.
 2. The system searches the web using the selected source-discovery policy and collects source pages.
-3. Sources are classified for reliability, then pages are compressed into structured learnings and stored in PostgreSQL with embeddings.
+3. Sources are classified for reliability using deterministic global and regional trust rules, then pages are compressed into structured learnings and stored in PostgreSQL with embeddings.
 4. The LLM plans and writes the report section by section using retrieval.
 5. You review citations and evidence in the UI.
 6. You regenerate with pinned or excluded evidence and extra instructions.
@@ -104,11 +105,14 @@ Installing the Caddy certificate is optional, but recommended. It is safe in the
 
 Research Engine can bias web discovery before pages are scraped.
 
+- **Auto** lets the protocol choose the best discovery mode for the query.
 - **Balanced** mixes broad discovery with deterministic source-quality heuristics.
 - **Reliable only** keeps higher-trust sources such as official statements, government pages, academic material, journals, and established publications.
-- **Academic only** focuses discovery on research-oriented sources such as papers, journals, preprints, and PDFs.
+- **Academic only** focuses discovery on research-oriented sources such as academic domains, journals, and preprints.
 
-The default mode is set in the Settings dialog and can be overridden per job from the composer. Stored sources also keep reliability metadata so the evidence drawer can show source class, reliability tier, and rationale.
+Global trust rules are always applied. When a job language or human-readable region string matches a known locale, the matching regional pack is added on top. The built-in packs currently include `Russia` and `China`.
+
+The default mode is set in the Settings dialog and can be overridden per job from the composer. Stored sources keep source class, reliability tier, and rationale so the evidence drawer can explain why a source was promoted or demoted. Trust packs are currently code-defined rather than editable from the UI.
 
 ## Example Reports
 

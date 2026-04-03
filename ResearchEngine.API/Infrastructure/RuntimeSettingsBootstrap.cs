@@ -22,7 +22,7 @@ public static class RuntimeSettingsBootstrap
                 out _))
         {
             throw new InvalidOperationException(
-                $"{nameof(ResearchOrchestratorConfig.DefaultDiscoveryMode)} must be one of Balanced, ReliableOnly, or AcademicOnly.");
+                $"{nameof(ResearchOrchestratorConfig.DefaultDiscoveryMode)} must be one of Auto, Balanced, ReliableOnly, or AcademicOnly.");
         }
 
         if (snapshot.LearningSimilarityOptions.MinLearningsPerSegment >

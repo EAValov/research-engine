@@ -14,13 +14,13 @@
                  aria-modal="true"
                  aria-labelledby="settingsTitle"
                  @onclick:stopPropagation="true">
-            <div class="settings-head">
-                <div>
-                    <h2 id="settingsTitle">Settings</h2>
-                    <p class="settings-subtitle">ResearchEngine API, Chat LLM settings, crawl settings, search settings, and learning similarity.</p>
+                <div class="settings-head">
+                    <div>
+                        <h2 id="settingsTitle">Settings</h2>
+                        <p class="settings-subtitle">ResearchEngine API, Chat LLM settings, crawl settings, search defaults, and learning similarity.</p>
+                    </div>
+                    <button type="button" class="close-btn" @onclick="CloseSettings" aria-label="Close settings">×</button>
                 </div>
-                <button type="button" class="close-btn" @onclick="CloseSettings" aria-label="Close settings">×</button>
-            </div>
 
             <div class="settings-body">
                 <section class="settings-group">
@@ -352,11 +352,12 @@
                         <label class="settings-field settings-field-full">
                             <span class="settings-label-row">
                                 <span>Default discovery mode</span>
-                                <span class="settings-help" title="Controls the default source-quality policy for new jobs unless the composer overrides it.">Source policy</span>
+                                <span class="settings-help" title="Controls the default source-quality policy for new jobs unless the composer overrides it. Auto lets the protocol decide per query.">Source policy</span>
                             </span>
                             <select class="@GetInputClass("ResearchOrchestratorConfig.DefaultDiscoveryMode")"
                                     @bind="_draftResearchOptions.DefaultDiscoveryMode"
                                     disabled="@IsRuntimeSettingsDisabled">
+                                <option value="Auto">Auto</option>
                                 <option value="Balanced">Balanced</option>
                                 <option value="ReliableOnly">Reliable only</option>
                                 <option value="AcademicOnly">Academic only</option>

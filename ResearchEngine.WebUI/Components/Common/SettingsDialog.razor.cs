@@ -36,7 +36,7 @@ public partial class SettingsDialog : ComponentBase
     {
         PropertyNameCaseInsensitive = true
     };
-    private static readonly string[] DiscoveryModeOptions = ["Balanced", "ReliableOnly", "AcademicOnly"];
+    private static readonly string[] DiscoveryModeOptions = ["Auto", "Balanced", "ReliableOnly", "AcademicOnly"];
 
     [Inject] private AppStateStore AppState { get; set; } = default!;
     [Inject] private ApiConnectionSettings ApiConnection { get; set; } = default!;
@@ -603,7 +603,7 @@ public partial class SettingsDialog : ComponentBase
     private void ValidateDiscoveryMode(string key, string? value)
     {
         if (string.IsNullOrWhiteSpace(value) || !DiscoveryModeOptions.Contains(value, StringComparer.Ordinal))
-            SetFieldError(key, "Choose Balanced, ReliableOnly, or AcademicOnly.");
+            SetFieldError(key, "Choose Auto, Balanced, ReliableOnly, or AcademicOnly.");
     }
 
     private void SetFieldError(string key, string message)

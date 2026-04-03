@@ -2,9 +2,10 @@ namespace ResearchEngine.Domain;
 
 public enum SourceDiscoveryMode
 {
-    Balanced = 0,
-    ReliableOnly = 1,
-    AcademicOnly = 2
+    Auto = 0,
+    Balanced = 1,
+    ReliableOnly = 2,
+    AcademicOnly = 3
 }
 
 public static class SourceDiscoveryModeExtensions
@@ -21,6 +22,7 @@ public static class SourceDiscoveryModeExtensions
 
         return value.Trim().ToLowerInvariant() switch
         {
+            "auto" => Set(SourceDiscoveryMode.Auto, out mode),
             "balanced" => Set(SourceDiscoveryMode.Balanced, out mode),
             "reliableonly" or "reliable_only" or "reliable-only" => Set(SourceDiscoveryMode.ReliableOnly, out mode),
             "academiconly" or "academic_only" or "academic-only" => Set(SourceDiscoveryMode.AcademicOnly, out mode),
@@ -31,6 +33,7 @@ public static class SourceDiscoveryModeExtensions
     public static string ToApiValue(this SourceDiscoveryMode mode)
         => mode switch
         {
+            SourceDiscoveryMode.Auto => "Auto",
             SourceDiscoveryMode.Balanced => "Balanced",
             SourceDiscoveryMode.ReliableOnly => "ReliableOnly",
             SourceDiscoveryMode.AcademicOnly => "AcademicOnly",
@@ -42,6 +45,12 @@ public static class SourceDiscoveryModeExtensions
         mode = value;
         return true;
     }
+}
+
+public enum SourceSelectionStage
+{
+    Candidate = 0,
+    Final = 1
 }
 
 public enum SourceClassification

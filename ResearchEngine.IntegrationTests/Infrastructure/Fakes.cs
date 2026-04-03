@@ -138,6 +138,10 @@ public sealed class FakeChatModel : IChatModel
             if (SchemaContains(schemaRaw, "\"language\"", "\"region\""))
                 return Task.FromResult(MakeResponse(MakeLanguageRegionJson()));
 
+            // DiscoveryModeSelection
+            if (SchemaContains(schemaRaw, "\"discoveryMode\""))
+                return Task.FromResult(MakeResponse(MakeDiscoveryModeJson()));
+
             // ClarificationQuestionsResponse
             if (SchemaContains(schemaRaw, "\"queries\"") && schemaRaw.Contains("clarification", StringComparison.OrdinalIgnoreCase))
                 return Task.FromResult(MakeResponse(MakeClarificationsJson()));
@@ -163,6 +167,13 @@ public sealed class FakeChatModel : IChatModel
         if (sys.Contains("clarification", StringComparison.OrdinalIgnoreCase))
         {
             text = """{"queries":["What exactly should the report optimize for (speed vs depth)?","Any constraints on sources (academic only, recency, region)?"]}""";
+            return Task.FromResult(MakeResponse(text));
+        }
+
+        if (sys.Contains("source discovery mode", StringComparison.OrdinalIgnoreCase)
+            || sys.Contains("ReliableOnly", StringComparison.OrdinalIgnoreCase))
+        {
+            text = """{"discoveryMode":"Balanced"}""";
             return Task.FromResult(MakeResponse(text));
         }
 
@@ -366,6 +377,7 @@ public sealed class FakeChatModel : IChatModel
 
     private static string MakeBreadthDepthJson() => """{ "breadth": 2, "depth": 2 }""";
     private static string MakeLanguageRegionJson() => """{ "language": "en", "region": null }""";
+    private static string MakeDiscoveryModeJson() => """{ "discoveryMode": "Balanced" }""";
 
     private static string MakeClarificationsJson()
     {
