@@ -52,7 +52,7 @@ The app is containerized. You don't need Linux or Mac - it will just work on you
 
 The main requirement is that system must be powerful enough to run at least 8-14B models with a decent speed and context window. 
 
-If your hardware is different, or you want HTTPS and friendly local URLs such as `https://research-webui.llm.local:8443` and `https://research-api.llm.local:8443`, see the [Deployment guide](./Docs/Deployment.md).
+If your hardware is different see the [Model Pod section of the Deployment guide](./Docs/Deployment.md#model-pod).
 
 If you have a similar PC, you can use this one-command installer flow:
 
