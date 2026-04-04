@@ -1,9 +1,14 @@
 #!/bin/sh
 set -eu
 
-: "${API_BASE_URL:=http://localhost:8090}"
 : "${APP_VERSION:=dev}"
 : "${AuthenticationOptions__ApiKeys__0:=}"
+
+if [ -z "${API_BASE_URL:-}" ]; then
+  API_BASE_URL="$(sed -n 's/^[[:space:]]*"ApiBaseUrl":[[:space:]]*"\(.*\)",[[:space:]]*$/\1/p' /srv/appsettings.json | head -n 1)"
+fi
+
+: "${API_BASE_URL:?API_BASE_URL is required or /srv/appsettings.json must define ApiBaseUrl}"
 
 cat > /srv/appsettings.json <<EOF
 {

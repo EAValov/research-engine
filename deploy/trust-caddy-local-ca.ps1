@@ -57,3 +57,5 @@ if ($StoreScope -eq "CurrentUser") {
 Write-Host ""
 Write-Host "Done. Restart your browser and open:"
 Write-Host "  https://research-webui.llm.local:8443/"
+Write-Host "API endpoint:"
+Write-Host "  https://research-api.llm.local:8443/"

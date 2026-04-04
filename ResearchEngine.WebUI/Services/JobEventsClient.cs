@@ -226,7 +226,7 @@ public sealed class JobEventsClient : IAsyncDisposable
                     throw new InvalidOperationException("StreamUrl is empty.");
 
                 // IMPORTANT: token.StreamUrl is usually "/api/...."
-                // Ensure we always connect to the API origin (http://localhost:8090),
+                // Ensure we always connect to the configured API origin,
                 // not the SPA origin (http://localhost:5173) and not "file:///".
                 var absoluteUrl = ToAbsoluteApiUrl(_apiConnection.ApiBaseUrl, url);
 

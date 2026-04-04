@@ -301,14 +301,18 @@ if ($Action -eq "up" -or $Action -eq "restart") {
 
     Write-Host ""
     Write-Host "Local stack started: $($started -join ', ')."
-    Write-Host "HTTP:  http://localhost:8080/"
+    Write-Host "Debug API: http://localhost:8090/"
 
     if ($InstallCaddyCertificate) {
-        Write-Host "HTTPS: https://research-webui.llm.local:8443/"
+        Write-Host "UI:    https://research-webui.llm.local:8443/"
+        Write-Host "API:   https://research-api.llm.local:8443/"
     }
     else {
-        Write-Host "Optional HTTPS: https://research-webui.llm.local:8443/"
-        Write-Host "  To use it without browser warnings, add '127.0.0.1 research-webui.llm.local' to your hosts file"
+        Write-Host "UI:    https://research-webui.llm.local:8443/"
+        Write-Host "API:   https://research-api.llm.local:8443/"
+        Write-Host "  To use them without browser warnings, add these entries to your hosts file:"
+        Write-Host "    127.0.0.1 research-webui.llm.local"
+        Write-Host "    127.0.0.1 research-api.llm.local"
         Write-Host "  and rerun with -InstallCaddyCertificate, or run .\Deploy\trust-caddy-local-ca.ps1 later."
     }
 }

@@ -6,7 +6,7 @@
 const sources = new Map();
 
 export function connect(url, dotNetRef) {
-  // url MUST be absolute (http://localhost:8090/...), JobEventsClient ensures this.
+  // url MUST be absolute, JobEventsClient ensures this.
   const es = new EventSource(url);
 
   const id = (crypto?.randomUUID?.() ?? ("es_" + Math.random().toString(16).slice(2)));

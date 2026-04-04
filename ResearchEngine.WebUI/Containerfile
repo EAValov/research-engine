@@ -24,7 +24,6 @@ COPY entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh
 
 ENV WEBUI_PORT=8081
-ENV API_BASE_URL=http://localhost:8090
 ENV APP_VERSION=$APP_VERSION
 
 EXPOSE 8081

@@ -31,13 +31,14 @@ builder.Services.AddSingleton<AppRuntimeInfo>();
 
 builder.Services.AddScoped(sp =>
 {
-    var apiBaseUrl = builder.Configuration["ApiBaseUrl"] ?? "http://localhost:8090";
+    var apiBaseUrl = ApiConnectionSettings.NormalizeBaseUrl(builder.Configuration["ApiBaseUrl"])
+        ?? throw new InvalidOperationException("Missing or invalid Web UI configuration value: ApiBaseUrl.");
     var handler = sp.GetRequiredService<AuthHeaderHandler>();
     handler.InnerHandler = new HttpClientHandler();
 
     return new HttpClient(handler)
     {
-        BaseAddress = new Uri(apiBaseUrl.TrimEnd('/') + "/")
+        BaseAddress = new Uri(apiBaseUrl)
     };
 });
 

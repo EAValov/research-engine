@@ -523,25 +523,14 @@ Queues used by the application:
 
 `AllowedOrigins` defines the `WebUIDev` CORS policy.
 
-If the section is missing or empty, the API falls back to these built-in defaults:
-
-- `http://localhost:5170`
-- `http://127.0.0.1:5170`
-- `http://localhost:5173`
-- `http://127.0.0.1:5173`
-- `https://localhost:5001`
-- `http://localhost:5000`
-
 Single-host deployment example:
 
 ```yaml
 env:
   - name: Cors__AllowedOrigins__0
-    value: "http://localhost:8080"
-  - name: Cors__AllowedOrigins__1
-    value: "http://127.0.0.1:8080"
-  - name: Cors__AllowedOrigins__2
     value: "https://research-webui.llm.local:8443"
+  - name: Cors__AllowedOrigins__1
+    value: "http://localhost:5173"
 ```
 
 ### `IpRateLimiting`
@@ -644,6 +633,9 @@ The Web UI default config file is:
 - `ApiAuth:ApiKey`
   - default API key
 
+This file is the single built-in source for the default API base URL in the Web UI project.
+Local debugging uses this file, and container deployments can override `ApiBaseUrl` through `API_BASE_URL`.
+
 ### Browser-Saved Settings
 
 The Web UI settings dialog allows the user to change:
@@ -663,7 +655,7 @@ In the single-host deployment, the Web UI container receives:
 ```yaml
 env:
   - name: API_BASE_URL
-    value: "http://localhost:8080"
+    value: "https://research-api.llm.local:8443"
   - name: AuthenticationOptions__ApiKeys__0
     valueFrom:
       secretKeyRef:
@@ -676,6 +668,7 @@ env:
 - `API_BASE_URL` -> `ApiBaseUrl`
 - `AuthenticationOptions__ApiKeys__0` -> `ApiAuth:ApiKey`
 
+If `API_BASE_URL` is not provided, the container keeps the default `ApiBaseUrl` from `wwwroot/appsettings.json`.
 These are only startup defaults. The browser can still override them later.
 
 ## Single-Host Deployment Summary

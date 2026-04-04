@@ -7,14 +7,9 @@ data:
     {
       admin off
     }
-    http://localhost:8080, http://127.0.0.1:8080 {
+    http://localhost:8090 {
       encode zstd gzip
-      @api path /api* /health* /openapi* /scalar* /hangfire*
-      reverse_proxy @api research-app:8080
-      reverse_proxy research-app:8082
-    }
-    http://research-webui.llm.local:8080 {
-      redir https://research-webui.llm.local:8443{uri} permanent
+      reverse_proxy research-app:8080
     }
     https://research-webui.llm.local:8443 {
       tls internal
@@ -22,6 +17,11 @@ data:
       @api path /api* /health* /openapi* /scalar* /hangfire*
       reverse_proxy @api research-app:8080
       reverse_proxy research-app:8082
+    }
+    https://research-api.llm.local:8443 {
+      tls internal
+      encode zstd gzip
+      reverse_proxy research-app:8080
     }
 
 ---
@@ -35,8 +35,8 @@ spec:
     - name: caddy
       image: docker.io/library/caddy:2.8
       ports:
-        - containerPort: 8080
-          hostPort: 8080
+        - containerPort: 8090
+          hostPort: 8090
         - containerPort: 8443
           hostPort: 8443
       volumeMounts:

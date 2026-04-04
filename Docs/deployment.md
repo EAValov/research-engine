@@ -37,12 +37,12 @@ Purpose:
 
 - provide HTTPS
 - provide the friendly local address `https://research-webui.llm.local:8443/`
+- provide the friendly local API address `https://research-api.llm.local:8443/`
+- provide a plain HTTP API endpoint at `http://localhost:8090/` for local Web UI debugging
 - route UI traffic to `research-webui`
 - route API traffic to `research-api`
 - optionally load-balance multiple `research-api` instances later
 - persist the local Caddy CA state so the trusted certificate survives `.\Deploy\single-host.ps1 up` redeploys
-
-`http://localhost:8080/` still works and can be used as a fallback, but the friendly HTTPS address is the recommended path.
 
 ## App Pod
 
@@ -145,13 +145,14 @@ This is the recommended setup flow for a clean Windows installation with current
    podman kube play --replace .\Deploy\single-host\10-edge.yaml
    ```
 
-5. Add this entry to `C:\Windows\System32\drivers\etc\hosts` if you want the friendly HTTPS URL:
+5. Add these entries to `C:\Windows\System32\drivers\etc\hosts`:
 
    ```text
    127.0.0.1 research-webui.llm.local
+   127.0.0.1 research-api.llm.local
    ```
 
-   You can choose any domain name here.
+   You can choose any local domain names here.
 
 6. Optional but recommended: install the local Caddy certificate:
 
@@ -171,5 +172,15 @@ This is the recommended setup flow for a clean Windows installation with current
 
    ```text
    https://research-webui.llm.local:8443/
+   ```
+   The Web UI will use this API endpoint by default:
+
+   ```text
+   https://research-api.llm.local:8443/
+   ```
+   For local Web UI debugging from VS Code, use:
+
+   ```text
+   http://localhost:8090/
    ```
 8. You're ready to go. Good luck with your research!

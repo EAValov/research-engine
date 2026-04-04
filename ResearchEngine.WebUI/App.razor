@@ -21,53 +21,21 @@
         await AppState.InitializeAsync();
 
         var saved = AppState.GetApiSettings();
-
-        var apiBaseUrl = string.IsNullOrWhiteSpace(saved.BaseUrl) || ShouldPreferFallback(saved.BaseUrl, ApiConnection.FallbackApiBaseUrl)
-            ? ApiConnection.FallbackApiBaseUrl
-            : saved.BaseUrl;
-
         var apiKey = saved.ApiKey ?? string.Empty;
         var authEnabled = saved.AuthEnabled;
 
-        if (ApiConnection.TryApply(apiBaseUrl, apiKey, authEnabled))
+        if (ApiConnection.TryApply(saved.BaseUrl, apiKey, authEnabled))
         {
-            if (!string.Equals(saved.BaseUrl, apiBaseUrl, StringComparison.Ordinal)
+            if (!string.Equals(saved.BaseUrl, ApiConnection.ApiBaseUrl, StringComparison.Ordinal)
                 || !string.Equals(saved.ApiKey ?? string.Empty, apiKey, StringComparison.Ordinal)
                 || saved.AuthEnabled != authEnabled)
             {
-                AppState.SetApiSettings(apiBaseUrl, apiKey, authEnabled);
+                AppState.SetApiSettings(ApiConnection.ApiBaseUrl, apiKey, authEnabled);
             }
-        }
-        else
-        {
-            ApiConnection.TryApply(ApiConnection.FallbackApiBaseUrl, apiKey, authEnabled);
-            AppState.SetApiSettings(ApiConnection.ApiBaseUrl, apiKey, authEnabled);
-        }
-    }
-
-    private static bool ShouldPreferFallback(string? savedBaseUrl, string fallbackBaseUrl)
-    {
-        var normalizedSaved = ApiConnectionSettings.NormalizeBaseUrl(savedBaseUrl);
-        var normalizedFallback = ApiConnectionSettings.NormalizeBaseUrl(fallbackBaseUrl);
-
-        if (normalizedSaved is null || normalizedFallback is null)
-            return false;
-
-        if (string.Equals(normalizedSaved, normalizedFallback, StringComparison.OrdinalIgnoreCase))
-            return false;
-
-        if (!ApiConnectionSettings.IsLocalDeploymentUrl(normalizedSaved)
-            || !ApiConnectionSettings.IsLocalDeploymentUrl(normalizedFallback))
-        {
-            return false;
+            return;
         }
 
-        if (!Uri.TryCreate(normalizedSaved, UriKind.Absolute, out var savedUri)
-            || !Uri.TryCreate(normalizedFallback, UriKind.Absolute, out var fallbackUri))
-        {
-            return false;
-        }
-
-        return savedUri.IsLoopback != fallbackUri.IsLoopback;
+        ApiConnection.TryApply(ApiConnection.ConfiguredApiBaseUrl, apiKey, authEnabled);
+        AppState.SetApiSettings(ApiConnection.ApiBaseUrl, apiKey, authEnabled);
     }
 }
