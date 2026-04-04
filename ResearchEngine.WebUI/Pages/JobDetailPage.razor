@@ -183,6 +183,9 @@ else
                     <div class="report-meta-line">
                         <span>Embeddings: @DisplayModelName(ActiveSynthesis.EmbeddingModelName)</span>
                     </div>
+                    <div class="report-meta-line">
+                        <span>Sources: @DisplayMetadataValue(_job?.DiscoveryMode)</span>
+                    </div>
                 }
 
                 @if (_selectedSynthesisId is not null)
@@ -1354,13 +1357,15 @@ else
 
         var createdText = createdAt is null ? "Not recorded" : FormatTime(createdAt.Value);
         var completedText = completedAt is null ? "Not completed" : FormatTime(completedAt.Value);
+        var discoveryModeText = DisplayMetadataValue(_job?.DiscoveryMode);
 
         return string.Join("\n", new[]
         {
             $"- Breadth: {breadth}",
             $"- Depth: {depth}",
             $"- Created: {createdText}",
-            $"- Completed: {completedText}"
+            $"- Completed: {completedText}",
+            $"- Sources: {discoveryModeText}"
         });
     }
 
@@ -1534,8 +1539,11 @@ else
 
     private static string ShortId(Guid id) => id.ToString("N")[..8];
 
-    private static string DisplayModelName(string? value)
+    private static string DisplayMetadataValue(string? value)
         => string.IsNullOrWhiteSpace(value) ? "Not recorded" : value.Trim();
+
+    private static string DisplayModelName(string? value)
+        => DisplayMetadataValue(value);
 
     private static bool IsHttpUrl(string text)
     {
