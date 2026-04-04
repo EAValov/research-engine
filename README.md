@@ -103,11 +103,11 @@ Installing the Caddy certificate is optional. It is safe in the normal local-dep
 ## Example Reports
 
 - [Most promising approaches to long-duration energy storage](<./Examples/Long-duration energy storage.md>)
-- [Market opportunities for launching an AI-powered consumer health app](<./Examples/Health app in the EU and US.md>)
 - [Why Bitcoin is still not widely adopted](<./Examples/Why Bitcoin still not widely adopted.md>)
 - [Will AI replace the traditional search engines?](<./Examples/AI and the traditional search engines.md>)
 - [Europe’s Housing Crisis explained](<./Examples/Europe’s Housing Crisis.md>)
-- [Overview of neural networks for text-to-speech.md](<./Examples/Overview of neural networks for text-to-speech.md>)
+- [Market opportunities for launching an AI-powered consumer health app](<./Examples/Health app in the EU and US.md>)
+- [Overview of neural networks for text-to-speech](<./Examples/Overview of neural networks for text-to-speech.md>)
 
 
 ## Screenshots
