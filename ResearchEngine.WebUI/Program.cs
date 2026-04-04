@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
 using ResearchEngine.WebUI;
@@ -31,7 +32,10 @@ builder.Services.AddSingleton<AppRuntimeInfo>();
 
 builder.Services.AddScoped(sp =>
 {
-    var apiBaseUrl = ApiConnectionSettings.NormalizeBaseUrl(builder.Configuration["ApiBaseUrl"])
+    var navigationManager = sp.GetRequiredService<NavigationManager>();
+    var apiBaseUrl = ApiConnectionSettings.ResolveConfiguredBaseUrl(
+            builder.Configuration["ApiBaseUrl"],
+            navigationManager.BaseUri)
         ?? throw new InvalidOperationException("Missing or invalid Web UI configuration value: ApiBaseUrl.");
     var handler = sp.GetRequiredService<AuthHeaderHandler>();
     handler.InnerHandler = new HttpClientHandler();

@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Configuration;
 
 namespace ResearchEngine.WebUI.Services;
@@ -10,11 +11,14 @@ public sealed class ApiConnectionSettings
 
     public ApiConnectionSettings(
         AuthTokenProvider authTokenProvider,
-        IConfiguration configuration)
+        IConfiguration configuration,
+        NavigationManager navigationManager)
     {
         _authTokenProvider = authTokenProvider;
 
-        _configuredBaseUrl = NormalizeBaseUrl(configuration["ApiBaseUrl"])
+        _configuredBaseUrl = ResolveConfiguredBaseUrl(
+                configuration["ApiBaseUrl"],
+                navigationManager.BaseUri)
             ?? throw new InvalidOperationException("Missing or invalid Web UI configuration value: ApiBaseUrl.");
         _apiBaseUrl = _configuredBaseUrl;
 
@@ -42,6 +46,18 @@ public sealed class ApiConnectionSettings
         _authTokenProvider.ApiKey = (apiKey ?? string.Empty).Trim();
         _authTokenProvider.Enabled = authEnabled;
         return true;
+    }
+
+    public static string? ResolveConfiguredBaseUrl(string? configuredBaseUrl, string? currentPageBaseUrl)
+    {
+        var configured = configuredBaseUrl?.Trim();
+        if (string.IsNullOrWhiteSpace(configured))
+            return null;
+
+        if (string.Equals(configured, "same-origin", StringComparison.OrdinalIgnoreCase))
+            return NormalizeBaseUrl(currentPageBaseUrl);
+
+        return NormalizeBaseUrl(configured);
     }
 
     public static string? NormalizeBaseUrl(string? raw)

@@ -655,7 +655,7 @@ In the single-host deployment, the Web UI container receives:
 ```yaml
 env:
   - name: API_BASE_URL
-    value: "https://research-api.llm.local:8443"
+    value: "same-origin"
   - name: AuthenticationOptions__ApiKeys__0
     valueFrom:
       secretKeyRef:
@@ -668,6 +668,7 @@ env:
 - `API_BASE_URL` -> `ApiBaseUrl`
 - `AuthenticationOptions__ApiKeys__0` -> `ApiAuth:ApiKey`
 
+The special value `same-origin` tells the Web UI to use the current page origin as its API base URL.
 If `API_BASE_URL` is not provided, the container keeps the default `ApiBaseUrl` from `wwwroot/appsettings.json`.
 These are only startup defaults. The browser can still override them later.
 

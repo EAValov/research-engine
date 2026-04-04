@@ -126,8 +126,10 @@ spec:
         - name: AuthenticationOptions__Enabled
           value: "true"
         - name: Cors__AllowedOrigins__0
-          value: "https://research-webui.llm.local:8443"
+          value: "http://localhost:8090"
         - name: Cors__AllowedOrigins__1
+          value: "https://research-webui.llm.local:8443"
+        - name: Cors__AllowedOrigins__2
           value: "http://localhost:5173"
       ports:
         - containerPort: 8080
@@ -154,7 +156,7 @@ spec:
         - name: WEBUI_PORT
           value: "8082"
         - name: API_BASE_URL
-          value: "https://research-api.llm.local:8443"
+          value: "same-origin"
         - name: AuthenticationOptions__ApiKeys__0
           valueFrom:
             secretKeyRef:

@@ -38,7 +38,7 @@ Purpose:
 - provide HTTPS
 - provide the friendly local address `https://research-webui.llm.local:8443/`
 - provide the friendly local API address `https://research-api.llm.local:8443/`
-- provide a plain HTTP API endpoint at `http://localhost:8090/` for local Web UI debugging
+- provide a plain HTTP app entrypoint at `http://localhost:8090/` without requiring hosts-file or certificate setup
 - route UI traffic to `research-webui`
 - route API traffic to `research-api`
 - optionally load-balance multiple `research-api` instances later
@@ -145,7 +145,13 @@ This is the recommended setup flow for a clean Windows installation with current
    podman kube play --replace .\Deploy\single-host\10-edge.yaml
    ```
 
-5. Add these entries to `C:\Windows\System32\drivers\etc\hosts`:
+5. Open the app:
+
+   ```text
+   http://localhost:8090/
+   ```
+
+6. Optional: add these entries to `C:\Windows\System32\drivers\etc\hosts` if you want the friendly HTTPS URLs:
 
    ```text
    127.0.0.1 research-webui.llm.local
@@ -154,7 +160,7 @@ This is the recommended setup flow for a clean Windows installation with current
 
    You can choose any local domain names here.
 
-6. Optional but recommended: install the local Caddy certificate:
+7. Optional but recommended: install the local Caddy certificate:
 
    ```powershell
    .\Deploy\single-host.ps1 up -InstallCaddyCertificate
@@ -168,12 +174,12 @@ This is the recommended setup flow for a clean Windows installation with current
    .\Deploy\trust-caddy-local-ca.ps1
    ```
 
-7. Open the app:
+8. If you want the friendly HTTPS URL, open:
 
    ```text
    https://research-webui.llm.local:8443/
    ```
-   The Web UI will use this API endpoint by default:
+   The Web UI will use the current origin by default, so this direct API endpoint also works:
 
    ```text
    https://research-api.llm.local:8443/
@@ -183,4 +189,4 @@ This is the recommended setup flow for a clean Windows installation with current
    ```text
    http://localhost:8090/
    ```
-8. You're ready to go. Good luck with your research!
+9. You're ready to go. Good luck with your research!

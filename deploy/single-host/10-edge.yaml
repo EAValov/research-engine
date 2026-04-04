@@ -9,7 +9,9 @@ data:
     }
     http://localhost:8090 {
       encode zstd gzip
-      reverse_proxy research-app:8080
+      @api path /api* /health* /openapi* /scalar* /hangfire*
+      reverse_proxy @api research-app:8080
+      reverse_proxy research-app:8082
     }
     https://research-webui.llm.local:8443 {
       tls internal
