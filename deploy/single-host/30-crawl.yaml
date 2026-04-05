@@ -174,6 +174,8 @@ spec:
         - name: searxng-settings
           mountPath: /etc/searxng
           readOnly: true
+        - name: crawl-searxng-cache
+          mountPath: /var/cache/searxng
 
     - name: firecrawl
       image: ghcr.io/firecrawl/firecrawl:latest@sha256:dce85da4cf4e5e9758ce6ac79856f5ad4dcac2a98591a61d535afaa7abd0328f
@@ -264,6 +266,9 @@ spec:
     - name: crawl-playwright-data
       persistentVolumeClaim:
         claimName: crawl-playwright-data
+    - name: crawl-searxng-cache
+      persistentVolumeClaim:
+        claimName: crawl-searxng-cache
     - name: searxng-settings
       configMap:
         name: crawl-searxng-config
