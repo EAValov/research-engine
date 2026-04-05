@@ -520,6 +520,7 @@ public sealed class ReportSynthesisService(
                 query: job.Query,
                 clarifications: clarificationsText,
                 targetLanguage: job.TargetLanguage ?? "en",
+                discoveryMode: job.DiscoveryMode,
                 section: section,
                 instructions: instructions);
 
@@ -530,8 +531,8 @@ public sealed class ReportSynthesisService(
             var toolHandler = new SynthesisToolHandler(
                 learningIntelService,
                 synthesis.Id,
-                job.Region,
-                job.TargetLanguage);
+                language: job.TargetLanguage,
+                region: job.Region);
 
             var tool = chatModel.CreateTool(toolHandler.HandleGetSimilarLearningsAsync, "get_similar_learnings");
 

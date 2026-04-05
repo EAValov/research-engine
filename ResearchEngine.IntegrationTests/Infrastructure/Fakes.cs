@@ -188,8 +188,8 @@ public sealed class FakeChatModel : IChatModel
             text = """
             {
               "learnings": [
-                { "text": "Key learning A.", "importance": 0.9 },
-                { "text": "Key learning B.", "importance": 0.7 }
+                { "text": "Key learning A.", "statementType": "Finding", "importance": 0.9 },
+                { "text": "Key learning B.", "statementType": "Commentary", "importance": 0.7 }
               ]
             }
             """;
@@ -402,7 +402,15 @@ public sealed class FakeChatModel : IChatModel
         {
             var imp = i == 1 ? 0.95 : 0.70 - (i * 0.05);
             if (imp < 0.1) imp = 0.1;
-            items.Add($$"""{"text":"Learning {{i}} extracted from segment.","importance":{{imp.ToString(System.Globalization.CultureInfo.InvariantCulture)}}}""");
+            var statementType = i switch
+            {
+                1 => "Finding",
+                2 => "Requirement",
+                3 => "Forecast",
+                4 => "Claim",
+                _ => "Commentary"
+            };
+            items.Add($$"""{"text":"Learning {{i}} extracted from segment.","statementType":"{{statementType}}","importance":{{imp.ToString(System.Globalization.CultureInfo.InvariantCulture)}}}""");
         }
 
         return $$"""{"learnings":[{{string.Join(",", items)}}]}""";

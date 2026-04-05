@@ -242,6 +242,7 @@ namespace ResearchEngine.API.Migrations
                     IsUserProvided = table.Column<bool>(type: "boolean", nullable: false),
                     QueryHash = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: false),
                     Text = table.Column<string>(type: "text", nullable: false),
+                    StatementType = table.Column<string>(type: "character varying(50)", maxLength: 50, nullable: false),
                     ImportanceScore = table.Column<float>(type: "real", nullable: false),
                     EvidenceText = table.Column<string>(type: "text", nullable: false),
                     CreatedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false, defaultValueSql: "now() at time zone 'utc'"),

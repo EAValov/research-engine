@@ -30,8 +30,20 @@ public static class LearningExtractionPromptFactory
         sb.AppendLine("- Whenever available, preserve important metrics, numbers, percentages, time ranges, and dates EXACTLY as written.");
         sb.AppendLine("- Include key domain entities (e.g., regulations, organizations, products, regions, technologies) when they are relevant.");
         sb.AppendLine("- Strongly prefer concrete facts, definitions, quantitative estimates, or clearly stated consensus views over vague commentary or marketing fluff.");
+        sb.AppendLine("- Preserve modality and attribution instead of flattening everything into bare facts.");
+        sb.AppendLine("- If the content makes a forecast, projection, vendor/self-reported claim, expert commentary, or contested point, keep that explicit in the learning text.");
+        sb.AppendLine("- Do NOT rewrite attributed claims or future projections as settled facts.");
         sb.AppendLine("- Avoid restating the same idea in different words; each learning should add NEW information.");
         sb.AppendLine("- If large portions of the content are unrelated to the query, IGNORE them rather than extracting generic or off-topic learnings.");
+        sb.AppendLine();
+        sb.AppendLine("For each learning, assign a STATEMENT TYPE:");
+        sb.AppendLine("- Finding: concrete observed fact, result, measurement, definition, or well-supported factual statement.");
+        sb.AppendLine("- Requirement: binding rule, legal obligation, policy requirement, or formal classification criterion.");
+        sb.AppendLine("- Forecast: prediction, projection, scenario, or expected future outcome.");
+        sb.AppendLine("- Claim: attributed assertion, self-reported performance statement, vendor statement, or official claim that should remain attributed.");
+        sb.AppendLine("- Commentary: interpretation, expert opinion, narrative framing, or analytical commentary.");
+        sb.AppendLine("- Contested: statement explicitly presented as disputed, conflicting, unresolved, or debated.");
+        sb.AppendLine("- If in doubt, prefer Finding.");
         sb.AppendLine();
         sb.AppendLine("In addition to the learning text, you must assign an IMPORTANCE SCORE between 0.0 and 1.0, relative to how much it helps answer the user’s query:");
         sb.AppendLine("- 1.0 = absolutely critical for answering the user query.");
@@ -79,7 +91,7 @@ public static class LearningExtractionPromptFactory
         sb.AppendLine();
         sb.AppendLine("You will respond in a structured JSON format provided by the system.");
         sb.AppendLine($"- Include at most {maxLearnings} learning items.");
-        sb.AppendLine("- Each learning must include the final learning text in the target language and its importance score as a float between 0.0 and 1.0.");
+        sb.AppendLine("- Each learning must include the final learning text in the target language, a statementType, and its importance score as a float between 0.0 and 1.0.");
         sb.AppendLine("- Do NOT add any extra commentary or fields; output only the JSON payload required by the system.");
 
         return new Prompt(GetSystemPrompt(), sb.ToString());
@@ -101,6 +113,7 @@ public static class LearningExtractionPromptFactory
         sb.AppendLine("- If a number or legal detail looks uncertain, speculative, or inconsistent within the text, omit it rather than repeating a potentially incorrect figure.");
         sb.AppendLine("- If large parts of the content are off-topic, ignore them instead of forcing vague or generic learnings.");
         sb.AppendLine("- If the content provides nothing useful for the query, you may return fewer learnings or even none (if allowed by the task prompt).");
+        sb.AppendLine("- Preserve attribution and uncertainty. Forecasts, claims, commentary, and contested points must remain labeled as such in both the text and statementType.");
         sb.AppendLine();
         sb.AppendLine("Source handling:");
         sb.AppendLine("- You are not browsing yourself; trust the provided content as the page text, but do NOT add anything that is not explicitly supported.");

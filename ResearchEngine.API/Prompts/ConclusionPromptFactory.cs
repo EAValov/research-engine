@@ -16,6 +16,9 @@ public static class ConclusionPromptFactory
         systemSb.AppendLine("You will now write ONLY the final conclusion/summary section of a report.");
         systemSb.AppendLine("Base your conclusion on the provided section summaries.");
         systemSb.AppendLine("Do NOT introduce new sources or new citation numbers.");
+        systemSb.AppendLine("Do NOT include the section title as a heading; start directly with the conclusion text.");
+        systemSb.AppendLine("Preserve calibration: keep well-supported findings distinct from uncertain, source-dependent, or contested points.");
+        systemSb.AppendLine("Do NOT turn forecasts, attributed claims, commentary, or disputed points into settled facts.");
         systemSb.AppendLine($"Write in: {targetLanguage}.");
         var systemPrompt = systemSb.ToString();
 
@@ -46,7 +49,10 @@ public static class ConclusionPromptFactory
 
         userSb.AppendLine("Task:");
         userSb.AppendLine("- Write a single, coherent conclusion section answering the main query.");
-        userSb.AppendLine("- Highlight the overall economic viability, main trade-offs, and key conditions.");
+        userSb.AppendLine("- Answer the query directly, but calibrate the wording to the strength of the evidence in the section summaries.");
+        userSb.AppendLine("- Surface the strongest supported findings first.");
+        userSb.AppendLine("- Explicitly mention major uncertainties, evidence limitations, and contested points when they affect the answer.");
+        userSb.AppendLine("- Do NOT use a generic template or introduce topic framing that is not supported by the summaries.");
         userSb.AppendLine("- Do NOT add new [n] citations or new facts not present in the summaries.");
         
         var userPrompt = userSb.ToString();

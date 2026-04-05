@@ -126,6 +126,7 @@ public sealed class LearningIntelService(
                     SourceId = sourceId,
                     LearningGroupId = Guid.Empty, // assigned later
                     Text = text,
+                    StatementType = ParseStatementType(it.StatementType),
                     ImportanceScore = it.Importance,
                     EvidenceText = segment.Length > options.MaxEvidenceLength
                         ? segment[..options.MaxEvidenceLength]
@@ -215,6 +216,7 @@ public sealed class LearningIntelService(
             SourceId = src.Id,
             LearningGroupId = Guid.Empty, // assigned below
             Text = trimmedText,
+            StatementType = LearningStatementType.Finding,
             ImportanceScore = score,
             EvidenceText = (evidenceText ?? string.Empty).Length > options.MaxEvidenceLength
                 ? (evidenceText ?? string.Empty)[..options.MaxEvidenceLength]
@@ -624,6 +626,9 @@ public sealed class LearningIntelService(
         [Description("Single, self-contained learning text in the target language, highly relevant to the user's query.")]
         public required string Text { get; init; }
 
+        [Description("Statement type. Must be one of: Finding, Requirement, Forecast, Claim, Commentary, Contested.")]
+        public required string StatementType { get; init; }
+
         [Description("Importance score between 0.0 (barely relevant) and 1.0 (critical for answering the query).")]
         public required float Importance { get; init; }
     }
@@ -643,4 +648,9 @@ public sealed class LearningIntelService(
             return new ChatResponseFormatJson(jsonElement);
         }
     }
+
+    private static LearningStatementType ParseStatementType(string? value)
+        => LearningStatementTypeExtensions.TryParse(value, out var parsed)
+            ? parsed
+            : LearningStatementType.Finding;
 }

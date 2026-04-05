@@ -13,6 +13,7 @@ public static class SectionWritingPromptFactory
         string query,
         string? clarifications,
         string targetLanguage,
+        SourceDiscoveryMode discoveryMode,
         SectionPlan section,
         string? instructions)
     {
@@ -43,6 +44,7 @@ public static class SectionWritingPromptFactory
         userSb.AppendLine("Section specification (write ONLY this section):");
         userSb.AppendLine($"- Title: {section.Title}");
         userSb.AppendLine($"- Scope: {section.Description}");
+        userSb.AppendLine($"- Discovery mode: {discoveryMode.ToApiValue()}");
         userSb.AppendLine();
 
         userSb.AppendLine("SECTION-LEVEL CONSTRAINTS:");
@@ -68,11 +70,24 @@ public static class SectionWritingPromptFactory
         userSb.AppendLine("- BEFORE writing any substantive content, you MUST call `get_similar_learnings` at least once");
         userSb.AppendLine("  with a focused query that is specific to THIS section.");
         userSb.AppendLine("- You MAY call it multiple times for distinct sub-aspects within this section.");
+        userSb.AppendLine("- The tool returns evidence snippets plus metadata such as sourceClassification, reliabilityTier, isPrimarySource, statementType, and evidenceProfile.");
         userSb.AppendLine("- The tool returns evidence snippets that contain citation tokens like: [lrn:2f0d...].");
         userSb.AppendLine("- Preserve these [lrn:...] citation tokens EXACTLY as provided.");
         userSb.AppendLine("- Do NOT invent citations and do NOT rewrite tokens.");
         userSb.AppendLine("- This section must contain at least ONE citation token like [lrn:0123abcd...].");
         userSb.AppendLine("- Do NOT output the tool call results verbatim; synthesize them into prose.");
+        userSb.AppendLine();
+
+        userSb.AppendLine("EVIDENCE CALIBRATION (MANDATORY):");
+        userSb.AppendLine("- Use sourceClassification, reliabilityTier, isPrimarySource, statementType, and evidenceProfile to calibrate the wording.");
+        userSb.AppendLine("- Balanced mode intentionally mixes evidence quality. Do NOT smooth mixed-quality material into one equally confident voice.");
+        userSb.AppendLine("- For Finding or Requirement items from high-trust or primary sources, you may write more directly, especially when multiple domains align.");
+        userSb.AppendLine("- For Forecast items, use future-facing and conditional language such as 'is projected', 'is expected', or 'sources forecast'.");
+        userSb.AppendLine("- For Claim items, attribute the statement to the source, organization, or source type instead of rewriting it as a settled fact.");
+        userSb.AppendLine("- For Commentary items, present them as interpretation, framing, or analysis rather than proof.");
+        userSb.AppendLine("- For Contested items, explicitly note the disagreement, uncertainty, or unresolved status.");
+        userSb.AppendLine("- If the evidenceProfile indicates mixed, low-trust, or mostly secondary evidence, briefly signal that in the prose.");
+        userSb.AppendLine("- Do NOT average away conflicts between stronger and weaker sources.");
         userSb.AppendLine();
 
         userSb.AppendLine("CITATION STYLE (CRITICAL):");
@@ -103,7 +118,7 @@ public static class SectionWritingPromptFactory
 
         sb.AppendLine("TOOL USAGE (`get_similar_learnings`) IS MANDATORY:");
         sb.AppendLine("- You MUST call `get_similar_learnings` at least once before writing substantive content.");
-        sb.AppendLine("- The tool returns evidence snippets that include citation tokens like [lrn:...].");
+        sb.AppendLine("- The tool returns evidence snippets that include citation tokens like [lrn:...], along with sourceClassification, reliabilityTier, isPrimarySource, statementType, and evidenceProfile.");
         sb.AppendLine("- Preserve citation tokens EXACTLY; do not invent, renumber, or rewrite them.");
         sb.AppendLine("- If you cannot find evidence for a claim, phrase it as uncertainty or omit it.");
         sb.AppendLine();
@@ -115,9 +130,14 @@ public static class SectionWritingPromptFactory
         sb.AppendLine();
 
         sb.AppendLine("SOURCE QUALITY:");
-        sb.AppendLine("- Prefer authoritative sources when weighing evidence.");
-        sb.AppendLine("- If evidence conflicts, mention the disagreement explicitly.");
-        sb.AppendLine("- Do not present speculative tech as mature without strong support.");
+        sb.AppendLine("- Prefer authoritative and primary sources when weighing evidence, but do not hide weaker or conflicting evidence when it materially affects the answer.");
+        sb.AppendLine("- Finding + high-trust/primary evidence can support firmer language, especially when multiple domains converge.");
+        sb.AppendLine("- Forecast means projection, not fact.");
+        sb.AppendLine("- Claim means attributed assertion, not established truth.");
+        sb.AppendLine("- Commentary means interpretation, not direct proof.");
+        sb.AppendLine("- Contested means the disagreement should stay visible in the final prose.");
+        sb.AppendLine("- If evidence conflicts, mention the disagreement explicitly instead of smoothing it away.");
+        sb.AppendLine("- Do not present speculative tech or weakly sourced claims as mature without strong support.");
         sb.AppendLine();
 
         sb.AppendLine($"Write the final text in: {targetLanguage ?? "en"}.");

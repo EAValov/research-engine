@@ -18,7 +18,7 @@ namespace ResearchEngine.API.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "10.0.3")
+                .HasAnnotation("ProductVersion", "10.0.5")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.HasPostgresExtension(modelBuilder, "vector");
@@ -92,6 +92,11 @@ namespace ResearchEngine.API.Migrations
 
                     b.Property<Guid>("SourceId")
                         .HasColumnType("uuid");
+
+                    b.Property<string>("StatementType")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
 
                     b.Property<string>("Text")
                         .IsRequired()

@@ -22,6 +22,7 @@ public sealed class Learning
     public string QueryHash { get; set; } = null!;
 
     public string Text { get; set; } = null!;
+    public LearningStatementType StatementType { get; set; } = LearningStatementType.Finding;
     public float ImportanceScore { get; set; }
     public string EvidenceText { get; set; } = null!;
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;

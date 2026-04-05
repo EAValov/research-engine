@@ -276,6 +276,11 @@ public sealed class ResearchDbContext : DbContext
         entity.Property(l => l.Text)
             .IsRequired();
 
+        entity.Property(l => l.StatementType)
+            .HasConversion<string>()
+            .IsRequired()
+            .HasMaxLength(50);
+
         entity.Property(l => l.IsUserProvided)
             .IsRequired();
 
