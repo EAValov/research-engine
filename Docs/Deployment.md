@@ -94,9 +94,9 @@ Any OpenAI-compatible web service can be used instead of `vllm`. The current sam
 
 ### LLM Server requirements
 
-1. [Required] The backend and model must support tool calling with `tool_choice: required`, because the research pipeline depends on it.
-2. [Required] The backend and model must support structured output with a JSON schema.
-3. [Optional] The app can use a `/tokenize` endpoint in the internal RAG pipeline to split content more accurately. Without it, the app falls back to `MaxContextLength` and a heuristic estimate with a 20% safety buffer.
+1. **[Required]** The backend and model must support tool calling with `tool_choice: required`, because the research pipeline depends on it.
+2. **[Required]** The backend and model must support structured output with a JSON schema.
+3. **[Optional]** The app can use a `/tokenize` endpoint in the internal RAG pipeline to split content more accurately. Without it, the app falls back to `MaxContextLength` and a heuristic estimate with a 20% safety buffer.
 
 vLLM is the preferred backend because it supports all of these features. Ollama also works, but it does not expose `/tokenize`. Below is the compatibility chart:
 

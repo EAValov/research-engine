@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  <strong>Local-first deep research.</strong>
+  <strong>Local-first deep research</strong>
 </p>
 
 <p align="center">
@@ -57,7 +57,7 @@ If your hardware is different see the [Model Pod section of the Deployment guide
 If you have a similar PC, you can use this one-command installer flow:
 
 ```bash
-git clone https://github.com/EAValov/research-engine.git
+git clone --depth 1 https://github.com/EAValov/research-engine.git
 cd research-engine
 powershell -File .\Deploy\single-host.ps1 up
 ```
