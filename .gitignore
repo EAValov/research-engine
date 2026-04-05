@@ -431,3 +431,6 @@ FodyWeavers.xsd
 
 # Local secret manifests (keep values out of git)
 research-api.secrets.local.yaml
+
+deploy/release.ps1
+deploy/.generated/caddy-local-root.crt
