@@ -90,7 +90,8 @@ For a local deployment, follow the vLLM docs:
 
 - https://docs.vllm.ai/en/latest/serving/openai_compatible_server.html
 
-Any OpenAI-compatible web service can be used instead of `vllm`. The current sample setup is tuned for a single RTX 5090. 
+Any OpenAI-compatible web service can be used instead of `vllm`. The current sample setup is tuned for a single RTX 5090 and is intentionally biased toward maximum speed with a large context window.
+Use [`Deploy/single-host/40-llm.yaml`](../Deploy/single-host/40-llm.yaml) as the main local `vllm` reference. That manifest is where you normally adjust the model id, quantization mode, GPU memory target, and maximum context length for your hardware.
 
 ### LLM Server requirements
 
@@ -117,6 +118,32 @@ As a rule of thumb, the model should process at least 50 tokens per second if yo
 Hint: The app supports both thinking and non-thinking models.
 
 The chat model should have a context window of at least `10000`. Smaller context windows degrade quality a lot because the planner, section writer, and learning extraction prompts need room to work.
+
+#### Hardware Sizing Guide
+
+[`Deploy/single-host/40-llm.yaml`](../Deploy/single-host/40-llm.yaml) is the reference example for the local `vllm` pod. The current sample manifest assumes:
+
+- `nvidia/Qwen3-30B-A3B-NVFP4`
+- `--quantization modelopt_fp4`
+- `--max-model-len 32768`
+- a single RTX 5090 GPU
+
+That is not the right baseline for every machine, and it is meant as a high-end example rather than the minimum usable configuration.
+
+- If you have around `16 GB` of VRAM, do not assume the sample MoE model will fit or perform well. Start with a smaller `8B-14B` instruct model instead.
+- Prefer an efficient quantized variant when your backend supports it, for example `AWQ` or `NVFP4` / `MXFP4`.
+- If the model barely fits, reduce the backend context length first. The sample uses `32768`, but smaller GPUs may need a lower value. Try to stay at or above `10000` because the research pipeline degrades noticeably below that.
+- Smaller models and lower context lengths usually trade some peak quality for stability and speed, but they can still work quite well for this app. In practice, that is often a better outcome than running an oversized model too slowly or out of memory.
+- The app has been tested mainly with the Qwen3 family. In the author's testing, Qwen3 models have been the most capable for this workload so far, but you are free to try other OpenAI-compatible models that support the required tool-calling and structured-output features.
+
+#### What To Change When You Swap Models
+
+For a local `vllm` deployment, these are the main knobs:
+
+- In [`Deploy/single-host/40-llm.yaml`](../Deploy/single-host/40-llm.yaml), change the model id, `--quantization`, `--max-model-len`, and optionally `--gpu-memory-utilization`.
+- In [`Deploy/single-host/20-app.yaml`](../Deploy/single-host/20-app.yaml), keep `ChatConfig__ModelId` aligned with the model served by the backend.
+- If your backend does not expose `/tokenize`, set `ChatConfig__MaxContextLength` in [`Deploy/single-host/20-app.yaml`](../Deploy/single-host/20-app.yaml) to match the real backend limit you chose.
+- Make these edits before the first startup when possible. After first startup, `ChatConfig` is stored in PostgreSQL, so later `ChatConfig__*` environment-variable changes will not override the existing runtime settings row until you update it through the app or reset that row.
 
 ## Recommended User Flow
 

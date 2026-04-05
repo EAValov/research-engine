@@ -45,16 +45,16 @@ The app is containerized. You don't need Linux or Mac - it will just work on you
 
 - CPU: AMD Ryzen 7940HX (16 cores)
 - RAM: 32 GB DDR5 5200
-- GPU: **Nvidia RTX 5090** *--works with less beefy GPU ofc!*
+- GPU: **Nvidia RTX 5090**
 - OS: Windows 11 with WSL2
-- Containers: Podman Desktop
+- Containers: **Podman Desktop**
 - [GPU container access](https://podman-desktop.io/docs/podman/gpu) is configured. 
 
-The main requirement is that system must be powerful enough to run at least 8-14B models with a decent speed and context window. 
+The main requirement is that the system must be powerful enough to run at least an 8B-14B instruct model at a reasonable speed and with enough context for planning, synthesis, and evidence extraction.
 
-If your hardware is different see the [Model Pod section of the Deployment guide](./Docs/Deployment.md#model-pod).
+The sample deployment is tuned for a single RTX 5090 and the `Qwen3-30B-A3B` MoE model - this is the setup designed for fastest inference with good quality. **If you have a smaller GPU with less VRAM**, you will need to switch to a smaller 8B-14B model, use an efficient quantization such as AWQ or NVFP4 and lower the configured context length from the 32k sample - see the [hardware sizing notes in the Deployment guide](./Docs/Deployment.md#hardware-sizing-guide).
 
-If you have a similar PC, you can use this one-command installer flow:
+If you have similar hardware, you can use this one-command installer flow:
 
 ```bash
 git clone --depth 1 https://github.com/EAValov/research-engine.git

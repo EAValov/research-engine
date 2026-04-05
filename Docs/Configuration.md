@@ -223,7 +223,11 @@ Important:
 - `MaxContextLength` must be at least `10000`; smaller context windows degrade quality a lot
 - `MaxContextLength` is validated on startup when provided; other bad `ChatConfig` values may still fail when first used
 - the current implementation requires a non-empty `ApiKey` value even for local backends that ignore authentication; use a dummy value such as `ollama` if needed
-- the current sample setup is tuned for a single RTX 5090 and using the `nvidia/Qwen3-30B-A3B-NVFP4` model.
+- the current sample setup is tuned for a single RTX 5090, uses the `nvidia/Qwen3-30B-A3B-NVFP4` model, and is intentionally biased toward maximum speed with a large context window
+- the app has been tested mainly with Qwen3 family models, which have been the most capable for this workload in the author's testing so far, but other compatible models are still worth trying
+- if you have around `16 GB` of VRAM, do not expect the sample MoE setup to be the right starting point; start with a smaller `8B-14B` instruct model, prefer efficient quantization such as `AWQ` or `NVFP4` when supported, and reduce `MaxContextLength` from the 32k sample if needed while staying at or above `10000`
+- those smaller models can still work quite well in this app; the sample config is a high-end baseline, not the only recommended path
+- [`Deploy/single-host/40-llm.yaml`](../Deploy/single-host/40-llm.yaml) is the main local backend example; if you change the served model there, keep [`Deploy/single-host/20-app.yaml`](../Deploy/single-host/20-app.yaml) `ChatConfig__ModelId` aligned with it
 
 Single-host deployment example:
 
