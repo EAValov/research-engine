@@ -7,9 +7,9 @@ using ResearchEngine.IntegrationTests.Infrastructure;
 namespace ResearchEngine.IntegrationTests.Tests;
 
 [Collection(ContainersCollection.Name)]
-public sealed class MetaUpdateStatus_Tests : IntegrationTestBase
+public sealed class VersionControlUpdateStatus_Tests : IntegrationTestBase
 {
-    public MetaUpdateStatus_Tests(ContainersFixture containers) : base(containers) { }
+    public VersionControlUpdateStatus_Tests(ContainersFixture containers) : base(containers) { }
 
     [Fact]
     public async Task UpdateStatus_ReturnsConfiguredPayload()
@@ -27,7 +27,7 @@ public sealed class MetaUpdateStatus_Tests : IntegrationTestBase
 
         using var client = CreateClient();
 
-        var response = await client.GetAsync("/meta/update-status");
+        var response = await client.GetAsync("/version-control/update-status");
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 

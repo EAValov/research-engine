@@ -11,6 +11,8 @@ This guide is based on:
 - `ResearchEngine.WebUI`
 - `ResearchEngine.API/appsettings.json`
 - `ResearchEngine.WebUI/wwwroot/appsettings.json`
+- `Deploy/compose/compose.yaml`
+- `Deploy/compose/Caddyfile`
 - the single-host deployment manifests in `Deploy/single-host`
 
 ## Quick Mental Model
@@ -156,12 +158,12 @@ env:
   - name: ConnectionStrings__ResearchDb
     valueFrom:
       secretKeyRef:
-        name: research-single-host-secrets
+        name: research-app-secrets
         key: RESEARCH_CONNECTION_STRING
   - name: ConnectionStrings__HangfireDb
     valueFrom:
       secretKeyRef:
-        name: research-single-host-secrets
+        name: research-app-secrets
         key: RESEARCH_CONNECTION_STRING
 ```
 
@@ -188,7 +190,7 @@ env:
   - name: FirecrawlOptions__ApiKey
     valueFrom:
       secretKeyRef:
-        name: research-single-host-secrets
+        name: research-app-secrets
         key: FIRE_CRAWL_API_KEY
   - name: FirecrawlOptions__HttpClientTimeoutSeconds
     value: "600"
@@ -200,8 +202,8 @@ env:
 "ChatConfig": {
   "Endpoint": "http://vllm:8000/v1",
   "ApiKey": "...",
-  "ModelId": "nvidia/Qwen3-30B-A3B-NVFP4",
-  "MaxContextLength": 32768
+  "ModelId": "openai/gpt-oss-20b",
+  "MaxContextLength": 10240
 }
 ```
 
@@ -223,10 +225,11 @@ Important:
 - `MaxContextLength` must be at least `10000`; smaller context windows degrade quality a lot
 - `MaxContextLength` is validated on startup when provided; other bad `ChatConfig` values may still fail when first used
 - the current implementation requires a non-empty `ApiKey` value even for local backends that ignore authentication; use a dummy value such as `ollama` if needed
-- the current sample setup is tuned for a single RTX 5090, uses the `nvidia/Qwen3-30B-A3B-NVFP4` model, and is intentionally biased toward maximum speed with a large context window
+- the current single-host example is tuned for a single `16 GB` NVIDIA GPU and uses `openai/gpt-oss-20b` as a conservative default
+- `openai/gpt-oss-20b` is the current baseline example because it fits `16 GB` cards well and supports the structured-output and tool-calling features this app needs
 - the app has been tested mainly with Qwen3 family models, which have been the most capable for this workload in the author's testing so far, but other compatible models are still worth trying
-- if you have around `16 GB` of VRAM, do not expect the sample MoE setup to be the right starting point; start with a smaller `8B-14B` instruct model, prefer efficient quantization such as `AWQ` or `NVFP4` when supported, and reduce `MaxContextLength` from the 32k sample if needed while staying at or above `10000`
-- those smaller models can still work quite well in this app; the sample config is a high-end baseline, not the only recommended path
+- if you have around `16 GB` of VRAM, the current single-host example is the recommended starting point; if you change it, prefer efficient quantization such as `AWQ`, `NVFP4`, or `MXFP4` when supported and keep `MaxContextLength` at or above `10000`
+- if you have more GPU headroom, you can usually raise the context limit first and then try higher-quality alternatives such as `Qwen3-14B` or `Qwen3-14B-AWQ`
 - [`Deploy/single-host/40-llm.yaml`](../Deploy/single-host/40-llm.yaml) is the main local backend example; if you change the served model there, keep [`Deploy/single-host/20-app.yaml`](../Deploy/single-host/20-app.yaml) `ChatConfig__ModelId` aligned with it
 
 Single-host deployment example:
@@ -236,11 +239,11 @@ env:
   - name: ChatConfig__Endpoint
     value: "http://research-llm:8000/v1"
   - name: ChatConfig__ModelId
-    value: "nvidia/Qwen3-30B-A3B-NVFP4"
+    value: "openai/gpt-oss-20b"
   - name: ChatConfig__ApiKey
     valueFrom:
       secretKeyRef:
-        name: research-single-host-secrets
+        name: research-app-secrets
         key: ChatConfig__ApiKey
 ```
 
@@ -249,7 +252,7 @@ Optional override for backends that do not expose `/tokenize`:
 ```yaml
 env:
   - name: ChatConfig__MaxContextLength
-    value: "32768"
+    value: "10240"
 ```
 
 #### Chat Backend Requirements
@@ -312,7 +315,7 @@ env:
   - name: EmbeddingConfig__ApiKey
     valueFrom:
       secretKeyRef:
-        name: research-single-host-secrets
+        name: research-app-secrets
         key: EmbeddingConfig__ApiKey
 ```
 
@@ -457,7 +460,7 @@ env:
   - name: AuthenticationOptions__ApiKeys__0
     valueFrom:
       secretKeyRef:
-        name: research-single-host-secrets
+        name: research-app-secrets
         key: AuthenticationOptions__ApiKeys__0
 ```
 
@@ -654,7 +657,7 @@ The same dialog also loads and updates the API runtime settings described above.
 
 ### Web UI Container Mapping
 
-In the single-host deployment, the Web UI container receives:
+Both deployment paths set `API_BASE_URL=same-origin` and pass the API key into the Web UI container. In the single-host deployment, that looks like:
 
 ```yaml
 env:
@@ -663,7 +666,7 @@ env:
   - name: AuthenticationOptions__ApiKeys__0
     valueFrom:
       secretKeyRef:
-        name: research-single-host-secrets
+        name: research-app-secrets
         key: AuthenticationOptions__ApiKeys__0
 ```
 
@@ -675,6 +678,25 @@ env:
 The special value `same-origin` tells the Web UI to use the current page origin as its API base URL.
 If `API_BASE_URL` is not provided, the container keeps the default `ApiBaseUrl` from `wwwroot/appsettings.json`.
 These are only startup defaults. The browser can still override them later.
+
+In `Deploy/compose/compose.yaml`, the same mapping is provided through normal compose environment variables instead of a Kubernetes-style secret block. `Deploy/compose/Caddyfile` also proxies `/api*`, `/health*`, `/openapi*`, `/scalar*`, and `/hangfire*` to `research-api`, so the browser only needs `http://localhost:8090/`.
+
+## Compose Deployment Summary
+
+`Deploy/compose/compose.yaml` configures these important runtime values through `Deploy/compose/.env`:
+
+- released app image tag
+- PostgreSQL database name, user, and password
+- Firecrawl base URL and API key
+- chat endpoint, API key, model id, and optional max context length
+- Web UI host port
+- API key auth value shared by the API and Web UI
+
+The same compose file also starts local `postgres`, `redis`, and `ollama` containers for the app stack.
+
+Important consequence:
+
+- if you change `CHAT_*` values in `.env` after the first startup, the existing PostgreSQL `runtime_settings` row still wins until you update the runtime settings through the app or reset the compose database volume
 
 ## Single-Host Deployment Summary
 
@@ -724,7 +746,7 @@ FirecrawlOptions__HttpClientTimeoutSeconds=600
 ChatConfig__Endpoint=http://localhost:8000/v1
 ChatConfig__ApiKey=your-chat-key
 ChatConfig__ModelId=your-chat-model
-ChatConfig__MaxContextLength=32768
+ChatConfig__MaxContextLength=10240
 EmbeddingConfig__Endpoint=http://localhost:11434/v1
 EmbeddingConfig__ApiKey=your-embedding-key
 EmbeddingConfig__ModelId=your-embedding-model

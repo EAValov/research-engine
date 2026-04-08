@@ -1,10 +1,15 @@
 namespace ResearchEngine.API;
 
-public static class AppMetaApi
+public interface IReleaseUpdateService
 {
-    public static void MapAppMetaApi(this WebApplication app)
+    Task<UpdateStatusResponse> GetStatusAsync(CancellationToken ct = default);
+}
+
+public static class VersionControlApi
+{
+    public static void MapVersionControlApi(this WebApplication app)
     {
-        app.MapGet("/meta/update-status", GetUpdateStatusAsync)
+        app.MapGet("/version-control/update-status", GetUpdateStatusAsync)
             .AllowAnonymous()
             .ExcludeFromDescription()
             .Produces<UpdateStatusResponse>(StatusCodes.Status200OK);

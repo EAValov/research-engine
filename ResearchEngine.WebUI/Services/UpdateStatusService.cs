@@ -10,7 +10,7 @@ public sealed class UpdateStatusService(HttpClient http)
     {
         try
         {
-            return await _http.GetFromJsonAsync<UpdateStatusResult>("/meta/update-status", ct);
+            return await _http.GetFromJsonAsync<UpdateStatusResult>("/version-control/update-status", ct);
         }
         catch
         {

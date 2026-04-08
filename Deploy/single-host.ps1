@@ -16,6 +16,11 @@ Deployment action: up, down, restart, status, or build.
 .PARAMETER SkipBuild
 Skips the local image build step for `up` and `restart`.
 
+.PARAMETER AppVersion
+Overrides the application version embedded into the locally built app images.
+When omitted, the script uses the exact git tag that points at `HEAD`. If the
+current commit is not tagged, it falls back to `dev`.
+
 .PARAMETER InstallCaddyCertificate
 After a successful `up` or `restart`, exports the local Caddy CA certificate
 from the edge container and imports it into the selected Windows trust store.
@@ -46,6 +51,8 @@ param(
     [string]$Action = "up",
 
     [switch]$SkipBuild,
+
+    [string]$AppVersion,
 
     [switch]$InstallCaddyCertificate,
 
@@ -92,6 +99,73 @@ function Get-ImageDefinitions {
     )
 }
 
+function Normalize-AppVersion {
+    param([string]$Value)
+
+    if ([string]::IsNullOrWhiteSpace($Value)) {
+        return "dev"
+    }
+
+    $normalized = $Value.Trim()
+    if ($normalized.StartsWith("v", [System.StringComparison]::OrdinalIgnoreCase)) {
+        $normalized = $normalized.Substring(1)
+    }
+
+    if ([string]::IsNullOrWhiteSpace($normalized)) {
+        return "dev"
+    }
+
+    return $normalized
+}
+
+function Get-GitTagAppVersion {
+    if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
+        return $null
+    }
+
+    $gitDir = Join-Path $script:RepoRoot ".git"
+    if (-not (Test-Path -Path $gitDir)) {
+        return $null
+    }
+
+    $tags = @(
+        & git -C $script:RepoRoot tag --points-at HEAD 2>$null |
+            Where-Object { $_ -match '^[vV]?\d+\.\d+\.\d+$' }
+    )
+
+    if ($LASTEXITCODE -ne 0 -or $tags.Count -eq 0) {
+        return $null
+    }
+
+    $selectedTag = $tags |
+        Sort-Object {
+            $normalized = Normalize-AppVersion -Value $_
+            [version]$normalized
+        } -Descending |
+        Select-Object -First 1
+
+    if ([string]::IsNullOrWhiteSpace($selectedTag)) {
+        return $null
+    }
+
+    return Normalize-AppVersion -Value $selectedTag
+}
+
+function Resolve-AppVersion {
+    param([string]$RequestedVersion)
+
+    if (-not [string]::IsNullOrWhiteSpace($RequestedVersion)) {
+        return Normalize-AppVersion -Value $RequestedVersion
+    }
+
+    $tagVersion = Get-GitTagAppVersion
+    if (-not [string]::IsNullOrWhiteSpace($tagVersion)) {
+        return Normalize-AppVersion -Value $tagVersion
+    }
+
+    return "dev"
+}
+
 function Get-ComponentDefinitions {
     $base = Join-Path $PSScriptRoot "single-host"
 
@@ -120,17 +194,20 @@ function Get-ComponentDefinitions {
 }
 
 function Invoke-Build {
-    param([object[]]$Images)
+    param(
+        [object[]]$Images,
+        [string]$ResolvedAppVersion
+    )
 
     foreach ($image in $Images) {
         if (-not (Test-Path -Path $image.ContextPath)) {
             throw "Image build context '$($image.ContextPath)' does not exist."
         }
 
-        Write-Host "Building image '$($image.Tag)' from '$($image.ContextPath)'..."
+        Write-Host "Building image '$($image.Tag)' from '$($image.ContextPath)' with APP_VERSION '$ResolvedAppVersion'..."
         Invoke-ExternalCommand `
             -FilePath "podman" `
-            -Arguments @("build", "-t", $image.Tag, $image.ContextPath) `
+            -Arguments @("build", "--build-arg", "APP_VERSION=$ResolvedAppVersion", "-t", $image.Tag, $image.ContextPath) `
             -FailureMessage "Failed to build image '$($image.Tag)'."
     }
 }
@@ -263,9 +340,10 @@ if ($SkipBuild -and $Action -eq "build") {
 
 $definitions = Get-ComponentDefinitions
 $images = Get-ImageDefinitions
+$resolvedAppVersion = Resolve-AppVersion -RequestedVersion $AppVersion
 
 if ($Action -in @("up", "restart", "build") -and -not $SkipBuild) {
-    Invoke-Build -Images $images
+    Invoke-Build -Images $images -ResolvedAppVersion $resolvedAppVersion
 }
 
 switch ($Action) {

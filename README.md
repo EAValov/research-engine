@@ -7,6 +7,13 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/EAValov/research-engine/releases"><img src="https://img.shields.io/github/v/release/EAValov/research-engine" alt="Release" /></a>
+  <a href="https://github.com/EAValov/research-engine/releases"><img src="https://img.shields.io/github/release-date/EAValov/research-engine" alt="Release date" /></a>
+  <a href="https://github.com/EAValov/research-engine/blob/main/LICENSE"><img src="https://img.shields.io/github/license/EAValov/research-engine" alt="License" /></a>
+  <a href="https://github.com/EAValov/research-engine/stargazers"><img src="https://img.shields.io/github/stars/EAValov/research-engine" alt="Stars" /></a>
+</p>
+
+<p align="center">
   Research Engine collects web evidence, distills it into structured learnings, and generates cited research reports through an inspectable retrieval-based synthesis pipeline.
 </p>
 
@@ -18,11 +25,13 @@
   <a href="./Docs/Deployment.md">Deployment</a>
   ·
   <a href="./Docs/Configuration.md">Configuration</a>
+  ·
+  <a href="./CONTRIBUTING.md">Contributing</a>
 </p>
 
 Designed for individual researchers and small teams who want private, inspectable, and controllable research workflows on local infrastructure instead of cloud-only systems.
 
-No subscription required. Your prompts, sources, and reports stays under you control.
+No subscription required. Your prompts, sources, and reports stay under you control.
 
 <p align="center">
   <img src="./Docs/Images/MainAnimation.gif" alt="Research Engine Web UI" width="1000">
@@ -39,22 +48,18 @@ No subscription required. Your prompts, sources, and reports stays under you con
 - **Pin and exclude workflow** for curating evidence without restarting the full job
 - **Regeneration with extra instructions** to refine a report from the existing research set
 
-## Super Quick Start
-
-The app is containerized. You don't need Linux or Mac - it will just work on your Windows 11 gaming PC. It was tested on this configuration:
-
-- CPU: AMD Ryzen 7940HX (16 cores)
-- RAM: 32 GB DDR5 5200
-- GPU: **Nvidia RTX 5090**
-- OS: Windows 11 with WSL2
-- Containers: **Podman Desktop**
-- [GPU container access](https://podman-desktop.io/docs/podman/gpu) is configured. 
-
+## Quick Start & Hardware Requirements
 The main requirement is that the system must be powerful enough to run at least an 8B-14B instruct model at a reasonable speed and with enough context for planning, synthesis, and evidence extraction.
 
-The sample deployment is tuned for a single RTX 5090 and the `Qwen3-30B-A3B` MoE model - this is the setup designed for fastest inference with good quality. **If you have a smaller GPU with less VRAM**, you will need to switch to a smaller 8B-14B model, use an efficient quantization such as AWQ or NVFP4 and lower the configured context length from the 32k sample - see the [hardware sizing notes in the Deployment guide](./Docs/Deployment.md#hardware-sizing-guide).
 
-If you have similar hardware, you can use this one-command installer flow:
+The app is containerized and **Podman** is the recommended platform because it is secure and open source. The full single-host setup was tested on Windows 11 with WSL2 and Podman, and it works well there. The example below uses [podman kube play](https://docs.podman.io/en/latest/markdown/podman-kube-play.1.html) and vLLM CUDA image.
+
+> [!TIP]
+> For Docker-based deployment, check out the [Deployment guide Compose Setup section](./Docs/Deployment.md#compose-setup).
+
+If you have AMD or Intel GPU, check the [hardware sizing notes in the Deployment guide](./Docs/Deployment.md#hardware-sizing-guide) before using the local single-host setup.
+
+If you have an **NVIDIA GPU with `16 GB` of VRAM** or more and **Podman** with [GPU container access](https://podman-desktop.io/docs/podman/gpu) configured, you can use this one-command installer flow:
 
 ```bash
 git clone --depth 1 https://github.com/EAValov/research-engine.git
@@ -62,7 +67,9 @@ cd research-engine
 powershell -File .\Deploy\single-host.ps1 up
 ```
 
-That command builds the local `research-api` and `research-webui` images and then deploys the full single-host stack.
+That command builds the local `research-api` and `research-webui` images and then deploys the **full local single-host stack**.
+
+The first startup can take several minutes while `vLLM` downloads the model and compiles kernels.
 
 Then open:
 
@@ -76,20 +83,7 @@ Wait until the `Live` and `Ready` indicators are green. This means the backend i
 
 At that point the app is ready to use. Good luck with your research!
 
-Optional but recommended: if you want the friendly HTTPS URLs, add these entries in `C:\Windows\System32\drivers\etc\hosts`:
-
-```text
-127.0.0.1 research-webui.llm.local
-127.0.0.1 research-api.llm.local
-```
-
-Then run:
-
-```bash
-powershell -File .\Deploy\single-host.ps1 up -InstallCaddyCertificate
-```
-
-Installing the Caddy certificate is optional. It is safe in the normal local-deployment sense: the script trusts the local CA generated by your own Caddy container so Windows and your browser accept both `https://research-webui.llm.local:8443` and `https://research-api.llm.local:8443` without warnings.
+For friendly local HTTPS hostnames and the optional Caddy certificate setup, see the [Deployment guide](./Docs/Deployment.md#recommended-user-flow).
 
 ## How It Works
 
@@ -181,45 +175,11 @@ For the deeper architecture walkthrough, see the [Architecture guide](./Docs/Arc
 - [Architecture](./Docs/Architecture.md) - how evidence collection and synthesis fit together
 - [Deployment](./Docs/Deployment.md) - single-host setup, pod layout, and backend choices
 - [Configuration](./Docs/Configuration.md) - runtime settings, environment variables, and live-editable options
+- [Contributing](./CONTRIBUTING.md) - branch workflow, SemVer, and pull request expectations
 
-## Development Workflow
+## Contributing
 
-This repository uses a simple two-branch workflow:
-
-- `develop` is the integration branch. All feature and fix pull requests should target `develop`.
-- `main` is the release branch. Only the maintainer merges `develop` into `main`, creates the release tag, and publishes the GitHub release.
-
-This app uses [Semantic Versioning](https://semver.org/): MAJOR.MINOR.PATCH.
-
-- 1.0.0: first stable public release
-- 1.0.1: bug fixes only
-- 1.1.0: new backward-compatible features
-- 2.0.0: breaking changes
-
-If you are opening a pull request:
-
-1. Branch from `develop`.
-2. Keep the pull request focused on one feature or fix.
-3. Open the pull request into `develop`.
-4. Run these checks locally before opening or updating the pull request:
-
-```powershell
-dotnet build ResearchEngine.slnx
-dotnet test ResearchEngine.IntegrationTests/ResearchEngine.IntegrationTests.csproj
-```
-
-5. Please do not create or move release tags in feature branches or pull requests. Release tags are created by the maintainer on `main`.
-
-For cleaner GitHub release notes, label pull requests when possible:
-
-- `breaking-change`
-- `feature`
-- `enhancement`
-- `bug`
-- `fix`
-- `documentation`
-- `dependencies`
-- `ignore-for-release`
+If you want to contribute, please see [CONTRIBUTING.md](./CONTRIBUTING.md) for the branch workflow, Semantic Versioning policy, pull request checklist, and recommended labels.
 
 ## License
 

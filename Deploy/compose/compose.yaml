@@ -1,0 +1,114 @@
+name: research-engine
+
+services:
+  research-postgres:
+    image: docker.io/pgvector/pgvector:pg17
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${RESEARCH_DB_NAME:-research}
+      POSTGRES_USER: ${RESEARCH_DB_USER:-research}
+      POSTGRES_PASSWORD: ${RESEARCH_DB_PASSWORD:?Set RESEARCH_DB_PASSWORD in .env}
+    volumes:
+      - research-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${RESEARCH_DB_USER:-research} -d ${RESEARCH_DB_NAME:-research}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  research-redis:
+    image: docker.io/library/redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--bind", "0.0.0.0"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+
+  research-ollama:
+    image: docker.io/ollama/ollama:0.19.0
+    restart: unless-stopped
+    environment:
+      OLLAMA_HOST: "0.0.0.0:11434"
+    volumes:
+      - research-ollama-data:/root/.ollama
+    healthcheck:
+      test: ["CMD-SHELL", "ollama list >/dev/null 2>&1"]
+      interval: 15s
+      timeout: 10s
+      retries: 20
+
+  research-ollama-init:
+    image: docker.io/ollama/ollama:0.19.0
+    restart: "no"
+    depends_on:
+      - research-ollama
+    environment:
+      OLLAMA_HOST: "research-ollama:11434"
+    command:
+      - pull
+      - ${EMBEDDING_MODEL_ID:-qwen3-embedding:0.6b}
+
+  research-api:
+    image: ghcr.io/eavalov/research-api:${RESEARCH_ENGINE_TAG:-latest}
+    restart: unless-stopped
+    depends_on:
+      research-postgres:
+        condition: service_started
+      research-redis:
+        condition: service_started
+      research-ollama:
+        condition: service_started
+      research-ollama-init:
+        condition: service_completed_successfully
+    environment:
+      ASPNETCORE_URLS: "http://0.0.0.0:8080"
+      ChatConfig__Endpoint: ${CHAT_ENDPOINT:?Set CHAT_ENDPOINT in .env}
+      ChatConfig__ApiKey: ${CHAT_API_KEY:?Set CHAT_API_KEY in .env}
+      ChatConfig__ModelId: ${CHAT_MODEL_ID:?Set CHAT_MODEL_ID in .env}
+      ChatConfig__MaxContextLength: ${CHAT_MAX_CONTEXT_LENGTH:-32768}
+      EmbeddingConfig__Endpoint: "http://research-ollama:11434/v1"
+      EmbeddingConfig__ApiKey: ${EMBEDDING_API_KEY:-ollama}
+      EmbeddingConfig__ModelId: ${EMBEDDING_MODEL_ID:-qwen3-embedding:0.6b}
+      EmbeddingConfig__Dimension: ${EMBEDDING_DIMENSION:-1024}
+      ConnectionStrings__ResearchDb: Host=research-postgres;Port=5432;Database=${RESEARCH_DB_NAME:-research};Username=${RESEARCH_DB_USER:-research};Password=${RESEARCH_DB_PASSWORD:?Set RESEARCH_DB_PASSWORD in .env}
+      ConnectionStrings__HangfireDb: Host=research-postgres;Port=5432;Database=${RESEARCH_DB_NAME:-research};Username=${RESEARCH_DB_USER:-research};Password=${RESEARCH_DB_PASSWORD:?Set RESEARCH_DB_PASSWORD in .env}
+      FirecrawlOptions__BaseUrl: ${FIRECRAWL_BASE_URL:?Set FIRECRAWL_BASE_URL in .env}
+      FirecrawlOptions__ApiKey: ${FIRECRAWL_API_KEY:?Set FIRECRAWL_API_KEY in .env}
+      FirecrawlOptions__HttpClientTimeoutSeconds: ${FIRECRAWL_TIMEOUT_SECONDS:-600}
+      RedisEventBusOptions__ConnectionString: "research-redis:6379"
+      AuthenticationOptions__Enabled: "true"
+      AuthenticationOptions__ApiKeys__0: ${RESEARCH_API_KEY:?Set RESEARCH_API_KEY in .env}
+      Cors__AllowedOrigins__0: http://localhost:${WEBUI_HOST_PORT:-8090}
+    volumes:
+      - research-api-logs:/app/logs
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+
+  research-webui:
+    image: ghcr.io/eavalov/research-webui:${RESEARCH_ENGINE_TAG:-latest}
+    restart: unless-stopped
+    depends_on:
+      - research-api
+    environment:
+      WEBUI_PORT: "8081"
+      API_BASE_URL: "same-origin"
+      AuthenticationOptions__ApiKeys__0: ${RESEARCH_API_KEY:?Set RESEARCH_API_KEY in .env}
+    ports:
+      - ${WEBUI_HOST_PORT:-8090}:8081
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8081/index.html"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  research-postgres-data:
+  research-ollama-data:
+  research-api-logs:

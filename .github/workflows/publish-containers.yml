@@ -67,6 +67,7 @@ jobs:
           images: ghcr.io/${{ steps.prep.outputs.owner_lc }}/${{ matrix.image_name }}
           tags: |
             type=raw,value=${{ steps.prep.outputs.version }}
+            type=raw,value=latest,enable=${{ github.event.release.prerelease == false }}
           labels: |
             org.opencontainers.image.title=${{ matrix.image_title }}
             org.opencontainers.image.description=${{ matrix.image_description }}

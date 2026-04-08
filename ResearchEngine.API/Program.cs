@@ -285,7 +285,7 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 // ---------- Health endpoints ----------
-app.MapAppMetaApi();
+app.MapVersionControlApi();
 
 app.MapHealthChecks("/health/live",
     new HealthCheckOptions { Predicate = check => check.Name == "self" });

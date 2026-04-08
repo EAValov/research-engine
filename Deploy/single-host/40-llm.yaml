@@ -6,7 +6,7 @@ spec:
   hostname: research-llm
   containers:
     - name: vllm
-      image: docker.io/vllm/vllm-openai:v0.19.0-cu130
+      image: docker.io/vllm/vllm-openai:v0.19.0
       ports:
         - containerPort: 8000
       resources:
@@ -20,22 +20,20 @@ spec:
         - name: LD_LIBRARY_PATH
           value: /usr/lib/wsl/lib:${LD_LIBRARY_PATH}
       args:
-        - "nvidia/Qwen3-30B-A3B-NVFP4"
+        - "openai/gpt-oss-20b"
         - "--host"
         - "0.0.0.0"
         - "--port"
         - "8000"
-        - "--quantization"
-        - "modelopt_fp4"
         - "--gpu-memory-utilization"
-        - "0.93"
+        - "0.94"
         - "--max-model-len"
-        - "32768"
+        - "10240"
         - "--max-num-seqs"
         - "1"
         - "--enable-auto-tool-choice"
         - "--tool-call-parser"
-        - "hermes"
+        - "openai"
       volumeMounts:
         - name: model-cache
           mountPath: /root/.cache/huggingface

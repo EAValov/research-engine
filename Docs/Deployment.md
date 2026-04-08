@@ -1,17 +1,99 @@
 # Deployment Guide
 
-This guide focuses on the simplest supported setup: a single-host deployment.
+This guide covers two supported deployment paths:
+
+- `Deploy/compose/compose.yaml` for a lightweight app-only deployment using released images and external chat and web crawl services
+- `Deploy/single-host` for the full local Podman-based stack with edge, crawl, and model pods
 
 If you want to move to Kubernetes later, use this document and the files in `Deploy/single-host` as the baseline.
 
-Podman is the recommended platform because it is secure and open source. The example setup was tested on Windows 11 with WSL2 and Podman, and it works well there.
+Podman is the recommended platform because it is secure and open source. The full single-host setup was tested on Windows 11 with WSL2 and Podman, and it works well there.
 
-My PC specs for reference:
-- CPU: AMD Ryzen 7940HX (16 cores)
-- RAM: 32 GB DDR5 5200
-- GPU: Nvidia RTX 5090
+Local testing has included both high-end GPUs such as the RTX 5090 and more common `16 GB` cards such as the RTX 4080. The current single-host example in `Deploy/single-host` is tuned for the `16 GB` VRAM class because it is a more practical starting point for most users.
 
-If you have similar hardware, you can jump straight to the `Recommended User Flow` section. Otherwise, you will likely need to tune the LLM server for your machine. Research quality and speed mainly depend on the model backend. See `LLM Server configuration` for details.
+If you have an NVIDIA GPU with around `16 GB` of VRAM or more and want the full local stack, you can jump straight to the `Recommended User Flow` section. Otherwise, you will likely need to tune the LLM server for your machine. Research quality and speed mainly depend on the model backend. See `LLM Server configuration` for details.
+
+## Which Deployment Path Should I Use?
+
+| If you want... | Use | Why |
+| --- | --- | --- |
+| the quickest way to try Research Engine with external chat and crawl services | `Deploy/compose/compose.yaml` | it pulls the released app images and starts only the app stack locally |
+| to use Docker Compose or Podman Compose and point the app at separately deployed backends | `Deploy/compose/compose.yaml` | it keeps the app deployment simple while letting you manage chat and crawl services independently |
+| to build the app images locally from source instead of pulling released images | `Deploy/single-host` | `.\Deploy\single-host.ps1 up` builds `research-api` and `research-webui` before deploying |
+| the full local stack on one machine with Podman | `Deploy/single-host` | it includes the edge, app, crawl, and model pods |
+
+## Compose Setup
+
+`Deploy/compose/compose.yaml` is the lightest app deployment option. It starts the app itself locally and points it at a chat backend and a crawl backend over HTTP. Those backends can be cloud-hosted or self-hosted separately.
+
+What it starts locally:
+
+- `research-webui`
+- `research-api`
+- `research-postgres`
+- `research-redis`
+- `research-ollama`
+- `research-ollama-init` as a one-shot helper that pulls the configured embedding model and then exits
+
+What it expects externally:
+
+- an OpenAI-compatible chat backend for planning and synthesis
+- a Firecrawl endpoint for search and scraping
+
+The compose deployment pulls the released `research-api` and `research-webui` images from GitHub Container Registry instead of building them locally. The Web UI container mounts `Deploy/compose/Caddyfile`, proxies API routes to `research-api`, and exposes a single browser URL at `http://localhost:8090/`.
+By default it uses the `latest` container tag, and you can pin a specific release by changing `RESEARCH_ENGINE_TAG` in `Deploy/compose/.env`.
+Seeing `research-ollama-init` in an exited state after a successful `compose up` is expected. It only preloads the embedding model into the shared Ollama volume and does not stay running.
+
+### Compose Setup With Cloud Services
+
+Use this if you want to use Firecrawl Cloud and a cloud LLM provider.
+
+> Note:
+> Instead of cloud services, you can just deploy vLLM and Firecrawl separately and point the same compose file at those endpoints.
+> - vLLM Docker deployment: https://docs.vllm.ai/en/stable/deployment/docker/
+> - Firecrawl self-host guide: https://github.com/firecrawl/firecrawl/blob/main/SELF_HOST.md
+
+1. Create a Firecrawl account at `firecrawl.dev` and get your API key.
+2. Create an API key with an OpenAI-compatible chat provider.
+3. Change into the compose deployment folder:
+
+   ```powershell
+   cd .\Deploy\compose
+   ```
+
+4. Copy `.env.example` to `.env`.
+5. Set these values:
+
+   - `RESEARCH_DB_PASSWORD`
+   - `RESEARCH_API_KEY`
+   - `CHAT_ENDPOINT=https://openrouter.ai/api/v1` if you use OpenRouter
+    - `CHAT_API_KEY=<your-llm-api-key>`
+    - `CHAT_MODEL_ID=<your-model-id>`
+    - `CHAT_MAX_CONTEXT_LENGTH=<the real context limit of your selected model>`
+    - `FIRECRAWL_BASE_URL=https://api.firecrawl.dev` or your self-hosted firecrawl instance
+    - `FIRECRAWL_API_KEY=<your-firecrawl-api-key>`
+
+6. Recommended: if your LLM backend does not expose `/tokenize`, set `CHAT_MAX_CONTEXT_LENGTH` to the real model context limit you selected. Most of the OpenAI-compatible cloud providers don't have this.
+
+7. Start the stack:
+
+   ```powershell
+   docker compose up -d
+   ```
+
+   or:
+
+   ```powershell
+   podman compose up -d
+   ```
+
+8. Open:
+
+   ```text
+   http://localhost:8090/
+   ```
+   
+## Full Single-Host Podman Layout
 
 The recommended single-host layout is four pods with clear responsibility boundaries:
 
@@ -54,7 +136,7 @@ Services:
 - `research-redis`
 - `ollama`
 
-`research-webui` and `research-api` are built locally by `.\Deploy\single-host.ps1 up` and `.\Deploy\single-host.ps1 restart` by default. Container images will be published to GitHub Container Registry later and the example configuration will be updated with those image URLs.
+For the full single-host Podman flow, `research-webui` and `research-api` are built locally by `.\Deploy\single-host.ps1 up` and `.\Deploy\single-host.ps1 restart` by default. Published release images are also available in GitHub Container Registry and are used by `Deploy/compose/compose.yaml`.
 
 `ollama` is not optional and is used to generate embeddings. You can replace it with any OpenAI-compatible embeddings service. Ollama is used here because it is easy to deploy. In the example setup, it uses the CPU to compute embeddings and keep some load off the GPU.
 
@@ -90,8 +172,8 @@ For a local deployment, follow the vLLM docs:
 
 - https://docs.vllm.ai/en/latest/serving/openai_compatible_server.html
 
-Any OpenAI-compatible web service can be used instead of `vllm`. The current sample setup is tuned for a single RTX 5090 and is intentionally biased toward maximum speed with a large context window.
-Use [`Deploy/single-host/40-llm.yaml`](../Deploy/single-host/40-llm.yaml) as the main local `vllm` reference. That manifest is where you normally adjust the model id, quantization mode, GPU memory target, and maximum context length for your hardware.
+Any OpenAI-compatible web service can be used instead of `vllm`. The current single-host example is tuned for a single `16 GB` NVIDIA GPU and uses `openai/gpt-oss-20b` as a conservative local baseline.
+Use [`Deploy/single-host/40-llm.yaml`](../Deploy/single-host/40-llm.yaml) as the main local `vllm` reference. That manifest is where you normally adjust the model id, model-specific quantization settings, GPU memory target, and maximum context length for your hardware.
 
 ### LLM Server requirements
 
@@ -123,24 +205,29 @@ The chat model should have a context window of at least `10000`. Smaller context
 
 [`Deploy/single-host/40-llm.yaml`](../Deploy/single-host/40-llm.yaml) is the reference example for the local `vllm` pod. The current sample manifest assumes:
 
-- `nvidia/Qwen3-30B-A3B-NVFP4`
-- `--quantization modelopt_fp4`
-- `--max-model-len 32768`
-- a single RTX 5090 GPU
+- `openai/gpt-oss-20b`
+- MXFP4 weights from the published model
+- `--gpu-memory-utilization 0.94`
+- `--max-model-len 10240`
+- `--max-num-seqs 1`
+- a single `16 GB` NVIDIA GPU
 
-That is not the right baseline for every machine, and it is meant as a high-end example rather than the minimum usable configuration.
+That is meant as a conservative `16 GB`-friendly baseline rather than a maximum-quality configuration.
 
-- If you have around `16 GB` of VRAM, do not assume the sample MoE model will fit or perform well. Start with a smaller `8B-14B` instruct model instead.
-- Prefer an efficient quantized variant when your backend supports it, for example `AWQ` or `NVFP4` / `MXFP4`.
-- If the model barely fits, reduce the backend context length first. The sample uses `32768`, but smaller GPUs may need a lower value. Try to stay at or above `10000` because the research pipeline degrades noticeably below that.
+- The current `Deploy/single-host/40-llm.yaml` container image is the NVIDIA/CUDA variant of `vLLM`. If you want to run on AMD, switch to the official ROCm image such as `vllm/vllm-openai-rocm` and adjust the container runtime/device configuration accordingly.
+- If you have around `16 GB` of VRAM, start with the current sample manifest and only raise the context length after you confirm it is stable on your card.
+- Prefer an efficient quantized variant when your backend supports it, for example `AWQ`, `NVFP4`, or `MXFP4`.
+- If the model barely fits, reduce the backend context length first. The current sample uses `10240` . Try to stay at or above `10000` because the research pipeline degrades noticeably below that.
 - Smaller models and lower context lengths usually trade some peak quality for stability and speed, but they can still work quite well for this app. In practice, that is often a better outcome than running an oversized model too slowly or out of memory.
-- The app has been tested mainly with the Qwen3 family. In the author's testing, Qwen3 models have been the most capable for this workload so far, but you are free to try other OpenAI-compatible models that support the required tool-calling and structured-output features.
+- `openai/gpt-oss-20b` is the current default example because it fits `16 GB` cards well and supports the structured-output and tool-calling features this app needs.
+- The app has been tested mainly with the Qwen3 family. In the author's testing, Qwen3 models have been the most capable for this workload so far, so `Qwen3-14B-AWQ` or `Qwen3-30B-A3B-NVFP4` are strong alternatives if you want to tune for higher quality or have more GPU headroom.
+- If you have more VRAM than the `16 GB` baseline, raise `--max-model-len` first and then experiment with larger or higher-quality models.
 
 #### What To Change When You Swap Models
 
 For a local `vllm` deployment, these are the main knobs:
 
-- In [`Deploy/single-host/40-llm.yaml`](../Deploy/single-host/40-llm.yaml), change the model id, `--quantization`, `--max-model-len`, and optionally `--gpu-memory-utilization`.
+- In [`Deploy/single-host/40-llm.yaml`](../Deploy/single-host/40-llm.yaml), change the model id, any model-specific quantization settings, `--max-model-len`, and optionally `--gpu-memory-utilization`.
 - In [`Deploy/single-host/20-app.yaml`](../Deploy/single-host/20-app.yaml), keep `ChatConfig__ModelId` aligned with the model served by the backend.
 - If your backend does not expose `/tokenize`, set `ChatConfig__MaxContextLength` in [`Deploy/single-host/20-app.yaml`](../Deploy/single-host/20-app.yaml) to match the real backend limit you chose.
 - Make these edits before the first startup when possible. After first startup, `ChatConfig` is stored in PostgreSQL, so later `ChatConfig__*` environment-variable changes will not override the existing runtime settings row until you update it through the app or reset that row.
@@ -165,6 +252,7 @@ This is the recommended setup flow for a clean Windows installation with current
    ```
 
    This script builds the local `research-api` and `research-webui` images first, then deploys all single-host manifests (`app`, `crawl`, `llm`, `edge`).
+   The first startup can take several minutes while `vLLM` downloads the model and compiles kernels.
    If you need to exclude some services, deploy manifests manually with Podman:
 
    ```powershell
