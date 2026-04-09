@@ -51,6 +51,13 @@ public static class RuntimeSettingsBootstrap
                 $"{nameof(ChatConfig.MaxContextLength)} must be at least {TokenizerBase.MinimumContextLength} when provided.");
         }
 
+        if (snapshot.ChatConfig.MaxOutputTokens is int maxOutputTokens &&
+            maxOutputTokens <= 0)
+        {
+            throw new InvalidOperationException(
+                $"{nameof(ChatConfig.MaxOutputTokens)} must be greater than zero when provided.");
+        }
+
         if (!Uri.TryCreate(snapshot.CrawlConfig.BaseUrl, UriKind.Absolute, out var crawlEndpointUri) ||
             crawlEndpointUri.Scheme is not ("http" or "https"))
         {

@@ -364,6 +364,9 @@ namespace ResearchEngine.API.Migrations
                     b.Property<int?>("ChatMaxContextLength")
                         .HasColumnType("integer");
 
+                    b.Property<int?>("ChatMaxOutputTokens")
+                        .HasColumnType("integer");
+
                     b.Property<string>("ChatModelId")
                         .IsRequired()
                         .HasMaxLength(500)

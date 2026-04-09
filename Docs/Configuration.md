@@ -203,7 +203,8 @@ env:
   "Endpoint": "http://vllm:8000/v1",
   "ApiKey": "...",
   "ModelId": "openai/gpt-oss-20b",
-  "MaxContextLength": 10240
+  "MaxContextLength": 10240,
+  "MaxOutputTokens": 2048
 }
 ```
 
@@ -211,6 +212,7 @@ env:
 - `ApiKey` is required by the current implementation
 - `ModelId` is required
 - `MaxContextLength` is optional
+- `MaxOutputTokens` is optional
 
 Usage:
 
@@ -224,6 +226,7 @@ Important:
 - if `MaxContextLength` is not provided, the app uses the chat backend's `/tokenize` endpoint
 - `MaxContextLength` must be at least `10000`; smaller context windows degrade quality a lot
 - `MaxContextLength` is validated on startup when provided; other bad `ChatConfig` values may still fail when first used
+- `MaxOutputTokens`, when provided, caps generated response length for chat calls and must be greater than zero
 - the current implementation requires a non-empty `ApiKey` value even for local backends that ignore authentication; use a dummy value such as `ollama` if needed
 - the current single-host example is tuned for a single `16 GB` NVIDIA GPU and uses `openai/gpt-oss-20b` as a conservative default
 - `openai/gpt-oss-20b` is the current baseline example because it fits `16 GB` cards well and supports the structured-output and tool-calling features this app needs
@@ -253,6 +256,8 @@ Optional override for backends that do not expose `/tokenize`:
 env:
   - name: ChatConfig__MaxContextLength
     value: "10240"
+  - name: ChatConfig__MaxOutputTokens
+    value: "2048"
 ```
 
 #### Chat Backend Requirements

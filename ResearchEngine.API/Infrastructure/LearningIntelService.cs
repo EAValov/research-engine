@@ -35,10 +35,13 @@ public sealed class LearningIntelService(
         if (string.IsNullOrWhiteSpace(sourceContent))
             return Array.Empty<Learning>();
 
+        const int maxSegmentSplitDepth = 8;
+        const int promptBudgetSafetyMarginTokens = 512;
+
         var settings = await runtimeSettings.GetCurrentAsync(ct);
         var options = settings.LearningSimilarityOptions;
-        var pending = new Queue<string>();
-        pending.Enqueue(sourceContent);
+        var pending = new Queue<(string Segment, int SplitDepth)>();
+        pending.Enqueue((sourceContent, 0));
 
         var allLearnings = new List<Learning>();
         var jsonOptions = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
@@ -47,7 +50,7 @@ public sealed class LearningIntelService(
         {
             ct.ThrowIfCancellationRequested();
 
-            var segment = pending.Dequeue();
+            var (segment, splitDepth) = pending.Dequeue();
             if (string.IsNullOrWhiteSpace(segment))
                 continue;
 
@@ -64,22 +67,33 @@ public sealed class LearningIntelService(
                 targetLanguage: targetLanguage);
 
             var tok = await tokenizer.TokenizePromptAsync(prompt, cancellationToken: ct);
+            var reservedOutputTokens = ComputeReservedOutputTokens(
+                tok.MaxModelLen,
+                settings.ChatConfig.MaxOutputTokens);
+            var promptTokenBudget = ComputePromptTokenBudget(
+                tok.MaxModelLen,
+                reservedOutputTokens,
+                promptBudgetSafetyMarginTokens);
 
             logger.LogDebug(
-                "Token count for learning-extraction segment (URL={Url}, length={Length}): {Tokens}/{Max}",
-                sourceUrl, segment.Length, tok.Count, tok.MaxModelLen);
+                "Token count for learning-extraction segment (URL={Url}, length={Length}): {Tokens}/{Max}. PromptBudget={PromptBudget}, ReservedOutputTokens={ReservedOutputTokens}, SafetyMarginTokens={SafetyMarginTokens}",
+                sourceUrl,
+                segment.Length,
+                tok.Count,
+                tok.MaxModelLen,
+                promptTokenBudget,
+                reservedOutputTokens,
+                promptBudgetSafetyMarginTokens);
 
-            if (tok.Count > tok.MaxModelLen)
+            if (tok.Count > promptTokenBudget)
             {
-                if (segment.Length < 2000)
-                {
-                    pending.Enqueue(segment[..(segment.Length / 2)]);
-                    continue;
-                }
-
-                var (left, right) = SplitSegmentOnBoundary(segment);
-                if (!string.IsNullOrWhiteSpace(left)) pending.Enqueue(left);
-                if (!string.IsNullOrWhiteSpace(right)) pending.Enqueue(right);
+                TryEnqueueSplitSegments(
+                    pending,
+                    segment,
+                    splitDepth,
+                    maxSegmentSplitDepth,
+                    sourceUrl,
+                    reason: $"prompt token count {tok.Count} exceeded effective prompt budget {promptTokenBudget} within model limit {tok.MaxModelLen} (reserved output tokens {reservedOutputTokens}, safety margin {promptBudgetSafetyMarginTokens})");
                 continue;
             }
 
@@ -92,6 +106,14 @@ public sealed class LearningIntelService(
 
             var withoutThink = chatModel.StripThinkBlock(raw.Text).Trim();
 
+            logger.LogDebug(
+                "Learning-extraction response metadata for URL {Url}: FinishReason={FinishReason}, ResponseChars={ResponseChars}, SegmentLength={SegmentLength}, SplitDepth={SplitDepth}",
+                sourceUrl,
+                raw.FinishReason,
+                withoutThink.Length,
+                segment.Length,
+                splitDepth);
+
             LearningExtractionResponse? parsed = null;
             try
             {
@@ -99,7 +121,34 @@ public sealed class LearningIntelService(
             }
             catch (Exception ex)
             {
-                logger.LogError(ex, "Failed to deserialize learning extraction JSON for URL {Url}. JSON: {Json}", sourceUrl, withoutThink);
+                var recovered = TryEnqueueSplitSegments(
+                    pending,
+                    segment,
+                    splitDepth,
+                    maxSegmentSplitDepth,
+                    sourceUrl,
+                    reason: raw.FinishReason == ChatFinishReason.Length
+                        ? "response hit the output length limit and returned incomplete JSON"
+                        : "response returned malformed JSON");
+
+                if (recovered)
+                {
+                    logger.LogWarning(
+                        ex,
+                        "Recovering malformed learning extraction response for URL {Url} by splitting the segment. FinishReason={FinishReason}, ResponseChars={ResponseChars}, SplitDepth={SplitDepth}",
+                        sourceUrl,
+                        raw.FinishReason,
+                        withoutThink.Length,
+                        splitDepth);
+                    continue;
+                }
+
+                logger.LogError(
+                    ex,
+                    "Failed to deserialize learning extraction JSON for URL {Url}. FinishReason={FinishReason}. JSON: {Json}",
+                    sourceUrl,
+                    raw.FinishReason,
+                    TruncateForLog(withoutThink, 4000));
             }
 
             var items = parsed?.Learnings
@@ -553,6 +602,87 @@ public sealed class LearningIntelService(
         return maxLearningsPerSegment;
     }
 
+    private static int ComputeReservedOutputTokens(int maxModelLen, int? configuredMaxOutputTokens)
+    {
+        if (configuredMaxOutputTokens is > 0)
+            return configuredMaxOutputTokens.Value;
+
+        // Reserve some completion room even when no explicit cap is configured.
+        return Math.Clamp(maxModelLen / 5, 512, 2048);
+    }
+
+    private static int ComputePromptTokenBudget(
+        int maxModelLen,
+        int reservedOutputTokens,
+        int promptBudgetSafetyMarginTokens)
+    {
+        return Math.Max(1, maxModelLen - reservedOutputTokens - promptBudgetSafetyMarginTokens);
+    }
+
+    private bool TryEnqueueSplitSegments(
+        Queue<(string Segment, int SplitDepth)> pending,
+        string segment,
+        int splitDepth,
+        int maxSegmentSplitDepth,
+        string sourceUrl,
+        string reason)
+    {
+        if (string.IsNullOrWhiteSpace(segment) || segment.Length < 2)
+        {
+            logger.LogWarning(
+                "Cannot split learning-extraction segment for URL {Url}. Reason={Reason}, SegmentLength={SegmentLength}, SplitDepth={SplitDepth}",
+                sourceUrl,
+                reason,
+                segment?.Length ?? 0,
+                splitDepth);
+            return false;
+        }
+
+        if (splitDepth >= maxSegmentSplitDepth)
+        {
+            logger.LogWarning(
+                "Reached max split depth while recovering learning extraction for URL {Url}. Reason={Reason}, SegmentLength={SegmentLength}, SplitDepth={SplitDepth}",
+                sourceUrl,
+                reason,
+                segment.Length,
+                splitDepth);
+            return false;
+        }
+
+        var (left, right) = SplitSegmentOnBoundary(segment);
+        if (string.IsNullOrWhiteSpace(left) || string.IsNullOrWhiteSpace(right))
+        {
+            var mid = segment.Length / 2;
+            if (mid <= 0 || mid >= segment.Length)
+            {
+                logger.LogWarning(
+                    "Failed to compute a valid split for learning-extraction segment for URL {Url}. Reason={Reason}, SegmentLength={SegmentLength}, SplitDepth={SplitDepth}",
+                    sourceUrl,
+                    reason,
+                    segment.Length,
+                    splitDepth);
+                return false;
+            }
+
+            left = segment[..mid];
+            right = segment[mid..];
+        }
+
+        pending.Enqueue((left, splitDepth + 1));
+        pending.Enqueue((right, splitDepth + 1));
+
+        logger.LogWarning(
+            "Splitting learning-extraction segment for URL {Url}. Reason={Reason}, SegmentLength={SegmentLength}, SplitDepth={SplitDepth}, LeftLength={LeftLength}, RightLength={RightLength}",
+            sourceUrl,
+            reason,
+            segment.Length,
+            splitDepth,
+            left.Length,
+            right.Length);
+
+        return true;
+    }
+
     private static (string left, string right) SplitSegmentOnBoundary(string segment)
     {
         if (string.IsNullOrEmpty(segment))
@@ -619,6 +749,14 @@ public sealed class LearningIntelService(
         var intersection = setA.Intersect(setB).Count();
         var union = setA.Union(setB).Count();
         return union == 0 ? 0.0 : (double)intersection / union;
+    }
+
+    private static string TruncateForLog(string value, int maxChars)
+    {
+        if (string.IsNullOrEmpty(value) || value.Length <= maxChars)
+            return value;
+
+        return value[..maxChars] + "...";
     }
 
     private sealed class ExtractedLearningItem

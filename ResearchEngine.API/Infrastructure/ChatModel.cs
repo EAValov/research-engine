@@ -54,6 +54,11 @@ public sealed class OpenAiChatModel : IChatModel
             options.Temperature = temperature;
         }
 
+        if (state.Config.MaxOutputTokens is int maxOutputTokens)
+        {
+            options.MaxOutputTokens = maxOutputTokens;
+        }
+
         var history = new List<Microsoft.Extensions.AI.ChatMessage>
         {
             new(ChatRole.System, prompt.systemPrompt),
@@ -104,7 +109,8 @@ public sealed class OpenAiChatModel : IChatModel
             if (_state is not null &&
                 string.Equals(_state.Config.Endpoint, config.Endpoint, StringComparison.Ordinal) &&
                 string.Equals(_state.Config.ApiKey, config.ApiKey, StringComparison.Ordinal) &&
-                string.Equals(_state.Config.ModelId, config.ModelId, StringComparison.Ordinal))
+                string.Equals(_state.Config.ModelId, config.ModelId, StringComparison.Ordinal) &&
+                _state.Config.MaxOutputTokens == config.MaxOutputTokens)
             {
                 return _state;
             }
@@ -128,7 +134,8 @@ public sealed class OpenAiChatModel : IChatModel
                     Endpoint = config.Endpoint,
                     ApiKey = config.ApiKey,
                     ModelId = config.ModelId,
-                    MaxContextLength = config.MaxContextLength
+                    MaxContextLength = config.MaxContextLength,
+                    MaxOutputTokens = config.MaxOutputTokens
                 },
                 new ChatClientBuilder(rawChatClient.AsIChatClient())
                     .UseFunctionInvocation()

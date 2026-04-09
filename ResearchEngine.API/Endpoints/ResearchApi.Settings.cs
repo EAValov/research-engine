@@ -156,7 +156,8 @@ public static partial class ResearchApi
                     Endpoint = request.ChatConfig.Endpoint.Trim(),
                     ApiKey = effectiveChatApiKey,
                     ModelId = request.ChatConfig.ModelId.Trim(),
-                    MaxContextLength = request.ChatConfig.MaxContextLength
+                    MaxContextLength = request.ChatConfig.MaxContextLength,
+                    MaxOutputTokens = request.ChatConfig.MaxOutputTokens
                 },
                 new FirecrawlOptions
                 {
@@ -181,6 +182,7 @@ public static partial class ResearchApi
             config.Endpoint,
             config.ModelId,
             config.MaxContextLength,
+            config.MaxOutputTokens,
             !string.IsNullOrWhiteSpace(config.ApiKey));
 
     private static RuntimeCrawlConfigDto ToRuntimeCrawlConfigDto(FirecrawlOptions config)
@@ -210,6 +212,13 @@ public static partial class ResearchApi
         {
             errors[$"{nameof(UpdateRuntimeSettingsRequest.ChatConfig)}.{nameof(UpdateChatConfigRequest.MaxContextLength)}"] =
             [$"MaxContextLength must be at least {TokenizerBase.MinimumContextLength}."];
+        }
+
+        if (request.MaxOutputTokens is int maxOutputTokens &&
+            maxOutputTokens <= 0)
+        {
+            errors[$"{nameof(UpdateRuntimeSettingsRequest.ChatConfig)}.{nameof(UpdateChatConfigRequest.MaxOutputTokens)}"] =
+            ["MaxOutputTokens must be greater than zero."];
         }
 
     }

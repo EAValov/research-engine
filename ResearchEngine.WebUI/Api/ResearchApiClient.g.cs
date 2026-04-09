@@ -5690,6 +5690,10 @@ namespace ResearchEngine.WebUI.Api
         [System.ComponentModel.DataAnnotations.RegularExpression(@"^-?(?:0|[1-9]\d*)$")]
         public int? MaxContextLength { get; set; } = default!;
 
+        [System.Text.Json.Serialization.JsonPropertyName("maxOutputTokens")]
+        [System.ComponentModel.DataAnnotations.RegularExpression(@"^-?(?:0|[1-9]\d*)$")]
+        public int? MaxOutputTokens { get; set; } = default!;
+
         [System.Text.Json.Serialization.JsonPropertyName("hasApiKey")]
         public bool HasApiKey { get; set; } = default!;
 
@@ -6296,6 +6300,10 @@ namespace ResearchEngine.WebUI.Api
         [System.Text.Json.Serialization.JsonPropertyName("maxContextLength")]
         [System.ComponentModel.DataAnnotations.RegularExpression(@"^-?(?:0|[1-9]\d*)$")]
         public int? MaxContextLength { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("maxOutputTokens")]
+        [System.ComponentModel.DataAnnotations.RegularExpression(@"^-?(?:0|[1-9]\d*)$")]
+        public int? MaxOutputTokens { get; set; } = default!;
 
         private System.Collections.Generic.IDictionary<string, object>? _additionalProperties;
 

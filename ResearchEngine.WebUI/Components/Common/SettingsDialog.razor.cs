@@ -336,6 +336,22 @@ public partial class SettingsDialog : ComponentBase
         _fieldErrors.Remove("ChatConfig.MaxContextLength");
     }
 
+    private void OnChatMaxOutputTokensChanged(ChangeEventArgs e)
+    {
+        var value = e.Value?.ToString();
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            _draftChatConfig.MaxOutputTokens = null;
+        }
+        else if (int.TryParse(value, out var parsed))
+        {
+            _draftChatConfig.MaxOutputTokens = parsed;
+        }
+
+        ResetSettingsMessages();
+        _fieldErrors.Remove("ChatConfig.MaxOutputTokens");
+    }
+
     private async Task TestApiConnectionAsync()
     {
         ResetSettingsMessages();
@@ -568,6 +584,12 @@ public partial class SettingsDialog : ComponentBase
             SetFieldError("ChatConfig.MaxContextLength", "Value must be at least 10000.");
         }
 
+        if (_draftChatConfig.MaxOutputTokens is int maxOutputTokens &&
+            maxOutputTokens <= 0)
+        {
+            SetFieldError("ChatConfig.MaxOutputTokens", "Value must be greater than zero.");
+        }
+
         if (!_draftChatConfig.HasApiKey && string.IsNullOrWhiteSpace(_draftChatApiKey))
             SetFieldError("ChatConfig.ApiKey", "Enter the chat backend API key.");
 
@@ -722,6 +744,7 @@ public partial class SettingsDialog : ComponentBase
         => string.Equals(left.Endpoint, right.Endpoint, StringComparison.Ordinal)
             && string.Equals(left.ModelId, right.ModelId, StringComparison.Ordinal)
             && left.MaxContextLength == right.MaxContextLength
+            && left.MaxOutputTokens == right.MaxOutputTokens
             && left.HasApiKey == right.HasApiKey;
 
     private static bool CrawlConfigEqual(
@@ -1059,6 +1082,7 @@ public partial class SettingsDialog : ComponentBase
             Endpoint = source.Endpoint,
             ModelId = source.ModelId,
             MaxContextLength = source.MaxContextLength,
+            MaxOutputTokens = source.MaxOutputTokens,
             HasApiKey = source.HasApiKey
         };
 
@@ -1075,6 +1099,7 @@ public partial class SettingsDialog : ComponentBase
             Endpoint = source.Endpoint,
             ModelId = source.ModelId,
             MaxContextLength = source.MaxContextLength,
+            MaxOutputTokens = source.MaxOutputTokens,
             ApiKey = apiKey
         };
 

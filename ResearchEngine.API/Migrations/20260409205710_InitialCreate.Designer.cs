@@ -13,7 +13,7 @@ using ResearchEngine.Infrastructure;
 namespace ResearchEngine.API.Migrations
 {
     [DbContext(typeof(ResearchDbContext))]
-    [Migration("20260405091706_InitialCreate")]
+    [Migration("20260409205710_InitialCreate")]
     partial class InitialCreate
     {
         /// <inheritdoc />
@@ -365,6 +365,9 @@ namespace ResearchEngine.API.Migrations
                         .HasColumnType("character varying(2000)");
 
                     b.Property<int?>("ChatMaxContextLength")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("ChatMaxOutputTokens")
                         .HasColumnType("integer");
 
                     b.Property<string>("ChatModelId")

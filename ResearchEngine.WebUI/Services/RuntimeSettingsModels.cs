@@ -60,6 +60,7 @@ public sealed class RuntimeChatConfigModel
     public string Endpoint { get; set; } = string.Empty;
     public string ModelId { get; set; } = string.Empty;
     public int? MaxContextLength { get; set; }
+    public int? MaxOutputTokens { get; set; }
     public bool HasApiKey { get; set; }
 }
 
@@ -69,6 +70,7 @@ public sealed class UpdateChatConfigModel
     public string ModelId { get; set; } = string.Empty;
     public string ApiKey { get; set; } = string.Empty;
     public int? MaxContextLength { get; set; }
+    public int? MaxOutputTokens { get; set; }
 }
 
 public sealed class RuntimeCrawlConfigModel

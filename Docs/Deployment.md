@@ -216,6 +216,7 @@ For a local `vllm` deployment, these are the main knobs:
 - In [`Deploy/single-host/40-llm.yaml`](../Deploy/single-host/40-llm.yaml), change the model id, any model-specific quantization settings, `--max-model-len`, and optionally `--gpu-memory-utilization`.
 - In [`Deploy/single-host/20-app.yaml`](../Deploy/single-host/20-app.yaml), keep `ChatConfig__ModelId` aligned with the model served by the backend.
 - If your backend does not expose `/tokenize`, set `ChatConfig__MaxContextLength` in [`Deploy/single-host/20-app.yaml`](../Deploy/single-host/20-app.yaml) to match the real backend limit you chose.
+- If structured-output responses are getting cut off, set `ChatConfig__MaxOutputTokens` in [`Deploy/single-host/20-app.yaml`](../Deploy/single-host/20-app.yaml) to an explicit cap that fits your model and workload.
 - Make these edits before the first startup when possible. After first startup, `ChatConfig` is stored in PostgreSQL, so later `ChatConfig__*` environment-variable changes will not override the existing runtime settings row until you update it through the app or reset that row.
 
 ## Recommended User Flow

@@ -207,6 +207,23 @@
                                 <span class="settings-field-error">@chatContextError</span>
                             }
                         </label>
+
+                        <label class="settings-field">
+                            <span class="settings-label-row">
+                                <span>Max output tokens</span>
+                                <span class="settings-help" title="Optional. Caps how many tokens the chat backend may generate per response. Leave blank to use the backend default.">Optional response cap</span>
+                            </span>
+                            <input type="number" min="1"
+                                   class="@GetInputClass("ChatConfig.MaxOutputTokens")"
+                                   value="@BindConverter.FormatValue(_draftChatConfig.MaxOutputTokens)"
+                                   @oninput="OnChatMaxOutputTokensChanged"
+                                   disabled="@IsRuntimeSettingsDisabled"
+                                   placeholder="2048" />
+                            @if (TryGetFieldError("ChatConfig.MaxOutputTokens", out var chatOutputTokensError))
+                            {
+                                <span class="settings-field-error">@chatOutputTokensError</span>
+                            }
+                        </label>
                     </div>
                 </section>
 
