@@ -9,18 +9,7 @@ If you want to move to Kubernetes later, use this document and the files in `Dep
 
 Podman is the recommended platform because it is secure and open source. The full single-host setup was tested on Windows 11 with WSL2 and Podman, and it works well there.
 
-Local testing has included both high-end GPUs such as the RTX 5090 and more common `16 GB` cards such as the RTX 4080. The current single-host example in `Deploy/single-host` is tuned for the `16 GB` VRAM class because it is a more practical starting point for most users.
-
 If you have an NVIDIA GPU with around `16 GB` of VRAM or more and want the full local stack, you can jump straight to the `Recommended User Flow` section. Otherwise, you will likely need to tune the LLM server for your machine. Research quality and speed mainly depend on the model backend. See `LLM Server configuration` for details.
-
-## Which Deployment Path Should I Use?
-
-| If you want... | Use | Why |
-| --- | --- | --- |
-| the quickest way to try Research Engine with external chat and crawl services | `Deploy/compose/compose.yaml` | it pulls the released app images and starts only the app stack locally |
-| to use Docker Compose or Podman Compose and point the app at separately deployed backends | `Deploy/compose/compose.yaml` | it keeps the app deployment simple while letting you manage chat and crawl services independently |
-| to build the app images locally from source instead of pulling released images | `Deploy/single-host` | `.\Deploy\single-host.ps1 up` builds `research-api` and `research-webui` before deploying |
-| the full local stack on one machine with Podman | `Deploy/single-host` | it includes the edge, app, crawl, and model pods |
 
 ## Compose Setup
 
@@ -206,7 +195,6 @@ The chat model should have a context window of at least `10000`. Smaller context
 [`Deploy/single-host/40-llm.yaml`](../Deploy/single-host/40-llm.yaml) is the reference example for the local `vllm` pod. The current sample manifest assumes:
 
 - `openai/gpt-oss-20b`
-- MXFP4 weights from the published model
 - `--gpu-memory-utilization 0.94`
 - `--max-model-len 10240`
 - `--max-num-seqs 1`
@@ -214,14 +202,12 @@ The chat model should have a context window of at least `10000`. Smaller context
 
 That is meant as a conservative `16 GB`-friendly baseline rather than a maximum-quality configuration.
 
-- The current `Deploy/single-host/40-llm.yaml` container image is the NVIDIA/CUDA variant of `vLLM`. If you want to run on AMD, switch to the official ROCm image such as `vllm/vllm-openai-rocm` and adjust the container runtime/device configuration accordingly.
-- If you have around `16 GB` of VRAM, start with the current sample manifest and only raise the context length after you confirm it is stable on your card.
-- Prefer an efficient quantized variant when your backend supports it, for example `AWQ`, `NVFP4`, or `MXFP4`.
-- If the model barely fits, reduce the backend context length first. The current sample uses `10240` . Try to stay at or above `10000` because the research pipeline degrades noticeably below that.
+- The current `Deploy/single-host/40-llm.yaml` container image is the NVIDIA/CUDA variant of `vLLM`. If you want to run on AMD, switch to the official ROCm image such as `vllm/vllm-openai-rocm` and adjust the container runtime/device configuration accordingly. For Intel there is a guide [guide](https://docs.vllm.ai/en/latest/getting_started/installation/gpu/#intel-xpu) - You would have to build the vLLM image locally.
+- If you have `16 GB` of VRAM, start with the current sample manifest and only raise the context length after you confirm it is stable on your card. The RAM offloading reduces the speed a lot.
+- The context length is important. The minimum is `10000` because the internal RAG pipeline degrades noticeably below that. More context improves the learning extraction speed and quality. The current sample uses `10240` 
 - Smaller models and lower context lengths usually trade some peak quality for stability and speed, but they can still work quite well for this app. In practice, that is often a better outcome than running an oversized model too slowly or out of memory.
 - `openai/gpt-oss-20b` is the current default example because it fits `16 GB` cards well and supports the structured-output and tool-calling features this app needs.
-- The app has been tested mainly with the Qwen3 family. In the author's testing, Qwen3 models have been the most capable for this workload so far, so `Qwen3-14B-AWQ` or `Qwen3-30B-A3B-NVFP4` are strong alternatives if you want to tune for higher quality or have more GPU headroom.
-- If you have more VRAM than the `16 GB` baseline, raise `--max-model-len` first and then experiment with larger or higher-quality models.
+- The app has been tested mainly with the Qwen3 family. In the author's testing, Qwen3 models have been the most capable for this workload so far, so `Qwen3-14B-AWQ` or `Qwen3-30B-A3B-NVFP4` are strong alternatives if you want to tune for higher quality or have more GPU headroom. Important is that the model needs to support tool calling.
 
 #### What To Change When You Swap Models
 

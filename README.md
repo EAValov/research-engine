@@ -51,13 +51,12 @@ No subscription required. Your prompts, sources, and reports stay under you cont
 ## Quick Start & Hardware Requirements
 The main requirement is that the system must be powerful enough to run at least an 8B-14B instruct model at a reasonable speed and with enough context for planning, synthesis, and evidence extraction.
 
+> [!TIP]
+> If you don't have a LLM-capable local hardware, check out the [Deployment guide Compose Setup section](./Docs/Deployment.md#compose-setup).
 
 The app is containerized and **Podman** is the recommended platform because it is secure and open source. The full single-host setup was tested on Windows 11 with WSL2 and Podman, and it works well there. The example below uses [podman kube play](https://docs.podman.io/en/latest/markdown/podman-kube-play.1.html) and vLLM CUDA image.
 
-> [!TIP]
-> For Docker-based deployment, check out the [Deployment guide Compose Setup section](./Docs/Deployment.md#compose-setup).
-
-If you have AMD or Intel GPU, check the [hardware sizing notes in the Deployment guide](./Docs/Deployment.md#hardware-sizing-guide) before using the local single-host setup.
+For AMD or Intel GPU, check the [hardware sizing notes in the Deployment guide](./Docs/Deployment.md#hardware-sizing-guide) before using the local single-host setup.
 
 If you have an **NVIDIA GPU with `16 GB` of VRAM** or more and **Podman** with [GPU container access](https://podman-desktop.io/docs/podman/gpu) configured, you can use this one-command installer flow:
 
