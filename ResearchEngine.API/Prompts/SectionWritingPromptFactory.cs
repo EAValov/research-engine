@@ -92,6 +92,7 @@ public static class SectionWritingPromptFactory
 
         userSb.AppendLine("CITATION STYLE (CRITICAL):");
         userSb.AppendLine("- Citations must appear ONLY as [lrn:<32-hex>] tokens, e.g. [lrn:6f5c1a2b3c4d5e6f7a8b9c0d1e2f3a4b].");
+        userSb.AppendLine("- Use ASCII square brackets [] only; never fullwidth brackets such as 【lrn:...】.");
         userSb.AppendLine("- If multiple, separate with commas/spaces: [lrn:...], [lrn:...].");
         userSb.AppendLine("- Never use chained citations like [lrn:...][lrn:...] (forbidden).");
 
@@ -125,6 +126,7 @@ public static class SectionWritingPromptFactory
 
         sb.AppendLine("CITATIONS (CRITICAL):");
         sb.AppendLine("- Citations must be ONLY in the form [lrn:<32-hex-guid>]. Example: [lrn:0123abcd0123abcd0123abcd0123abcd].");
+        sb.AppendLine("- Use ASCII square brackets [] only; never fullwidth brackets such as 【lrn:...】.");
         sb.AppendLine("- Never output chained citations like [lrn:...][lrn:...]; always separate: [lrn:...], [lrn:...].");
         sb.AppendLine("- The final section text MUST include at least one [lrn:...] citation token.");
         sb.AppendLine();
