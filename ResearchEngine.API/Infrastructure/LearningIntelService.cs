@@ -99,7 +99,7 @@ public sealed class LearningIntelService(
             }
             catch (Exception ex)
             {
-                logger.LogError(ex, "Failed to deserialize learning extraction JSON for URL {Url}.", sourceUrl);
+                logger.LogError(ex, "Failed to deserialize learning extraction JSON for URL {Url}. JSON: {Json}", sourceUrl, withoutThink);
             }
 
             var items = parsed?.Learnings

@@ -10,19 +10,32 @@ namespace ResearchEngine.WebUI.Services;
 
 public static class Citations
 {
-    // [lrn:<guid>] (case-insensitive)
-    // Accept both hyphenated GUIDs and compact 32-hex GUIDs (N format)
+    private const string GuidPattern =
+        @"(?:[0-9a-fA-F]{32}|[0-9a-fA-F]{8}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{12})";
+
+    // Canonical ASCII citation syntax: [lrn:<guid>] or [lrn:<guid>|label]
     private static readonly Regex LrnRegex = new(
-        @"\[lrn:(?<id>(?:[0-9a-fA-F]{32}|[0-9a-fA-F]{8}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{12}))(?:(?:\|)(?<label>[^\]]+))?\]",
+        $@"\[lrn:(?<id>{GuidPattern})(?:(?:\|)(?<label>[^\]]+))?\]",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
+
+    // Tolerate bracket variations the model occasionally emits, including fullwidth CJK brackets.
+    private static readonly Regex LrnLooseBracketRegex = new(
+        $@"(?:\[|【)\s*lrn:(?<id>{GuidPattern})(?:(?:\|)(?<label>[^\]】]+))?\s*(?:\]|】)",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
+
+    // Rarely the model emits a naked lrn:<guid> token. Canonicalize it before rewrite/render.
+    private static readonly Regex LrnBareRegex = new(
+        $@"(?<![\[【\p{{L}}\p{{N}}_/\-])lrn:(?<id>{GuidPattern})(?![\p{{L}}\p{{N}}_])",
         RegexOptions.Compiled | RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
 
     public static IReadOnlyList<Guid> ExtractLearningIds(string markdown)
     {
-        if (string.IsNullOrWhiteSpace(markdown))
+        var normalized = NormalizeLearningCitationMarkup(markdown);
+        if (string.IsNullOrWhiteSpace(normalized))
             return Array.Empty<Guid>();
 
         var set = new HashSet<Guid>();
-        foreach (Match m in LrnRegex.Matches(markdown))
+        foreach (Match m in LrnRegex.Matches(normalized))
         {
             var s = m.Groups["id"].Value;
             if (Guid.TryParse(s, out var id))
@@ -33,13 +46,14 @@ public static class Citations
 
     public static IReadOnlyList<Guid> ExtractLearningIdsInAppearanceOrder(string markdown)
     {
-        if (string.IsNullOrWhiteSpace(markdown))
+        var normalized = NormalizeLearningCitationMarkup(markdown);
+        if (string.IsNullOrWhiteSpace(normalized))
             return Array.Empty<Guid>();
 
         var seen = new HashSet<Guid>();
         var ordered = new List<Guid>();
 
-        foreach (Match m in LrnRegex.Matches(markdown))
+        foreach (Match m in LrnRegex.Matches(normalized))
         {
             var s = m.Groups["id"].Value;
             if (!Guid.TryParse(s, out var id))
@@ -54,10 +68,11 @@ public static class Citations
 
     public static string RewriteLearningCitations(string markdown, Func<Guid, string?> labelProvider)
     {
-        if (string.IsNullOrWhiteSpace(markdown))
-            return markdown ?? string.Empty;
+        var normalized = NormalizeLearningCitationMarkup(markdown);
+        if (string.IsNullOrWhiteSpace(normalized))
+            return normalized;
 
-        return LrnRegex.Replace(markdown, match =>
+        return LrnRegex.Replace(normalized, match =>
         {
             var s = match.Groups["id"].Value;
             if (!Guid.TryParse(s, out var id))
@@ -73,10 +88,11 @@ public static class Citations
 
     public static string RewriteLearningCitationsToLabels(string markdown, Func<Guid, string?> labelProvider)
     {
-        if (string.IsNullOrWhiteSpace(markdown))
-            return markdown ?? string.Empty;
+        var normalized = NormalizeLearningCitationMarkup(markdown);
+        if (string.IsNullOrWhiteSpace(normalized))
+            return normalized;
 
-        return LrnRegex.Replace(markdown, match =>
+        return LrnRegex.Replace(normalized, match =>
         {
             var s = match.Groups["id"].Value;
             if (!Guid.TryParse(s, out var id))
@@ -88,6 +104,24 @@ public static class Citations
 
             return $"[{label.Trim()}]";
         });
+    }
+
+    public static string NormalizeLearningCitationMarkup(string markdown)
+    {
+        if (string.IsNullOrWhiteSpace(markdown))
+            return markdown ?? string.Empty;
+
+        var normalized = LrnLooseBracketRegex.Replace(markdown, CanonicalizeMatch);
+        normalized = LrnBareRegex.Replace(normalized, match =>
+        {
+            var s = match.Groups["id"].Value;
+            if (!Guid.TryParse(s, out var id))
+                return match.Value;
+
+            return $"[lrn:{id:N}]";
+        });
+
+        return normalized;
     }
 
     public static MarkdownPipeline CreatePipelineWithCitations()
@@ -193,5 +227,21 @@ public static class Citations
 
             renderer.Write("</button>");
         }
+    }
+
+    private static string CanonicalizeMatch(Match match)
+    {
+        var s = match.Groups["id"].Value;
+        if (!Guid.TryParse(s, out var id))
+            return match.Value;
+
+        var label = match.Groups["label"].Success
+            ? match.Groups["label"].Value.Trim()
+            : null;
+
+        if (string.IsNullOrWhiteSpace(label))
+            return $"[lrn:{id:N}]";
+
+        return $"[lrn:{id:N}|{label}]";
     }
 }

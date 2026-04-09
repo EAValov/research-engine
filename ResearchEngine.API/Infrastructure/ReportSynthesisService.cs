@@ -543,7 +543,8 @@ public sealed class ReportSynthesisService(
 
             await ThrowIfJobCanceledAsync(synthesis.JobId, ct);
 
-            var text = chatModel.StripThinkBlock(response.Text).Trim();
+            var text = LearningCitationNormalizer.Normalize(
+                chatModel.StripThinkBlock(response.Text).Trim());
 
             results.Add(new SectionResult { Plan = section, Text = text });
             progress.SynthesisSectionWritten(repaired: false);
@@ -578,7 +579,8 @@ public sealed class ReportSynthesisService(
             section.Plan.Title, tokens.Count, tokens.MaxModelLen);
 
         var response = await chatModel.ChatAsync(prompt, tools: null, cancellationToken: ct);
-        return chatModel.StripThinkBlock(response.Text).Trim();
+        return LearningCitationNormalizer.Normalize(
+            chatModel.StripThinkBlock(response.Text).Trim());
     }
 
     private async Task<string> GenerateConclusionAsync(
@@ -599,7 +601,8 @@ public sealed class ReportSynthesisService(
         logger.LogDebug("[ReportSynthesis] Conclusion prompt tokens: {count}/{max}", tokens.Count, tokens.MaxModelLen);
 
         var response = await chatModel.ChatAsync(prompt, tools: null, cancellationToken: ct);
-        return chatModel.StripThinkBlock(response.Text).Trim();
+        return LearningCitationNormalizer.Normalize(
+            chatModel.StripThinkBlock(response.Text).Trim());
     }
 
     private static string FormatClarifications(IEnumerable<Clarification> clarifications)
