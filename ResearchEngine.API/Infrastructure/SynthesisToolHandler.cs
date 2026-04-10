@@ -9,6 +9,10 @@ public sealed class SynthesisToolHandler(
     string? region = null
 )
 {
+    private readonly HashSet<Guid> _returnedLearningIds = new();
+
+    public IReadOnlyCollection<Guid> ReturnedLearningIds => _returnedLearningIds;
+
     public async Task<GetSimilarLearningsToolResult> HandleGetSimilarLearningsAsync(
         string queryText,
         CancellationToken ct = default)
@@ -23,6 +27,8 @@ public sealed class SynthesisToolHandler(
 
         var toolLearnings = learnings.Select(l =>
         {
+            _returnedLearningIds.Add(l.Id);
+
             var url = l.Source?.Reference ?? string.Empty;
             if (string.IsNullOrWhiteSpace(url))
                 url = "about:blank";

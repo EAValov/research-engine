@@ -49,4 +49,37 @@ public sealed class LearningCitationNormalizer_Tests
 
         Assert.Contains("[lrn:3562ed21521c42f29007064a4393513b|12]", normalized);
     }
+
+    [Fact]
+    public void Normalize_RepairsTruncatedCitationIds_WhenKnownLearningIdsProvideUniqueMatch()
+    {
+        var knownIds = new[]
+        {
+            Guid.ParseExact("e95686f743ff4e8695ec661098d33af1", "N")
+        };
+
+        const string input =
+            "The first confirmation typically arrives 5-10 minutes after broadcast【lrn:e95686f743ff4e8695ec661098d33a】.";
+
+        var normalized = LearningCitationNormalizer.Normalize(input, knownIds);
+
+        Assert.Contains("[lrn:e95686f743ff4e8695ec661098d33af1]", normalized);
+    }
+
+    [Fact]
+    public void Normalize_DoesNotGuess_WhenMultipleKnownLearningIdsAreEquallyClose()
+    {
+        var knownIds = new[]
+        {
+            Guid.ParseExact("e95686f743ff4e8695ec661098d33af1", "N"),
+            Guid.ParseExact("e95686f743ff4e8695ec661098d33af2", "N")
+        };
+
+        const string input =
+            "The first confirmation typically arrives after broadcast【lrn:e95686f743ff4e8695ec661098d33a】.";
+
+        var normalized = LearningCitationNormalizer.Normalize(input, knownIds);
+
+        Assert.Contains("【lrn:e95686f743ff4e8695ec661098d33a】", normalized);
+    }
 }

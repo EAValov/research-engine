@@ -544,7 +544,8 @@ public sealed class ReportSynthesisService(
             await ThrowIfJobCanceledAsync(synthesis.JobId, ct);
 
             var text = LearningCitationNormalizer.Normalize(
-                chatModel.StripThinkBlock(response.Text).Trim());
+                chatModel.StripThinkBlock(response.Text).Trim(),
+                toolHandler.ReturnedLearningIds);
 
             results.Add(new SectionResult { Plan = section, Text = text });
             progress.SynthesisSectionWritten(repaired: false);
