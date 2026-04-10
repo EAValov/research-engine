@@ -5,6 +5,26 @@
 
 const sources = new Map();
 
+function logSuppressed(action, error, level = "debug") {
+  const logger = console?.[level] ?? console?.debug ?? console?.log;
+  if (!logger) return;
+  logger.call(console, `[jobEvents] ${action}`, error);
+}
+
+function invokeDotNetSafe(dotNetRef, method, action, ...args) {
+  Promise.resolve(dotNetRef.invokeMethodAsync(method, ...args)).catch((error) => {
+    logSuppressed(action, error, "warn");
+  });
+}
+
+function closeEventSourceSafe(es, action) {
+  try {
+    es.close();
+  } catch (error) {
+    logSuppressed(action, error);
+  }
+}
+
 export function connect(url, dotNetRef) {
   // url MUST be absolute, JobEventsClient ensures this.
   const es = new EventSource(url);
@@ -14,7 +34,7 @@ export function connect(url, dotNetRef) {
 
   const onAnyEvent = (e) => {
     if (!e || !e.data) return;
-    dotNetRef.invokeMethodAsync("OnSseEvent", e.data);
+    invokeDotNetSafe(dotNetRef, "OnSseEvent", "dispatching SSE event to .NET", e.data);
   };
 
   // Default SSE messages (no explicit `event:` field)
@@ -31,18 +51,22 @@ export function connect(url, dotNetRef) {
     "update"
   ];
   for (const name of possibleNames) {
-    try { es.addEventListener(name, onAnyEvent); } catch { }
+    try {
+      es.addEventListener(name, onAnyEvent);
+    } catch (error) {
+      logSuppressed(`subscribing to named SSE event '${name}'`, error);
+    }
   }
 
   es.addEventListener("done", (e) => {
     if (!e || !e.data) return;
-    dotNetRef.invokeMethodAsync("OnSseDone", e.data);
-    try { es.close(); } catch { }
+    invokeDotNetSafe(dotNetRef, "OnSseDone", "dispatching SSE completion to .NET", e.data);
+    closeEventSourceSafe(es, "closing EventSource after done event");
   });
 
   es.onerror = () => {
-    dotNetRef.invokeMethodAsync("OnSseError");
-    try { es.close(); } catch { }
+    invokeDotNetSafe(dotNetRef, "OnSseError", "dispatching SSE error to .NET");
+    closeEventSourceSafe(es, "closing EventSource after error event");
   };
 
   return id;
@@ -51,7 +75,7 @@ export function connect(url, dotNetRef) {
 export function close(id) {
   const entry = sources.get(id);
   if (!entry) return;
-  try { entry.es.close(); } catch { }
+  closeEventSourceSafe(entry.es, "closing EventSource connection");
   sources.delete(id);
 }
 
@@ -72,7 +96,8 @@ export async function copyText(text) {
   try {
     await navigator.clipboard.writeText(text);
     return true;
-  } catch {
+  } catch (error) {
+    logSuppressed("copying text to clipboard", error);
     return false;
   }
 }

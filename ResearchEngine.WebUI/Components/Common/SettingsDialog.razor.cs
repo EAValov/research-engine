@@ -1,8 +1,8 @@
 using System.Net;
 using System.Net.Http.Headers;
-using System.Text;
 using System.Text.Json;
 using Microsoft.AspNetCore.Components;
+using ResearchEngine.WebUI.Api;
 using ResearchEngine.WebUI.Services;
 using ResearchEngine.WebUI.State;
 
@@ -18,12 +18,12 @@ public partial class SettingsDialog : ComponentBase
     }
 
     private sealed record RuntimeSettingsCallResult(
-        RuntimeSettingsResponseModel? Data,
+        RuntimeSettingsResponse? Data,
         string? Error = null,
         Dictionary<string, string>? FieldErrors = null);
 
     private sealed record ChatModelCatalogCallResult(
-        ChatModelCatalogResponseModel? Data,
+        ChatModelCatalogResponse? Data,
         string? Error = null,
         Dictionary<string, string>? FieldErrors = null);
 
@@ -32,10 +32,6 @@ public partial class SettingsDialog : ComponentBase
         string? Error = null,
         Dictionary<string, string>? FieldErrors = null);
 
-    private static readonly JsonSerializerOptions RuntimeSettingsJsonOptions = new()
-    {
-        PropertyNameCaseInsensitive = true
-    };
     private static readonly string[] DiscoveryModeOptions = ["Auto", "Balanced", "ReliableOnly", "AcademicOnly"];
 
     [Inject] private AppStateStore AppState { get; set; } = default!;
@@ -53,17 +49,17 @@ public partial class SettingsDialog : ComponentBase
     private string _draftApiBaseUrl = string.Empty;
     private string _draftApiKey = string.Empty;
     private bool _draftApiAuthEnabled = true;
-    private ResearchOrchestratorConfigModel _draftResearchOptions = new();
-    private LearningSimilarityOptionsModel _draftLearningOptions = new();
-    private RuntimeChatConfigModel _draftChatConfig = new();
-    private RuntimeCrawlConfigModel _draftCrawlConfig = new();
+    private ResearchOrchestratorConfig _draftResearchOptions = new();
+    private LearningSimilarityOptions _draftLearningOptions = new();
+    private RuntimeChatConfigDto _draftChatConfig = new();
+    private RuntimeCrawlConfigDto _draftCrawlConfig = new();
     private string _draftChatApiKey = string.Empty;
     private string _draftCrawlApiKey = string.Empty;
     private readonly List<string> _chatModelOptions = new();
-    private ResearchOrchestratorConfigModel _baselineResearchOptions = new();
-    private LearningSimilarityOptionsModel _baselineLearningOptions = new();
-    private RuntimeChatConfigModel _baselineChatConfig = new();
-    private RuntimeCrawlConfigModel _baselineCrawlConfig = new();
+    private ResearchOrchestratorConfig _baselineResearchOptions = new();
+    private LearningSimilarityOptions _baselineLearningOptions = new();
+    private RuntimeChatConfigDto _baselineChatConfig = new();
+    private RuntimeCrawlConfigDto _baselineCrawlConfig = new();
     private readonly Dictionary<string, string> _fieldErrors = new(StringComparer.Ordinal);
     private bool _loadingChatModelOptions;
     private string? _chatModelOptionsError;
@@ -202,7 +198,7 @@ public partial class SettingsDialog : ComponentBase
                 return;
             }
 
-            var request = new UpdateRuntimeSettingsRequestModel
+            var request = new UpdateRuntimeSettingsRequest
             {
                 ResearchOrchestratorConfig = CloneResearchOptions(_draftResearchOptions),
                 LearningSimilarityOptions = CloneLearningOptions(_draftLearningOptions),
@@ -378,7 +374,6 @@ public partial class SettingsDialog : ComponentBase
         {
             var probe = await ProbeEndpointDirectAsync(
                 normalizedBaseUrl,
-                "api/ping",
                 _draftApiAuthEnabled,
                 GetEffectiveDraftApiKey(),
                 CancellationToken.None);
@@ -477,7 +472,7 @@ public partial class SettingsDialog : ComponentBase
                 _draftApiBaseUrl,
                 _draftApiAuthEnabled,
                 GetEffectiveDraftApiKey(),
-                new CrawlApiProbeRequestModel
+                new CrawlApiProbeRequest
                 {
                     Endpoint = normalizedEndpoint,
                     ApiKey = _draftCrawlApiKey,
@@ -532,7 +527,7 @@ public partial class SettingsDialog : ComponentBase
         }
     }
 
-    private void ApplyRuntimeSettings(RuntimeSettingsResponseModel response)
+    private void ApplyRuntimeSettings(RuntimeSettingsResponse response)
     {
         _draftResearchOptions = CloneResearchOptions(response.ResearchOrchestratorConfig);
         _draftLearningOptions = CloneLearningOptions(response.LearningSimilarityOptions);
@@ -719,16 +714,16 @@ public partial class SettingsDialog : ComponentBase
     }
 
     private static bool ResearchOptionsEqual(
-        ResearchOrchestratorConfigModel left,
-        ResearchOrchestratorConfigModel right)
+        ResearchOrchestratorConfig left,
+        ResearchOrchestratorConfig right)
         => left.LimitSearches == right.LimitSearches
             && left.MaxUrlParallelism == right.MaxUrlParallelism
             && left.MaxUrlsPerSerpQuery == right.MaxUrlsPerSerpQuery
             && string.Equals(left.DefaultDiscoveryMode, right.DefaultDiscoveryMode, StringComparison.Ordinal);
 
     private static bool LearningOptionsEqual(
-        LearningSimilarityOptionsModel left,
-        LearningSimilarityOptionsModel right)
+        LearningSimilarityOptions left,
+        LearningSimilarityOptions right)
         => left.MinImportance == right.MinImportance
             && left.DiversityMaxPerUrl == right.DiversityMaxPerUrl
             && left.DiversityMaxTextSimilarity == right.DiversityMaxTextSimilarity
@@ -739,8 +734,8 @@ public partial class SettingsDialog : ComponentBase
             && left.MaxEvidenceLength == right.MaxEvidenceLength;
 
     private static bool ChatConfigEqual(
-        RuntimeChatConfigModel left,
-        RuntimeChatConfigModel right)
+        RuntimeChatConfigDto left,
+        RuntimeChatConfigDto right)
         => string.Equals(left.Endpoint, right.Endpoint, StringComparison.Ordinal)
             && string.Equals(left.ModelId, right.ModelId, StringComparison.Ordinal)
             && left.MaxContextLength == right.MaxContextLength
@@ -748,14 +743,13 @@ public partial class SettingsDialog : ComponentBase
             && left.HasApiKey == right.HasApiKey;
 
     private static bool CrawlConfigEqual(
-        RuntimeCrawlConfigModel left,
-        RuntimeCrawlConfigModel right)
+        RuntimeCrawlConfigDto left,
+        RuntimeCrawlConfigDto right)
         => string.Equals(left.Endpoint, right.Endpoint, StringComparison.Ordinal)
             && left.HasApiKey == right.HasApiKey;
 
     private static async Task<(HttpStatusCode? Status, string? Error)> ProbeEndpointDirectAsync(
         string baseUrl,
-        string relativePath,
         bool authEnabled,
         string apiKey,
         CancellationToken ct)
@@ -765,14 +759,14 @@ public partial class SettingsDialog : ComponentBase
 
         try
         {
-            using var client = new HttpClient
-            {
-                BaseAddress = new Uri(baseUrl, UriKind.Absolute)
-            };
-
-            using var request = CreateAuthorizedRequest(HttpMethod.Get, relativePath, authEnabled, apiKey);
-            using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, linkedCts.Token);
-            return (response.StatusCode, null);
+            using var client = CreateDraftHttpClient(baseUrl, authEnabled, apiKey);
+            var api = new ResearchApiClient(client);
+            await api.PingAsync(linkedCts.Token);
+            return (HttpStatusCode.OK, null);
+        }
+        catch (ApiException ex)
+        {
+            return ((HttpStatusCode)ex.StatusCode, null);
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested)
         {
@@ -799,22 +793,19 @@ public partial class SettingsDialog : ComponentBase
 
         try
         {
-            using var client = new HttpClient
-            {
-                BaseAddress = new Uri(normalizedBaseUrl, UriKind.Absolute)
-            };
-
-            using var request = CreateAuthorizedRequest(HttpMethod.Get, "api/settings/runtime", authEnabled, apiKey);
-            using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, linkedCts.Token);
-            var body = await response.Content.ReadAsStringAsync(linkedCts.Token);
-
-            if (!response.IsSuccessStatusCode)
-                return new RuntimeSettingsCallResult(null, BuildRuntimeSettingsErrorMessage(response.StatusCode), ParseValidationErrors(body));
-
-            var data = JsonSerializer.Deserialize<RuntimeSettingsResponseModel>(body, RuntimeSettingsJsonOptions);
+            using var client = CreateDraftHttpClient(normalizedBaseUrl, authEnabled, apiKey);
+            var api = new ResearchApiClient(client);
+            var data = await api.RuntimeGETAsync(linkedCts.Token);
             return data is null
                 ? new RuntimeSettingsCallResult(null, "The API returned an empty runtime settings payload.")
                 : new RuntimeSettingsCallResult(data);
+        }
+        catch (ApiException ex)
+        {
+            return new RuntimeSettingsCallResult(
+                null,
+                BuildRuntimeSettingsErrorMessage((HttpStatusCode)ex.StatusCode),
+                ParseValidationErrors(ex.Response));
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested)
         {
@@ -830,7 +821,7 @@ public partial class SettingsDialog : ComponentBase
         string baseUrl,
         bool authEnabled,
         string apiKey,
-        UpdateRuntimeSettingsRequestModel requestModel,
+        UpdateRuntimeSettingsRequest requestModel,
         CancellationToken ct)
     {
         var normalizedBaseUrl = ApiConnectionSettings.NormalizeBaseUrl(baseUrl);
@@ -842,25 +833,19 @@ public partial class SettingsDialog : ComponentBase
 
         try
         {
-            using var client = new HttpClient
-            {
-                BaseAddress = new Uri(normalizedBaseUrl, UriKind.Absolute)
-            };
-
-            var json = JsonSerializer.Serialize(requestModel, RuntimeSettingsJsonOptions);
-            using var request = CreateAuthorizedRequest(HttpMethod.Put, "api/settings/runtime", authEnabled, apiKey);
-            request.Content = new StringContent(json, Encoding.UTF8, "application/json");
-
-            using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, linkedCts.Token);
-            var body = await response.Content.ReadAsStringAsync(linkedCts.Token);
-
-            if (!response.IsSuccessStatusCode)
-                return new RuntimeSettingsCallResult(null, BuildRuntimeSettingsErrorMessage(response.StatusCode), ParseValidationErrors(body));
-
-            var data = JsonSerializer.Deserialize<RuntimeSettingsResponseModel>(body, RuntimeSettingsJsonOptions);
+            using var client = CreateDraftHttpClient(normalizedBaseUrl, authEnabled, apiKey);
+            var api = new ResearchApiClient(client);
+            var data = await api.RuntimePUTAsync(requestModel, linkedCts.Token);
             return data is null
                 ? new RuntimeSettingsCallResult(null, "The API returned an empty runtime settings payload.")
                 : new RuntimeSettingsCallResult(data);
+        }
+        catch (ApiException ex)
+        {
+            return new RuntimeSettingsCallResult(
+                null,
+                BuildRuntimeSettingsErrorMessage((HttpStatusCode)ex.StatusCode),
+                ParseValidationErrors(ex.Response));
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested)
         {
@@ -876,7 +861,7 @@ public partial class SettingsDialog : ComponentBase
         string baseUrl,
         bool authEnabled,
         string apiKey,
-        ChatModelCatalogRequestModel requestModel,
+        ChatModelCatalogRequest requestModel,
         CancellationToken ct)
     {
         var normalizedBaseUrl = ApiConnectionSettings.NormalizeBaseUrl(baseUrl);
@@ -888,25 +873,19 @@ public partial class SettingsDialog : ComponentBase
 
         try
         {
-            using var client = new HttpClient
-            {
-                BaseAddress = new Uri(normalizedBaseUrl, UriKind.Absolute)
-            };
-
-            var json = JsonSerializer.Serialize(requestModel, RuntimeSettingsJsonOptions);
-            using var request = CreateAuthorizedRequest(HttpMethod.Post, "api/settings/runtime/chat-models", authEnabled, apiKey);
-            request.Content = new StringContent(json, Encoding.UTF8, "application/json");
-
-            using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, linkedCts.Token);
-            var body = await response.Content.ReadAsStringAsync(linkedCts.Token);
-
-            if (!response.IsSuccessStatusCode)
-                return new ChatModelCatalogCallResult(null, BuildChatModelCatalogErrorMessage(response.StatusCode), ParseValidationErrors(body));
-
-            var data = JsonSerializer.Deserialize<ChatModelCatalogResponseModel>(body, RuntimeSettingsJsonOptions);
+            using var client = CreateDraftHttpClient(normalizedBaseUrl, authEnabled, apiKey);
+            var api = new ResearchApiClient(client);
+            var data = await api.ChatModelsAsync(requestModel, linkedCts.Token);
             return data is null
                 ? new ChatModelCatalogCallResult(null, "The API returned an empty chat model catalog.")
                 : new ChatModelCatalogCallResult(data);
+        }
+        catch (ApiException ex)
+        {
+            return new ChatModelCatalogCallResult(
+                null,
+                BuildChatModelCatalogErrorMessage((HttpStatusCode)ex.StatusCode),
+                ParseValidationErrors(ex.Response));
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested)
         {
@@ -922,7 +901,7 @@ public partial class SettingsDialog : ComponentBase
         string baseUrl,
         bool authEnabled,
         string apiKey,
-        CrawlApiProbeRequestModel requestModel,
+        CrawlApiProbeRequest requestModel,
         CancellationToken ct)
     {
         var normalizedBaseUrl = ApiConnectionSettings.NormalizeBaseUrl(baseUrl);
@@ -934,27 +913,17 @@ public partial class SettingsDialog : ComponentBase
 
         try
         {
-            using var client = new HttpClient
-            {
-                BaseAddress = new Uri(normalizedBaseUrl, UriKind.Absolute)
-            };
-
-            var json = JsonSerializer.Serialize(requestModel, RuntimeSettingsJsonOptions);
-            using var request = CreateAuthorizedRequest(HttpMethod.Post, "api/settings/runtime/crawl-probe", authEnabled, apiKey);
-            request.Content = new StringContent(json, Encoding.UTF8, "application/json");
-
-            using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, linkedCts.Token);
-            var body = await response.Content.ReadAsStringAsync(linkedCts.Token);
-
-            if (!response.IsSuccessStatusCode)
-            {
-                return new CrawlApiProbeCallResult(
-                    false,
-                    BuildCrawlProbeErrorMessage(response.StatusCode),
-                    ParseValidationErrors(body));
-            }
-
+            using var client = CreateDraftHttpClient(normalizedBaseUrl, authEnabled, apiKey);
+            var api = new ResearchApiClient(client);
+            await api.CrawlProbeAsync(requestModel, linkedCts.Token);
             return new CrawlApiProbeCallResult(true);
+        }
+        catch (ApiException ex)
+        {
+            return new CrawlApiProbeCallResult(
+                false,
+                BuildCrawlProbeErrorMessage((HttpStatusCode)ex.StatusCode),
+                ParseValidationErrors(ex.Response));
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested)
         {
@@ -966,18 +935,20 @@ public partial class SettingsDialog : ComponentBase
         }
     }
 
-    private static HttpRequestMessage CreateAuthorizedRequest(
-        HttpMethod method,
-        string relativePath,
+    private static HttpClient CreateDraftHttpClient(
+        string baseUrl,
         bool authEnabled,
         string apiKey)
     {
-        var request = new HttpRequestMessage(method, relativePath);
+        var client = new HttpClient
+        {
+            BaseAddress = new Uri(baseUrl, UriKind.Absolute)
+        };
 
         if (authEnabled && !string.IsNullOrWhiteSpace(apiKey))
-            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey.Trim());
+            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", apiKey.Trim());
 
-        return request;
+        return client;
     }
 
     private static string BuildRuntimeSettingsErrorMessage(HttpStatusCode statusCode)
@@ -1054,7 +1025,7 @@ public partial class SettingsDialog : ComponentBase
         }
     }
 
-    private static ResearchOrchestratorConfigModel CloneResearchOptions(ResearchOrchestratorConfigModel source)
+    private static ResearchOrchestratorConfig CloneResearchOptions(ResearchOrchestratorConfig source)
         => new()
         {
             LimitSearches = source.LimitSearches,
@@ -1063,7 +1034,7 @@ public partial class SettingsDialog : ComponentBase
             DefaultDiscoveryMode = source.DefaultDiscoveryMode
         };
 
-    private static LearningSimilarityOptionsModel CloneLearningOptions(LearningSimilarityOptionsModel source)
+    private static LearningSimilarityOptions CloneLearningOptions(LearningSimilarityOptions source)
         => new()
         {
             MinImportance = source.MinImportance,
@@ -1076,7 +1047,7 @@ public partial class SettingsDialog : ComponentBase
             MaxEvidenceLength = source.MaxEvidenceLength
         };
 
-    private static RuntimeChatConfigModel CloneRuntimeChatConfig(RuntimeChatConfigModel source)
+    private static RuntimeChatConfigDto CloneRuntimeChatConfig(RuntimeChatConfigDto source)
         => new()
         {
             Endpoint = source.Endpoint,
@@ -1086,14 +1057,14 @@ public partial class SettingsDialog : ComponentBase
             HasApiKey = source.HasApiKey
         };
 
-    private static RuntimeCrawlConfigModel CloneRuntimeCrawlConfig(RuntimeCrawlConfigModel source)
+    private static RuntimeCrawlConfigDto CloneRuntimeCrawlConfig(RuntimeCrawlConfigDto source)
         => new()
         {
             Endpoint = source.Endpoint,
             HasApiKey = source.HasApiKey
         };
 
-    private static UpdateChatConfigModel CloneChatConfigForUpdate(RuntimeChatConfigModel source, string apiKey)
+    private static UpdateChatConfigRequest CloneChatConfigForUpdate(RuntimeChatConfigDto source, string apiKey)
         => new()
         {
             Endpoint = source.Endpoint,
@@ -1103,7 +1074,7 @@ public partial class SettingsDialog : ComponentBase
             ApiKey = apiKey
         };
 
-    private static UpdateCrawlConfigModel CloneCrawlConfigForUpdate(RuntimeCrawlConfigModel source, string apiKey)
+    private static UpdateCrawlConfigRequest CloneCrawlConfigForUpdate(RuntimeCrawlConfigDto source, string apiKey)
         => new()
         {
             Endpoint = source.Endpoint,
@@ -1152,7 +1123,7 @@ public partial class SettingsDialog : ComponentBase
                 _draftApiBaseUrl,
                 _draftApiAuthEnabled,
                 GetEffectiveDraftApiKey(),
-                new ChatModelCatalogRequestModel
+                new ChatModelCatalogRequest
                 {
                     Endpoint = normalizedEndpoint,
                     ApiKey = _draftChatApiKey,

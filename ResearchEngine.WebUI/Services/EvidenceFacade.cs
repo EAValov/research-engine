@@ -86,15 +86,12 @@ public sealed class EvidenceFacade
 
             // NSwag: Task<AddLearningResponse> LearningsPOSTAsync(Guid jobId, AddLearningRequest body, CancellationToken ct = default)
             var resp = await _api.LearningsPOSTAsync(jobId, request, ct);
-
-            // AddLearningResponse returns AddedLearningDto (no SourceReference field),
-            // but the UI expects LearningListItemDto.SourceReference. Best-effort mapping:
             var added = resp.Learning;
             var mapped = new LearningListItemDto
             {
                 LearningId = added.LearningId,
                 SourceId = added.SourceId,
-                SourceReference = request.Reference ?? "(manual)",
+                SourceReference = added.SourceReference,
                 ImportanceScore = added.ImportanceScore,
                 CreatedAt = added.CreatedAt,
                 Text = added.Text

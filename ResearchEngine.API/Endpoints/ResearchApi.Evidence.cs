@@ -115,6 +115,7 @@ public static partial class ResearchApi
             learning.Id,
             learning.SourceId,
             learning.LearningGroupId,
+            learning.Source.Reference,
             learning.ImportanceScore,
             learning.CreatedAt,
             learning.Text);

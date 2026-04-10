@@ -560,6 +560,7 @@ public sealed partial class PostgresResearchJobStore(
         var settings = await runtimeSettings.GetCurrentAsync(ct);
         var maxEvidenceLen = settings.LearningSimilarityOptions.MaxEvidenceLength;
         await using var db = await dbContextFactory.CreateDbContextAsync(ct);
+        await using var tx = await db.Database.BeginTransactionAsync(ct);
 
         var sourceExists = await db.Sources.AnyAsync(s => s.Id == sourceId && s.JobId == jobId, ct);
         if (!sourceExists)
@@ -597,9 +598,21 @@ public sealed partial class PostgresResearchJobStore(
             }
         }
 
+        var affectedGroupIds = list
+            .Select(l => l.LearningGroupId)
+            .Where(id => id != Guid.Empty)
+            .Distinct()
+            .ToList();
+
         db.Learnings.AddRange(list);
 
         await db.SaveChangesAsync(ct);
+
+        foreach (var gid in affectedGroupIds)
+            await RecomputeLearningGroupStatsCoreAsync(db, gid, ct);
+
+        await db.SaveChangesAsync(ct);
+        await tx.CommitAsync(ct);
 
         logger.LogDebug(
             "Persisted {Count} learnings for Job {JobId} and Source {SourceId}.",
@@ -985,9 +998,18 @@ public sealed partial class PostgresResearchJobStore(
     public async Task<int> RecomputeLearningGroupStatsAsync(Guid groupId, CancellationToken ct = default)
     {
         await using var db = await dbContextFactory.CreateDbContextAsync(ct);
+        await RecomputeLearningGroupStatsCoreAsync(db, groupId, ct);
+        return await db.SaveChangesAsync(ct);
+    }
 
+    private static async Task RecomputeLearningGroupStatsCoreAsync(
+        ResearchDbContext db,
+        Guid groupId,
+        CancellationToken ct = default)
+    {
         var g = await db.LearningGroups.FirstOrDefaultAsync(x => x.Id == groupId, ct);
-        if (g is null) return 0;
+        if (g is null)
+            return;
 
         var members = await db.Learnings
             .AsNoTracking()
@@ -998,8 +1020,6 @@ public sealed partial class PostgresResearchJobStore(
         g.MemberCount = members.Count;
         g.DistinctSourceCount = members.Select(x => x.SourceId).Distinct().Count();
         g.UpdatedAt = DateTimeOffset.UtcNow;
-
-        return await db.SaveChangesAsync(ct);
     }
 
     public async Task<IReadOnlyList<LearningGroupHit>> VectorSearchLearningGroupsWithDistanceAsync(
@@ -1206,6 +1226,7 @@ public sealed partial class PostgresResearchJobStore(
     public async Task<bool> SoftDeleteLearningAsync(Guid jobId, Guid learningId, CancellationToken ct = default)
     {
         await using var db = await dbContextFactory.CreateDbContextAsync(ct);
+        await using var tx = await db.Database.BeginTransactionAsync(ct);
 
         // Use IgnoreQueryFilters to allow deleting even if already deleted
         var entity = await db.Learnings
@@ -1220,12 +1241,16 @@ public sealed partial class PostgresResearchJobStore(
 
         entity.DeletedAt = DateTimeOffset.UtcNow;
         await db.SaveChangesAsync(ct);
+        await RecomputeLearningGroupStatsCoreAsync(db, entity.LearningGroupId, ct);
+        await db.SaveChangesAsync(ct);
+        await tx.CommitAsync(ct);
         return true;
     }
 
     public async Task<bool> SoftDeleteSourceAsync(Guid jobId, Guid sourceId, CancellationToken ct = default)
     {
         await using var db = await dbContextFactory.CreateDbContextAsync(ct);
+        await using var tx = await db.Database.BeginTransactionAsync(ct);
 
         var src = await db.Sources
             .IgnoreQueryFilters()
@@ -1239,6 +1264,14 @@ public sealed partial class PostgresResearchJobStore(
         if (src.DeletedAt is null)
             src.DeletedAt = now;
 
+        var affectedGroupIds = await db.Learnings
+            .IgnoreQueryFilters()
+            .Where(l => l.SourceId == sourceId && l.JobId == jobId && l.DeletedAt == null)
+            .Select(l => l.LearningGroupId)
+            .Where(id => id != Guid.Empty)
+            .Distinct()
+            .ToListAsync(ct);
+
         // Also soft-delete learnings under this source (idempotent)
         await db.Learnings
             .IgnoreQueryFilters()
@@ -1246,6 +1279,12 @@ public sealed partial class PostgresResearchJobStore(
             .ExecuteUpdateAsync(s => s.SetProperty(l => l.DeletedAt, now), ct);
 
         await db.SaveChangesAsync(ct);
+
+        foreach (var gid in affectedGroupIds)
+            await RecomputeLearningGroupStatsCoreAsync(db, gid, ct);
+
+        await db.SaveChangesAsync(ct);
+        await tx.CommitAsync(ct);
         return true;
     }
 

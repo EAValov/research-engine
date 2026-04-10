@@ -106,7 +106,7 @@ namespace ResearchEngine.WebUI.Api
         System.Threading.Tasks.Task<ListLearningsResponse> LearningsGETAsync(System.Guid jobId, int? skip = null, int? take = null, string? sourceReference = null, System.Guid? promoteLearningId = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken));
 
         /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
-        /// <returns>OK</returns>
+        /// <returns>Created</returns>
         /// <exception cref="ApiException">A server side error occurred.</exception>
         System.Threading.Tasks.Task<AddLearningResponse> LearningsPOSTAsync(System.Guid jobId, AddLearningRequest body, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken));
 
@@ -1778,7 +1778,7 @@ namespace ResearchEngine.WebUI.Api
         }
 
         /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
-        /// <returns>OK</returns>
+        /// <returns>Created</returns>
         /// <exception cref="ApiException">A server side error occurred.</exception>
         public virtual async System.Threading.Tasks.Task<AddLearningResponse> LearningsPOSTAsync(System.Guid jobId, AddLearningRequest body, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))
         {
@@ -1831,7 +1831,7 @@ namespace ResearchEngine.WebUI.Api
                         ProcessResponse(client_, response_);
 
                         var status_ = (int)response_.StatusCode;
-                        if (status_ == 200)
+                        if (status_ == 201)
                         {
                             var objectResponse_ = await ReadObjectResponseAsync<AddLearningResponse>(response_, headers_, cancellationToken).ConfigureAwait(false);
                             if (objectResponse_.Object == null)
@@ -3767,6 +3767,10 @@ namespace ResearchEngine.WebUI.Api
         [System.Text.Json.Serialization.JsonPropertyName("learningGroupId")]
         [System.ComponentModel.DataAnnotations.Required(AllowEmptyStrings = true)]
         public System.Guid LearningGroupId { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("sourceReference")]
+        [System.ComponentModel.DataAnnotations.Required(AllowEmptyStrings = true)]
+        public string SourceReference { get; set; } = default!;
 
         [System.Text.Json.Serialization.JsonPropertyName("importanceScore")]
         [System.ComponentModel.DataAnnotations.Required(AllowEmptyStrings = true)]

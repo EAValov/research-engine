@@ -198,9 +198,6 @@ public sealed class LearningIntelService(
         // 3) Persist
         await learningRepository.AddLearningsAsync(jobId, sourceId, query, allLearnings, ct);
 
-        // 4) Update group stats (best-effort)
-        await RecomputeGroupStatsBestEffortAsync(allLearnings, ct);
-
         return allLearnings;
     }
 
@@ -293,8 +290,8 @@ public sealed class LearningIntelService(
         // Persist (use stable "user" query placeholder)
         await learningRepository.AddLearningsAsync(jobId, src.Id, query: "user", learnings: new[] { learning }, ct);
 
-        // Update group stats (best-effort)
-        await RecomputeGroupStatsBestEffortAsync(new[] { learning }, ct);
+        // Preserve the authoritative source reference for the API response without reattaching it during persistence.
+        learning.Source = src;
 
         return learning;
     }
@@ -420,25 +417,6 @@ public sealed class LearningIntelService(
 
                 l.LearningGroupId = g.Id;
             }
-        }
-    }
-
-    private async Task RecomputeGroupStatsBestEffortAsync(IEnumerable<Learning> learnings, CancellationToken ct)
-    {
-        try
-        {
-            var groupIds = learnings
-                .Select(l => l.LearningGroupId)
-                .Where(id => id != Guid.Empty)
-                .Distinct()
-                .ToList();
-
-            foreach (var gid in groupIds)
-                await learningGroupRepository.RecomputeLearningGroupStatsAsync(gid, ct);
-        }
-        catch (Exception ex)
-        {
-            logger.LogWarning(ex, "Failed to recompute learning group stats (best-effort).");
         }
     }
 

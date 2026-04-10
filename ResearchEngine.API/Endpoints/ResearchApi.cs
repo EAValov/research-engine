@@ -110,7 +110,7 @@ public static partial class ResearchApi
 
         api.MapPost("/jobs/{jobId:guid}/learnings", AddLearningAsync)
             .Accepts<AddLearningRequest>("application/json")
-            .Produces<AddLearningResponse>(StatusCodes.Status200OK)
+            .Produces<AddLearningResponse>(StatusCodes.Status201Created)
             .Produces<ErrorResponse>(StatusCodes.Status400BadRequest)
             .ProducesProblem(StatusCodes.Status404NotFound)
             .ProducesProblem(StatusCodes.Status401Unauthorized)

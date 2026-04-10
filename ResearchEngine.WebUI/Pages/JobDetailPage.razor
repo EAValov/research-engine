@@ -16,6 +16,7 @@
 @inject LearningGroupFacade LearningGroups
 @inject NavigationManager Nav
 @inject IJSRuntime JS
+@inject ILogger<JobDetailPage> Log
 
 <PageTitle>Job</PageTitle>
 
@@ -653,7 +654,7 @@ else
             {
                 StateHasChanged();
                 await Task.Yield();
-                try { await JS.InvokeVoidAsync("researchEngine.jobEvents.scrollToBottom", _timelineRef); } catch { }
+                await TryInvokeJobEventsJsAsync("scrollToBottom", "scrolling progress timeline to bottom", _timelineRef);
             });
         }
     }
@@ -701,12 +702,15 @@ else
                     if (_progressExpanded)
                     {
                         if (_followTail)
-                            await JS.InvokeVoidAsync("researchEngine.jobEvents.scrollToBottom", _timelineRef);
+                            await TryInvokeJobEventsJsAsync("scrollToBottom", "scrolling progress timeline to bottom", _timelineRef);
                         else
-                            await JS.InvokeVoidAsync("researchEngine.jobEvents.scrollIfNearBottom", _timelineRef);
+                            await TryInvokeJobEventsJsAsync("scrollIfNearBottom", "adjusting progress timeline scroll position", _timelineRef);
                     }
                 }
-                catch { }
+                catch (Exception ex)
+                {
+                    LogSuppressed(ex, "updating progress timeline scroll position");
+                }
             });
 
             return;
@@ -743,11 +747,16 @@ else
 
     private async Task StopStreamAsync()
     {
-        try { _streamCts?.Cancel(); } catch { }
-        try { _streamCts?.Dispose(); } catch { }
+        var streamCts = _streamCts;
         _streamCts = null;
 
-        try { await EventsClient.StopAsync(); } catch { }
+        TryCancel(streamCts, "canceling job stream");
+        TryDispose(streamCts, "disposing job stream cancellation source");
+
+        await RunBestEffortAsync(
+            () => EventsClient.StopAsync(),
+            "stopping job event stream",
+            warning: true);
     }
 
     private async Task LoadLatestSynthesisAsync()
@@ -1255,8 +1264,9 @@ else
         {
             exportMarkdown = await BuildExportMarkdownAsync(_synthesisMarkdown);
         }
-        catch
+        catch (Exception ex)
         {
+            LogSuppressed(ex, "building enriched synthesis export");
             // Fall back to raw markdown if citation enrichment fails.
         }
 
@@ -1265,8 +1275,9 @@ else
             var exportDocument = BuildExportDocument(exportMarkdown, ActiveSynthesis);
             await JS.InvokeVoidAsync("researchEngine.downloadTextFile", fileName, exportDocument);
         }
-        catch
+        catch (Exception ex)
         {
+            LogSuppressed(ex, "downloading synthesis export", warning: true);
             // Keep page responsive if browser download fails.
         }
     }
@@ -1277,7 +1288,9 @@ else
         if (orderedIds.Count == 0)
             return markdown;
 
-        try { await LearningGroups.PrefetchGroupsAsync(orderedIds); } catch { }
+        await RunBestEffortAsync(
+            () => LearningGroups.PrefetchGroupsAsync(orderedIds),
+            "prefetching learning groups for synthesis export");
 
         var sourceIndexByKey = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
         var citationIndexByLearningId = new Dictionary<Guid, int>();
@@ -1379,7 +1392,7 @@ else
             {
                 StateHasChanged();
                 await Task.Yield();
-                try { await JS.InvokeVoidAsync("researchEngine.jobEvents.scrollToBottom", _timelineRef); } catch { }
+                await TryInvokeJobEventsJsAsync("scrollToBottom", "scrolling progress timeline to bottom", _timelineRef);
             });
         }
     }
@@ -1420,14 +1433,16 @@ else
         _synthesisWatchTask = null;
         _watchingSynthesisId = null;
 
-        try { cts?.Cancel(); } catch { }
+        TryCancel(cts, "canceling synthesis watch");
 
         if (task is not null)
         {
-            try { await task; } catch { }
+            await RunBestEffortAsync(
+                () => task,
+                "awaiting synthesis watch shutdown");
         }
 
-        try { cts?.Dispose(); } catch { }
+        TryDispose(cts, "disposing synthesis watch cancellation source");
     }
 
     private async Task WatchSynthesisAsync(Guid synthesisId, CancellationToken ct)
@@ -1452,9 +1467,10 @@ else
                 {
                     break;
                 }
-                catch
+                catch (Exception ex)
                 {
-                    // Best-effort watcher; do not break on transient failures.
+                    LogSuppressed(ex, "polling synthesis status");
+                    // Keep polling on transient failures.
                 }
 
                 if (synth is not null)
@@ -1515,7 +1531,7 @@ else
         {
             if (_watchingSynthesisId == synthesisId)
             {
-                try { _synthesisWatchCts?.Dispose(); } catch { }
+                TryDispose(_synthesisWatchCts, "disposing synthesis watch cancellation source");
                 _synthesisWatchCts = null;
                 _synthesisWatchTask = null;
                 _watchingSynthesisId = null;
@@ -1527,6 +1543,61 @@ else
     {
         var s = Overrides.GetSummary(JobId);
         return $"Pinned: {s.PinnedSources} sources, {s.PinnedLearnings} learnings · Excluded: {s.ExcludedSources} sources, {s.ExcludedLearnings} learnings";
+    }
+
+    private Task TryInvokeJobEventsJsAsync(string method, string operation, params object?[] args)
+        => RunBestEffortAsync(
+            () => JS.InvokeVoidAsync($"researchEngine.jobEvents.{method}", args).AsTask(),
+            operation);
+
+    private async Task RunBestEffortAsync(Func<Task> action, string operation, bool warning = false)
+    {
+        try
+        {
+            await action();
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception ex)
+        {
+            LogSuppressed(ex, operation, warning);
+        }
+    }
+
+    private void TryCancel(CancellationTokenSource? cts, string operation)
+    {
+        try
+        {
+            cts?.Cancel();
+        }
+        catch (Exception ex)
+        {
+            LogSuppressed(ex, operation);
+        }
+    }
+
+    private void TryDispose(IDisposable? disposable, string operation)
+    {
+        try
+        {
+            disposable?.Dispose();
+        }
+        catch (Exception ex)
+        {
+            LogSuppressed(ex, operation);
+        }
+    }
+
+    private void LogSuppressed(Exception ex, string operation, bool warning = false)
+    {
+        if (warning)
+        {
+            Log.LogWarning(ex, "Suppressed job detail failure while {Operation} for job {JobId}.", operation, JobId);
+            return;
+        }
+
+        Log.LogDebug(ex, "Suppressed job detail failure while {Operation} for job {JobId}.", operation, JobId);
     }
 
     private static bool IsTerminalStatus(string? s)

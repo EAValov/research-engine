@@ -24,7 +24,7 @@
     <Exec Command="$(NswagCommand) run &quot;$(NswagConfigFile)&quot; /variables:OpenApiSpecFile=$([System.IO.Path]::GetFileName('$(OpenApiSpecFile)'))" WorkingDirectory="$(MSBuildProjectDirectory)" />
   </Target>
 
-  <Target Name="BuildBackendBeforeApiClientGeneration" Condition="'$(GenerateApiClientOnBuild)' == 'true' and '$(DesignTimeBuild)' != 'true' and '$(BuildingSolutionFile)' != 'true'">
+  <Target Name="BuildBackendBeforeApiClientGeneration" Condition="'$(GenerateApiClientOnBuild)' == 'true' and '$(DesignTimeBuild)' != 'true'">
     <MSBuild Projects="$(MSBuildProjectDirectory)\..\ResearchEngine.API\ResearchEngine.API.csproj" Targets="Build" Properties="GenerateOpenApiSpecOnBuild=true;DesignTimeBuild=false;Restore=false" />
   </Target>
 

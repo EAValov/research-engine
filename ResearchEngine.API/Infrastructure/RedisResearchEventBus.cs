@@ -2,7 +2,6 @@ using System.Text;
 using System.Text.Json;
 using StackExchange.Redis;
 using ResearchEngine.Domain;
-using System.Threading.Channels;
 
 namespace ResearchEngine.Infrastructure;
 
@@ -45,46 +44,7 @@ public sealed class RedisResearchEventBus : IResearchEventBus
 
         // Link cancellation so the subscription/consumer stops when caller cancels
         var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-
-        // Bounded buffer so a slow SSE client doesn't explode memory
-        var buffer = Channel.CreateBounded<ResearchEvent>(new BoundedChannelOptions(capacity: 256)
-        {
-            SingleReader = true,
-            SingleWriter = false,
-            FullMode = BoundedChannelFullMode.DropOldest // or DropWrite if you prefer
-        });
-
-        // Consume sequentially to preserve order and avoid per-message Task.Run
-        var consumerTask = Task.Run(async () =>
-        {
-            try
-            {
-                await foreach (var ev in buffer.Reader.ReadAllAsync(linkedCts.Token).ConfigureAwait(false))
-                {
-                    try
-                    {
-                        await onEvent(ev, linkedCts.Token).ConfigureAwait(false);
-                    }
-                    catch (OperationCanceledException) when (linkedCts.IsCancellationRequested)
-                    {
-                        break;
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogError(ex, "Error in onEvent callback for job {JobId}", jobId);
-                        // continue
-                    }
-                }
-            }
-            catch (OperationCanceledException)
-            {
-                // normal shutdown
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Consumer loop crashed for job {JobId}", jobId);
-            }
-        }, CancellationToken.None);
+        var dispatchState = new DispatchState();
 
         Action<RedisChannel, RedisValue> handler = (_, msg) =>
         {
@@ -100,7 +60,32 @@ public sealed class RedisResearchEventBus : IResearchEventBus
                 if (ev is null)
                     return;
 
-                buffer.Writer.TryWrite(ev);
+                lock (dispatchState.Lock)
+                {
+                    dispatchState.Task = dispatchState.Task
+                        .ContinueWith(
+                            async _ =>
+                            {
+                                if (linkedCts.IsCancellationRequested)
+                                    return;
+
+                                try
+                                {
+                                    await onEvent(ev, linkedCts.Token).ConfigureAwait(false);
+                                }
+                                catch (OperationCanceledException) when (linkedCts.IsCancellationRequested)
+                                {
+                                }
+                                catch (Exception ex)
+                                {
+                                    _logger.LogError(ex, "Error in onEvent callback for job {JobId}", jobId);
+                                }
+                            },
+                            CancellationToken.None,
+                            TaskContinuationOptions.None,
+                            TaskScheduler.Default)
+                        .Unwrap();
+                }
             }
             catch (Exception ex)
             {
@@ -116,15 +101,17 @@ public sealed class RedisResearchEventBus : IResearchEventBus
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to subscribe to Redis channel {Channel} for job {JobId}", channel.ToString(), jobId);
-            buffer.Writer.TryComplete(ex);
             linkedCts.Cancel();
-            // ensure consumer stops
-            try { await consumerTask.ConfigureAwait(false); } catch { /* ignore */ }
+            Task pendingDispatch;
+            lock (dispatchState.Lock)
+                pendingDispatch = dispatchState.Task;
+
+            try { await pendingDispatch.ConfigureAwait(false); } catch { /* ignore */ }
             linkedCts.Dispose();
             throw;
         }
 
-        return new SubscriptionHandle(subscriber, channel, handler, linkedCts, buffer, consumerTask, _logger);
+        return new SubscriptionHandle(subscriber, channel, handler, linkedCts, dispatchState, _logger);
     }
 
     private sealed class SubscriptionHandle : IAsyncDisposable
@@ -133,8 +120,7 @@ public sealed class RedisResearchEventBus : IResearchEventBus
         private readonly RedisChannel _channel;
         private readonly Action<RedisChannel, RedisValue> _handler;
         private readonly CancellationTokenSource _cts;
-        private readonly Channel<ResearchEvent> _buffer;
-        private readonly Task _consumerTask;
+        private readonly DispatchState _dispatchState;
         private readonly ILogger _logger;
         private int _disposed;
 
@@ -143,16 +129,14 @@ public sealed class RedisResearchEventBus : IResearchEventBus
             RedisChannel channel,
             Action<RedisChannel, RedisValue> handler,
             CancellationTokenSource cts,
-            Channel<ResearchEvent> buffer,
-            Task consumerTask,
+            DispatchState dispatchState,
             ILogger logger)
         {
             _subscriber = subscriber;
             _channel = channel;
             _handler = handler;
             _cts = cts;
-            _buffer = buffer;
-            _consumerTask = consumerTask;
+            _dispatchState = dispatchState;
             _logger = logger;
         }
 
@@ -162,7 +146,6 @@ public sealed class RedisResearchEventBus : IResearchEventBus
                 return;
 
             try { _cts.Cancel(); } catch { /* ignore */ }
-            try { _buffer.Writer.TryComplete(); } catch { /* ignore */ }
 
             try
             {
@@ -173,9 +156,19 @@ public sealed class RedisResearchEventBus : IResearchEventBus
                 _logger.LogError(ex, "Error unsubscribing from Redis channel {Channel}", _channel.ToString());
             }
 
-            try { await _consumerTask.ConfigureAwait(false); } catch { /* ignore */ }
+            Task pendingDispatch;
+            lock (_dispatchState.Lock)
+                pendingDispatch = _dispatchState.Task;
+
+            try { await pendingDispatch.ConfigureAwait(false); } catch { /* ignore */ }
 
             _cts.Dispose();
         }
+    }
+
+    private sealed class DispatchState
+    {
+        public object Lock { get; } = new();
+        public Task Task { get; set; } = Task.CompletedTask;
     }
 }

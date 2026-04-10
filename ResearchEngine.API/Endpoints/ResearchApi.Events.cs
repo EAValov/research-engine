@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using System.Text;
 using System.Text.Json;
+using System.Threading.Channels;
 using ResearchEngine.Domain;
 
 namespace ResearchEngine.API;
@@ -98,6 +99,11 @@ public static partial class ResearchApi
         var token = linkedCts.Token;
 
         var lastSentId = lastId;
+        var liveEvents = Channel.CreateUnbounded<ResearchEvent>(new UnboundedChannelOptions
+        {
+            SingleReader = true,
+            SingleWriter = false
+        });
 
         static bool IsTerminal(ResearchEventStage stage)
             => stage is ResearchEventStage.Completed or ResearchEventStage.Failed or ResearchEventStage.Canceled;
@@ -140,33 +146,39 @@ public static partial class ResearchApi
                 if (t.IsCancellationRequested)
                     return;
 
-                await TryWriteEventAsync(ev, t);
-
-                if (IsTerminal(ev.Stage))
-                    await WriteDoneNowAsync(ev, t);
+                await liveEvents.Writer.WriteAsync(ev, t);
             },
             token);
 
-        var storedEvents = await eventRepository.GetEventsAsync(jobId, token);
-
-        foreach (var e in storedEvents.Where(e => e.Id > lastId).OrderBy(e => e.Id))
-        {
-            if (token.IsCancellationRequested)
-                break;
-
-            await TryWriteEventAsync(e, token);
-
-            if (IsTerminal(e.Stage))
-            {
-                await WriteDoneNowAsync(e, token);
-                return;
-            }
-        }
-
         try
         {
-            while (!token.IsCancellationRequested)
-                await Task.Delay(500, token);
+            var storedEvents = await eventRepository.GetEventsAsync(jobId, token);
+
+            foreach (var e in storedEvents.Where(e => e.Id > lastId).OrderBy(e => e.Id))
+            {
+                if (token.IsCancellationRequested)
+                    break;
+
+                await TryWriteEventAsync(e, token);
+
+                if (IsTerminal(e.Stage))
+                {
+                    await WriteDoneNowAsync(e, token);
+                    return;
+                }
+            }
+
+            await foreach (var e in liveEvents.Reader.ReadAllAsync(token))
+            {
+                if (!await TryWriteEventAsync(e, token))
+                    continue;
+
+                if (IsTerminal(e.Stage))
+                {
+                    await WriteDoneNowAsync(e, token);
+                    return;
+                }
+            }
         }
         catch (OperationCanceledException)
         {

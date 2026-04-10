@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Text.Json;
 using Microsoft.JSInterop;
+using Microsoft.Extensions.Logging;
 using ResearchEngine.WebUI.Api;
 
 namespace ResearchEngine.WebUI.Services;
@@ -17,6 +18,7 @@ public sealed class JobEventsClient : IAsyncDisposable
     private readonly IResearchApiClient _api;
     private readonly IJSRuntime _js;
     private readonly ApiConnectionSettings _apiConnection;
+    private readonly ILogger<JobEventsClient> _logger;
 
     private IJSObjectReference? _module;
     private string? _connId;
@@ -29,11 +31,16 @@ public sealed class JobEventsClient : IAsyncDisposable
     private CancellationTokenSource? _runCts;
     private Task? _runTask;
 
-    public JobEventsClient(IResearchApiClient api, IJSRuntime js, ApiConnectionSettings apiConnection)
+    public JobEventsClient(
+        IResearchApiClient api,
+        IJSRuntime js,
+        ApiConnectionSettings apiConnection,
+        ILogger<JobEventsClient> logger)
     {
         _api = api;
         _js = js;
         _apiConnection = apiConnection;
+        _logger = logger;
     }
 
     public sealed record PersistedJobEvent(int Id, DateTimeOffset Timestamp, string Stage, string Message);
@@ -104,9 +111,11 @@ public sealed class JobEventsClient : IAsyncDisposable
     {
         _doneReceived = true;
 
-        try { _runCts?.Cancel(); } catch { }
-        _runCts?.Dispose();
+        var runCts = _runCts;
         _runCts = null;
+
+        TryCancel(runCts, "canceling active job event stream");
+        TryDispose(runCts, "disposing active job event stream cancellation source");
 
         await CloseCurrentAsync();
 
@@ -115,9 +124,12 @@ public sealed class JobEventsClient : IAsyncDisposable
             if (_runTask is not null)
                 await _runTask;
         }
-        catch
+        catch (OperationCanceledException)
         {
-            // ignore
+        }
+        catch (Exception ex)
+        {
+            LogSuppressed(ex, "awaiting active job event stream task", warning: true);
         }
         finally
         {
@@ -150,7 +162,7 @@ public sealed class JobEventsClient : IAsyncDisposable
             }
             catch (Exception ex)
             {
-                await SafeInvoke(onError, ApiErrorMapper.Map(ex));
+                await SafeInvokeAsync(onError, ApiErrorMapper.Map(ex), "reporting stream token acquisition error");
                 await DelaySafe(BackoffMs(attempt, 15000), ct);
                 continue;
             }
@@ -177,11 +189,18 @@ public sealed class JobEventsClient : IAsyncDisposable
                             dto.Stage ?? string.Empty,
                             dto.Message ?? string.Empty);
 
-                        await SafeInvoke(onItem, JobStreamItem.FromEvent(ev));
+                        await SafeInvokeAsync(onItem, JobStreamItem.FromEvent(ev), "handling streamed job event");
                     }
-                    catch
+                    catch (OperationCanceledException)
                     {
-                        // ignore malformed payloads
+                    }
+                    catch (JSDisconnectedException ex)
+                    {
+                        LogSuppressed(ex, "dispatching streamed job event to .NET");
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Failed to deserialize or dispatch a streamed job event payload.");
                     }
                 },
                 onDoneJson: async json =>
@@ -206,7 +225,18 @@ public sealed class JobEventsClient : IAsyncDisposable
                             Status: dto.Status ?? string.Empty,
                             SynthesisId: synthesisId);
 
-                        await SafeInvoke(onItem, JobStreamItem.FromDone(done));
+                        await SafeInvokeAsync(onItem, JobStreamItem.FromDone(done), "handling stream completion");
+                    }
+                    catch (OperationCanceledException)
+                    {
+                    }
+                    catch (JSDisconnectedException ex)
+                    {
+                        LogSuppressed(ex, "dispatching stream completion to .NET");
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Failed to deserialize or dispatch the stream completion payload.");
                     }
                     finally
                     {
@@ -255,7 +285,7 @@ public sealed class JobEventsClient : IAsyncDisposable
                 if (_doneReceived || ct.IsCancellationRequested)
                     break;
 
-                await SafeInvoke(onError, ApiErrorMapper.Map(ex));
+                await SafeInvokeAsync(onError, ApiErrorMapper.Map(ex), "reporting stream connection error");
                 await DelaySafe(BackoffMs(attempt, 15000), ct);
             }
         }
@@ -283,14 +313,14 @@ public sealed class JobEventsClient : IAsyncDisposable
             if (_connId is not null && _module is not null)
                 await _module.InvokeVoidAsync("close", _connId);
         }
-        catch
+        catch (Exception ex)
         {
-            // ignore
+            LogSuppressed(ex, "closing EventSource connection");
         }
         finally
         {
             _connId = null;
-            try { _hubRef?.Dispose(); } catch { }
+            TryDispose(_hubRef, "disposing SSE callback hub");
             _hubRef = null;
         }
     }
@@ -317,12 +347,22 @@ public sealed class JobEventsClient : IAsyncDisposable
 
     private static async Task DelaySafe(int ms, CancellationToken ct)
     {
-        try { await Task.Delay(ms, ct); } catch { }
+        try { await Task.Delay(ms, ct); } catch (OperationCanceledException) { }
     }
 
-    private static async Task SafeInvoke<T>(Func<T, Task> cb, T arg)
+    private async Task SafeInvokeAsync<T>(Func<T, Task> cb, T arg, string operation)
     {
-        try { await cb(arg); } catch { }
+        try
+        {
+            await cb(arg);
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception ex)
+        {
+            LogSuppressed(ex, operation, warning: true);
+        }
     }
 
     public async ValueTask DisposeAsync()
@@ -334,7 +374,48 @@ public sealed class JobEventsClient : IAsyncDisposable
             if (_module is not null)
                 await _module.DisposeAsync();
         }
-        catch { }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception ex)
+        {
+            LogSuppressed(ex, "disposing job events JS module");
+        }
+    }
+
+    private void TryCancel(CancellationTokenSource? cts, string operation)
+    {
+        try
+        {
+            cts?.Cancel();
+        }
+        catch (Exception ex)
+        {
+            LogSuppressed(ex, operation);
+        }
+    }
+
+    private void TryDispose(IDisposable? disposable, string operation)
+    {
+        try
+        {
+            disposable?.Dispose();
+        }
+        catch (Exception ex)
+        {
+            LogSuppressed(ex, operation);
+        }
+    }
+
+    private void LogSuppressed(Exception ex, string operation, bool warning = false)
+    {
+        if (warning)
+        {
+            _logger.LogWarning(ex, "Suppressed job event client failure while {Operation}.", operation);
+            return;
+        }
+
+        _logger.LogDebug(ex, "Suppressed job event client failure while {Operation}.", operation);
     }
 
     private sealed record PersistedJobEventDto(int Id, DateTimeOffset Timestamp, string? Stage, string? Message);

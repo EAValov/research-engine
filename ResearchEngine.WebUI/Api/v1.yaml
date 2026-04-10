@@ -549,8 +549,8 @@ paths:
               $ref: '#/components/schemas/AddLearningRequest'
         required: true
       responses:
-        '200':
-          description: OK
+        '201':
+          description: Created
           content:
             application/json:
               schema:
@@ -1193,6 +1193,7 @@ components:
         - learningId
         - sourceId
         - learningGroupId
+        - sourceReference
         - importanceScore
         - createdAt
         - text
@@ -1207,6 +1208,8 @@ components:
         learningGroupId:
           type: string
           format: uuid
+        sourceReference:
+          type: string
         importanceScore:
           pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
           type:
