@@ -15,10 +15,15 @@ public static class PlanningPromptFactory
         string? clarificationsText = null,
         int? breadth = null,
         int? depth = null,
-        string? targetLanguage = "en")
+        string? targetLanguage = "en",
+        DateTime? utcNow = null)
     {
         var effectiveBreadth = breadth is > 0 ? breadth.Value : 3;
         var effectiveDepth   = depth   is > 0 ? depth.Value   : 2;
+        var effectiveUtcNow = utcNow ?? DateTime.UtcNow;
+        var currentDate = effectiveUtcNow.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
+        var currentYear = effectiveUtcNow.Year;
+        var priorYear = currentYear - 1;
 
         var sb = new StringBuilder();
 
@@ -44,7 +49,9 @@ public static class PlanningPromptFactory
         sb.AppendLine("- Prefer queries that are likely to surface:");
         sb.AppendLine("  - official or primary sources (regulators, standards bodies, official docs, primary research),");
         sb.AppendLine("  - reputable reports or reviews (e.g. industry reports, systematic reviews, whitepapers),");
-        sb.AppendLine("  - recent analyses in the 2020–2030 timeframe when recency is important (e.g. add years like 2024, 2025, 2030 if useful).");
+        sb.AppendLine($"  - recent analyses when recency is important; anchor recency to today's actual date ({currentDate} UTC), not to a model knowledge cutoff.");
+        sb.AppendLine($"  - if adding years improves retrieval, prefer {currentYear} and {priorYear}; only go further back when the user explicitly asks for history, baselines, or multi-year comparisons.");
+        sb.AppendLine($"  - for prompts about current conditions, latest updates, recent developments, or trends, avoid stale year anchors such as {priorYear - 1} or earlier unless they are genuinely necessary.");
         sb.AppendLine("- Use neutral, information-seeking wording, suitable for a search engine.");
         sb.AppendLine("- Keep each query reasonably concise (typically under 140 characters).");
         sb.AppendLine();
@@ -86,12 +93,12 @@ public static class PlanningPromptFactory
         sb.AppendLine("- Each item must be a single search query string.");
         sb.AppendLine("- Output only the JSON payload required by the system, with no extra commentary or formatting.");
         
-        return new Prompt(GetSystemPrompt(), sb.ToString());
+        return new Prompt(GetSystemPrompt(effectiveUtcNow), sb.ToString());
     }
 
-    private static string GetSystemPrompt()
+    private static string GetSystemPrompt(DateTime utcNow)
     {
-        var dt = DateTime.UtcNow.ToString("s", System.Globalization.CultureInfo.InvariantCulture);
+        var dt = utcNow.ToString("s", System.Globalization.CultureInfo.InvariantCulture);
         var sb = new StringBuilder();
 
         sb.AppendLine($"You are an expert web research planner. Today is {dt} (UTC).");
@@ -101,6 +108,8 @@ public static class PlanningPromptFactory
         sb.AppendLine("- Treat the user as a highly experienced analyst; do NOT oversimplify.");
         sb.AppendLine("- Your focus is on COVERAGE and RELEVANCE of sources, not on answering the question yourself.");
         sb.AppendLine("- Accuracy means: queries must reliably surface authoritative, up-to-date, domain-relevant sources.");
+        sb.AppendLine("- When the user asks about current, recent, latest, today, or trends, use today's date above as the source of truth for recency.");
+        sb.AppendLine("- Do not anchor on an internal training cutoff or arbitrary past years when selecting year terms.");
         sb.AppendLine("- Prefer primary and reputable sources (regulators, official docs, standards bodies,");
         sb.AppendLine("  well-known market research firms, major tech/finance/health/science outlets, etc.).");
         sb.AppendLine("- Avoid queries that are so generic they return unrelated domains just because of shared buzzwords.");
