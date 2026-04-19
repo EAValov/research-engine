@@ -146,7 +146,7 @@ spec:
         - containerPort: 15672
 
     - name: firecrawl-playwright
-      image: ghcr.io/firecrawl/playwright-service:latest@sha256:42cfcbfbfc7aed8e5026d08a54a4379cbaf12ecac1ae2255fae41cc669959a7e
+      image: ghcr.io/firecrawl/playwright-service:latest@sha256:9e0737bc09df28275aab29726b1c0824a7725113945434e843385d487b7f7ec6
       ports:
         - containerPort: 3000
       env:
@@ -157,7 +157,7 @@ spec:
           mountPath: /app/data
 
     - name: searxng
-      image: searxng/searxng:latest@sha256:67a3e2e339eb33e60d16df2b328961583c908c4b6f3a176b23ecb9ddd6f137fd
+      image: searxng/searxng:latest@sha256:0bbe85fb9bebe413a26c0e385c76309d15c91fdb9dc8a6bf01b35b714d0ece43
       env:
         - name: SEARXNG_SECRET
           valueFrom:
@@ -178,7 +178,7 @@ spec:
           mountPath: /var/cache/searxng
 
     - name: firecrawl
-      image: ghcr.io/firecrawl/firecrawl:latest@sha256:dce85da4cf4e5e9758ce6ac79856f5ad4dcac2a98591a61d535afaa7abd0328f
+      image: ghcr.io/firecrawl/firecrawl:latest@sha256:86e8bf1ec55bc39cc3fe2ab146f73104e3028376e5812bbf300c65209c46a3d3
       ports:
         - containerPort: 3002
       livenessProbe:
