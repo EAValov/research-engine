@@ -27,7 +27,7 @@ services:
       retries: 10
 
   research-ollama:
-    image: docker.io/ollama/ollama:0.19.0
+    image: docker.io/ollama/ollama:0.21.0
     restart: unless-stopped
     environment:
       OLLAMA_HOST: "0.0.0.0:11434"
@@ -40,7 +40,7 @@ services:
       retries: 20
 
   research-ollama-init:
-    image: docker.io/ollama/ollama:0.19.0
+    image: docker.io/ollama/ollama:0.21.0
     restart: "no"
     depends_on:
       - research-ollama
