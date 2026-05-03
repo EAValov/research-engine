@@ -6,7 +6,7 @@ spec:
   hostname: research-llm
   containers:
     - name: vllm
-      image: docker.io/vllm/vllm-openai:v0.19.1
+      image: docker.io/vllm/vllm-openai:v0.20.1
       ports:
         - containerPort: 8000
       resources:
@@ -28,7 +28,7 @@ spec:
         - "--gpu-memory-utilization"
         - "0.94"
         - "--max-model-len"
-        - "10240"
+        - "auto"
         - "--max-num-seqs"
         - "1"
         - "--enable-auto-tool-choice"
