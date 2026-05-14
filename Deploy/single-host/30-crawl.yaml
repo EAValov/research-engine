@@ -133,13 +133,13 @@ spec:
           mountPath: /docker-entrypoint-initdb.d
 
     - name: crawl-redis
-      image: docker.io/library/redis:7-alpine
+      image: redis:7-alpine
       command: ["redis-server", "--bind", "0.0.0.0"]
       ports:
         - containerPort: 6379
 
     - name: crawl-rabbitmq
-      image: docker.io/library/rabbitmq:3-management
+      image: rabbitmq:3-management
       command: ["rabbitmq-server"]
       ports:
         - containerPort: 5672
