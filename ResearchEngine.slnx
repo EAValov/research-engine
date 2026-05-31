@@ -7,4 +7,5 @@
   <Project Path="ResearchEngine.WebUI/ResearchEngine.WebUI.csproj" />
   <Project Path="ResearchEngine.IntegrationTests/ResearchEngine.IntegrationTests.csproj" />
   <Project Path="ResearchEngine.API/ResearchEngine.API.csproj" />
+  <Project Path="ResearchEngine.AppHost/ResearchEngine.AppHost.csproj" />
 </Solution>

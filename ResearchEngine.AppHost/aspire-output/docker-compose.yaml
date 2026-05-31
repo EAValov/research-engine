@@ -1,0 +1,370 @@
+name: "research-engine"
+services:
+  compose-dashboard:
+    image: "mcr.microsoft.com/dotnet/nightly/aspire-dashboard:latest"
+    ports:
+      - "18888:18888"
+    expose:
+      - "18889"
+      - "18890"
+    networks:
+      - "aspire"
+    restart: "always"
+  research-postgres:
+    image: "docker.io/pgvector/pgvector:pg17"
+    environment:
+      POSTGRES_HOST_AUTH_METHOD: "scram-sha-256"
+      POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256 --auth-local=scram-sha-256"
+      POSTGRES_USER: "research"
+      POSTGRES_PASSWORD: "research-password"
+    expose:
+      - "5432"
+    volumes:
+      - type: "volume"
+        target: "/var/lib/postgresql/data"
+        source: "research-postgres-data"
+        read_only: false
+    networks:
+      - "aspire"
+  research-redis:
+    image: "docker.io/library/redis:7-alpine"
+    command:
+      - "-c"
+      - "redis-server --requirepass $$REDIS_PASSWORD"
+    entrypoint:
+      - "/bin/sh"
+    environment:
+      REDIS_PASSWORD: "research-redis-password"
+    expose:
+      - "6379"
+    networks:
+      - "aspire"
+  research-ollama:
+    image: "docker.io/ollama/ollama:0.22.1"
+    environment:
+      OLLAMA_HOST: "0.0.0.0:11434"
+    expose:
+      - "11434"
+    volumes:
+      - type: "volume"
+        target: "/root/.ollama"
+        source: "research-ollama-data"
+        read_only: false
+    networks:
+      - "aspire"
+  research-ollama-init:
+    image: "docker.io/ollama/ollama:0.22.1"
+    command:
+      - "pull"
+      - "qwen3-embedding:0.6b"
+    environment:
+      OLLAMA_HOST: "research-ollama:11434"
+    depends_on:
+      research-ollama:
+        condition: "service_started"
+    networks:
+      - "aspire"
+  crawl-postgres:
+    image: "ghcr.io/firecrawl/nuq-postgres@sha256:8565e5f46000085c16d247a4354c41e2439dbcf1640f7dd6e6406c0b18c31732"
+    command:
+      - "mkdir -p \"$$(dirname '/docker-entrypoint-initdb.d/090-nuq-schema-fix.sql')\"\ncat > '/docker-entrypoint-initdb.d/090-nuq-schema-fix.sql' <<'RESEARCH_ENGINE_EMBEDDED_FILE'\nCREATE SCHEMA IF NOT EXISTS nuq;\n\nDO $$$$ BEGIN\n  CREATE TYPE nuq.job_status AS ENUM ('queued', 'active', 'completed', 'failed');\nEXCEPTION\n  WHEN duplicate_object THEN null;\nEND $$$$;\n\nCREATE TABLE IF NOT EXISTS nuq.queue_crawl_finished (\n  id uuid NOT NULL DEFAULT gen_random_uuid(),\n  status nuq.job_status NOT NULL DEFAULT 'queued'::nuq.job_status,\n  data jsonb,\n  created_at timestamp with time zone NOT NULL DEFAULT now(),\n  priority int NOT NULL DEFAULT 0,\n  lock uuid,\n  locked_at timestamp with time zone,\n  stalls integer,\n  finished_at timestamp with time zone,\n  listen_channel_id text,\n  returnvalue jsonb,\n  failedreason text,\n  owner_id uuid,\n  group_id uuid,\n  CONSTRAINT queue_crawl_finished_pkey PRIMARY KEY (id)\n);\n\nCREATE INDEX IF NOT EXISTS queue_crawl_finished_active_locked_at_idx\n  ON nuq.queue_crawl_finished USING btree (locked_at)\n  WHERE (status = 'active'::nuq.job_status);\n\nCREATE INDEX IF NOT EXISTS nuq_queue_crawl_finished_queued_optimal_2_idx\n  ON nuq.queue_crawl_finished (priority ASC, created_at ASC, id)\n  WHERE (status = 'queued'::nuq.job_status);\n\nCREATE INDEX IF NOT EXISTS nuq_queue_crawl_finished_failed_created_at_idx\n  ON nuq.queue_crawl_finished USING btree (created_at)\n  WHERE (status = 'failed'::nuq.job_status);\n\nCREATE INDEX IF NOT EXISTS nuq_queue_crawl_finished_completed_created_at_idx\n  ON nuq.queue_crawl_finished USING btree (created_at)\n  WHERE (status = 'completed'::nuq.job_status);\n\nRESEARCH_ENGINE_EMBEDDED_FILE\nexec docker-entrypoint.sh postgres"
+    entrypoint:
+      - "/bin/sh"
+      - "-c"
+    environment:
+      POSTGRES_DB: "postgres"
+      POSTGRES_USER: "firecrawl"
+      POSTGRES_PASSWORD: "firecrawl-password"
+    expose:
+      - "5432"
+    volumes:
+      - type: "volume"
+        target: "/var/lib/postgresql/data"
+        source: "crawl-nuq-postgres-data"
+        read_only: false
+    networks:
+      - "aspire"
+  crawl-redis:
+    image: "docker.io/library/redis:7-alpine"
+    command:
+      - "redis-server"
+      - "--bind"
+      - "0.0.0.0"
+      - "--port"
+      - "6379"
+    expose:
+      - "6379"
+    networks:
+      - "aspire"
+  crawl-rabbitmq:
+    image: "docker.io/library/rabbitmq:4.2-management"
+    environment:
+      RABBITMQ_DEFAULT_USER: "firecrawl"
+      RABBITMQ_DEFAULT_PASS: "firecrawl-rabbitmq-password"
+    expose:
+      - "5672"
+      - "15672"
+    networks:
+      - "aspire"
+  firecrawl-playwright:
+    image: "ghcr.io/firecrawl/playwright-service@sha256:9e0737bc09df28275aab29726b1c0824a7725113945434e843385d487b7f7ec6"
+    environment:
+      PORT: "3000"
+    expose:
+      - "3000"
+    volumes:
+      - type: "volume"
+        target: "/app/data"
+        source: "crawl-playwright-data"
+        read_only: false
+    networks:
+      - "aspire"
+  searxng:
+    image: "searxng/searxng@sha256:0bbe85fb9bebe413a26c0e385c76309d15c91fdb9dc8a6bf01b35b714d0ece43"
+    command:
+      - "mkdir -p \"$$(dirname '/etc/searxng/settings.yml')\"\ncat > '/etc/searxng/settings.yml' <<'RESEARCH_ENGINE_EMBEDDED_FILE'\nuse_default_settings: true\ngeneral:\n  instance_name: \"Research Stack Search\"\nserver:\n  bind_address: \"0.0.0.0\"\n  port: 8085\n  secret_key: \"overwritten-by-env\"\nsearch:\n  formats:\n    - html\n    - json\nengines:\n  - name: ahmia\n    disabled: true\n    inactive: true\n  - name: torch\n    disabled: true\n    inactive: true\n  - name: wikidata\n    disabled: true\n    inactive: true\n  - name: karmasearch\n    disabled: true\n    inactive: true\n  - name: karmasearch images\n    disabled: true\n    inactive: true\n  - name: karmasearch videos\n    disabled: true\n    inactive: true\n  - name: karmasearch news\n    disabled: true\n    inactive: true\nui:\n  static_use_hash: true\n\nRESEARCH_ENGINE_EMBEDDED_FILE\nexec /usr/local/searxng/entrypoint.sh"
+    entrypoint:
+      - "/bin/sh"
+      - "-c"
+    environment:
+      SEARXNG_SECRET: "research-engine-local-searxng"
+      GRANIAN_HOST: "0.0.0.0"
+      GRANIAN_PORT: "8085"
+    expose:
+      - "8085"
+    volumes:
+      - type: "volume"
+        target: "/var/cache/searxng"
+        source: "crawl-searxng-cache"
+        read_only: false
+    networks:
+      - "aspire"
+  research-crawl:
+    image: "ghcr.io/firecrawl/firecrawl@sha256:86e8bf1ec55bc39cc3fe2ab146f73104e3028376e5812bbf300c65209c46a3d3"
+    command:
+      - "until node -e \"const net=require('net'); const s=net.connect(5672, 'crawl-rabbitmq'); s.on('connect', () => process.exit(0)); s.on('error', () => process.exit(1)); setTimeout(() => process.exit(1), 1000);\"; do\n  echo \"Waiting for RabbitMQ at crawl-rabbitmq:5672...\"\n  sleep 2\ndone\nexec docker-entrypoint.sh node dist/src/harness.js --start-docker"
+    entrypoint:
+      - "/bin/sh"
+      - "-c"
+    environment:
+      PORT: "3002"
+      HOST: "0.0.0.0"
+      USE_DB_AUTHENTICATION: "false"
+      POSTGRES_DB: "postgres"
+      POSTGRES_USER: "firecrawl"
+      POSTGRES_PASSWORD: "firecrawl-password"
+      BULL_AUTH_KEY: "28d4f12a03a9476ba93e59e3fa752623e090f9798ff94d1089dd5f706ae8213f"
+      REDIS_URL: "redis://crawl-redis:6379"
+      REDIS_RATE_LIMIT_URL: "redis://crawl-redis:6379"
+      PLAYWRIGHT_MICROSERVICE_URL: "http://firecrawl-playwright:3000/scrape"
+      SEARXNG_ENDPOINT: "http://searxng:8085"
+      NUQ_DATABASE_URL: "postgresql://firecrawl:firecrawl-password@crawl-postgres:5432/postgres?sslmode=disable"
+      NUQ_RABBITMQ_URL: "amqp://firecrawl:firecrawl-rabbitmq-password@crawl-rabbitmq:5672"
+      DATABASE_URL: "postgresql://firecrawl:firecrawl-password@crawl-postgres:5432/postgres?sslmode=disable"
+      BLOCK_MEDIA: "true"
+      MAX_CPU: "0.7"
+      MAX_RAM: "0.7"
+    expose:
+      - "3002"
+    volumes:
+      - type: "volume"
+        target: "/app/data"
+        source: "crawl-firecrawl-data"
+        read_only: false
+    depends_on:
+      crawl-postgres:
+        condition: "service_started"
+      crawl-redis:
+        condition: "service_started"
+      crawl-rabbitmq:
+        condition: "service_started"
+      firecrawl-playwright:
+        condition: "service_started"
+      searxng:
+        condition: "service_started"
+    networks:
+      - "aspire"
+  research-llm:
+    image: "docker.io/vllm/vllm-openai:v0.20.1"
+    command:
+      - "openai/gpt-oss-20b"
+      - "--host"
+      - "0.0.0.0"
+      - "--port"
+      - "8000"
+      - "--gpu-memory-utilization"
+      - "0.94"
+      - "--max-model-len"
+      - "auto"
+      - "--max-num-seqs"
+      - "1"
+      - "--enable-auto-tool-choice"
+      - "--tool-call-parser"
+      - "openai"
+    environment:
+      HF_HOME: "/root/.cache/huggingface"
+      HUGGINGFACE_HUB_CACHE: "/root/.cache/huggingface"
+    expose:
+      - "8000"
+    volumes:
+      - type: "volume"
+        target: "/root/.cache/huggingface"
+        source: "model-cache"
+        read_only: false
+      - type: "volume"
+        target: "/root/.cache/vllm"
+        source: "model-compile-cache"
+        read_only: false
+    networks:
+      - "aspire"
+    devices:
+      - "nvidia.com/gpu=all"
+  research-api:
+    image: "${RESEARCH_API_IMAGE}"
+    environment:
+      OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY: "in_memory"
+      ASPNETCORE_FORWARDEDHEADERS_ENABLED: "true"
+      HTTP_PORTS: "18080"
+      ASPNETCORE_URLS: "http://0.0.0.0:18080"
+      ASPNETCORE_ENVIRONMENT: "Development"
+      DOTNET_ENVIRONMENT: "Development"
+      ConnectionStrings__ResearchDb: "Host=research-postgres;Port=5432;Username=research;Password=research-password;Database=research"
+      RESEARCHDB_HOST: "research-postgres"
+      RESEARCHDB_PORT: "5432"
+      RESEARCHDB_USERNAME: "research"
+      RESEARCHDB_PASSWORD: "research-password"
+      RESEARCHDB_URI: "postgresql://research:research-password@research-postgres:5432/research"
+      RESEARCHDB_JDBCCONNECTIONSTRING: "jdbc:postgresql://research-postgres:5432/research"
+      RESEARCHDB_DATABASENAME: "research"
+      ConnectionStrings__HangfireDb: "Host=research-postgres;Port=5432;Username=research;Password=research-password;Database=research"
+      HANGFIREDB_HOST: "research-postgres"
+      HANGFIREDB_PORT: "5432"
+      HANGFIREDB_USERNAME: "research"
+      HANGFIREDB_PASSWORD: "research-password"
+      HANGFIREDB_URI: "postgresql://research:research-password@research-postgres:5432/research"
+      HANGFIREDB_JDBCCONNECTIONSTRING: "jdbc:postgresql://research-postgres:5432/research"
+      HANGFIREDB_DATABASENAME: "research"
+      RedisEventBusOptions__ConnectionString: "research-redis:6379,password=research-redis-password"
+      ChatConfig__Endpoint: "http://research-llm:8000/v1"
+      ChatConfig__ApiKey: "local-chat-key"
+      ChatConfig__ModelId: "openai/gpt-oss-20b"
+      ChatConfig__MaxContextLength: "10240"
+      ChatConfig__MaxOutputTokens: "2048"
+      EmbeddingConfig__Endpoint: "http://research-ollama:11434/v1"
+      EmbeddingConfig__ApiKey: "ollama"
+      EmbeddingConfig__ModelId: "qwen3-embedding:0.6b"
+      EmbeddingConfig__Dimension: "1024"
+      FirecrawlOptions__BaseUrl: "http://research-crawl:3002"
+      FirecrawlOptions__ApiKey: "local-firecrawl-key"
+      FirecrawlOptions__HttpClientTimeoutSeconds: "600"
+      EndpointAliasOptions__Aliases__0__Host: "research-llm"
+      EndpointAliasOptions__Aliases__0__Target: "http://research-llm:8000"
+      EndpointAliasOptions__Aliases__1__Host: "research-crawl"
+      EndpointAliasOptions__Aliases__1__Target: "http://research-crawl:3002"
+      OTEL_SERVICE_NAME: "research-api"
+      OTEL_EXPORTER_OTLP_PROTOCOL: "grpc"
+      OTEL_RESOURCE_ATTRIBUTES: "service.namespace=ResearchEngine,deployment.environment.name=Development"
+      AuthenticationOptions__Enabled: "True"
+      AuthenticationOptions__ApiKeys__0: "RYCQlDNSFnJgUrOIZdnh4mlOghdkzhCntgeDjsJqCYFz7tou1F1bZi8oNJ4C0hav"
+      Cors__AllowedOrigins__0: "http://localhost:8090"
+      Cors__AllowedOrigins__1: "https://research-webui.llm.local:8443"
+      Cors__AllowedOrigins__2: "http://localhost:5173"
+      Hangfire__EnableServer: "True"
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://compose-dashboard:18889"
+    expose:
+      - "18080"
+    depends_on:
+      research-postgres:
+        condition: "service_started"
+      research-redis:
+        condition: "service_started"
+      research-ollama:
+        condition: "service_started"
+      research-ollama-init:
+        condition: "service_completed_successfully"
+      research-crawl:
+        condition: "service_started"
+      research-llm:
+        condition: "service_started"
+    networks:
+      - "aspire"
+  research-webui:
+    image: "${RESEARCH_WEBUI_IMAGE}"
+    environment:
+      OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY: "in_memory"
+      ASPNETCORE_FORWARDEDHEADERS_ENABLED: "true"
+      HTTP_PORTS: "5173"
+      ASPNETCORE_URLS: "http://0.0.0.0:5173"
+      ASPNETCORE_ENVIRONMENT: "Development"
+      DOTNET_ENVIRONMENT: "Development"
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://compose-dashboard:18889"
+      OTEL_EXPORTER_OTLP_PROTOCOL: "grpc"
+      OTEL_SERVICE_NAME: "research-webui"
+    expose:
+      - "5173"
+    depends_on:
+      research-api:
+        condition: "service_started"
+    networks:
+      - "aspire"
+  research-edge:
+    image: "docker.io/library/caddy:2.8"
+    command:
+      - "mkdir -p \"$$(dirname '/etc/caddy/Caddyfile')\"\ncat > '/etc/caddy/Caddyfile' <<'RESEARCH_ENGINE_EMBEDDED_FILE'\n{\n  admin off\n}\n\nhttp://localhost:{$$EDGE_HTTP_PORT} {\n  encode zstd gzip\n  @api path /api* /health* /openapi* /scalar* /hangfire* /version-control*\n  reverse_proxy @api {$$API_UPSTREAM} {\n    header_up Authorization \"Bearer {$$API_AUTH_TOKEN}\"\n  }\n  reverse_proxy {$$WEBUI_UPSTREAM}\n}\n\nhttps://{$$WEBUI_HTTPS_HOST}:{$$EDGE_HTTPS_PORT} {\n  tls internal\n  encode zstd gzip\n  @api path /api* /health* /openapi* /scalar* /hangfire* /version-control*\n  reverse_proxy @api {$$API_UPSTREAM} {\n    header_up Authorization \"Bearer {$$API_AUTH_TOKEN}\"\n  }\n  reverse_proxy {$$WEBUI_UPSTREAM}\n}\n\nhttps://{$$API_HTTPS_HOST}:{$$EDGE_HTTPS_PORT} {\n  tls internal\n  encode zstd gzip\n  reverse_proxy {$$API_UPSTREAM} {\n    header_up Authorization \"Bearer {$$API_AUTH_TOKEN}\"\n  }\n}\n\nRESEARCH_ENGINE_EMBEDDED_FILE\nexec caddy run --config /etc/caddy/Caddyfile --adapter caddyfile"
+    entrypoint:
+      - "/bin/sh"
+      - "-c"
+    environment:
+      XDG_DATA_HOME: "/data"
+      API_UPSTREAM: "http://research-api:18080"
+      WEBUI_UPSTREAM: "http://research-webui:5173"
+      API_AUTH_TOKEN: "RYCQlDNSFnJgUrOIZdnh4mlOghdkzhCntgeDjsJqCYFz7tou1F1bZi8oNJ4C0hav"
+      UPSTREAM_HOST: "host.containers.internal"
+      API_PORT: "18080"
+      WEBUI_PORT: "5173"
+      API_RESOURCE_NAME: "research-api"
+      WEBUI_RESOURCE_NAME: "research-webui"
+      EDGE_HTTP_PORT: "8090"
+      EDGE_HTTPS_PORT: "8443"
+      WEBUI_HTTPS_HOST: "research-webui.llm.local"
+      API_HTTPS_HOST: "research-api.llm.local"
+    ports:
+      - "8090:8090"
+      - "8443:8443"
+    expose:
+      - "8090"
+      - "8443"
+    volumes:
+      - type: "volume"
+        target: "/data"
+        source: "research-edge-caddy-data"
+        read_only: false
+    depends_on:
+      research-api:
+        condition: "service_started"
+      research-webui:
+        condition: "service_started"
+    networks:
+      - "aspire"
+networks:
+  aspire:
+    driver: "bridge"
+volumes:
+  research-postgres-data:
+    driver: "local"
+  research-ollama-data:
+    driver: "local"
+  crawl-nuq-postgres-data:
+    driver: "local"
+  crawl-playwright-data:
+    driver: "local"
+  crawl-searxng-cache:
+    driver: "local"
+  crawl-firecrawl-data:
+    driver: "local"
+  model-cache:
+    driver: "local"
+  model-compile-cache:
+    driver: "local"
+  research-edge-caddy-data:
+    driver: "local"

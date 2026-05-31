@@ -1,0 +1,5 @@
+{
+  "appHost": {
+    "path": "ResearchEngine.AppHost/ResearchEngine.AppHost.csproj"
+  }
+}

@@ -9,11 +9,11 @@ This guide is based on:
 
 - `ResearchEngine.API`
 - `ResearchEngine.WebUI`
+- `ResearchEngine.AppHost`
+- `ResearchEngine.AppHost/apphost.env`
 - `ResearchEngine.API/appsettings.json`
 - `ResearchEngine.WebUI/wwwroot/appsettings.json`
-- `Deploy/compose/compose.yaml`
-- `Deploy/compose/Caddyfile`
-- the single-host deployment manifests in `Deploy/single-host`
+- the Aspire-generated Docker Compose release bundle
 
 ## Quick Mental Model
 
@@ -33,6 +33,20 @@ This guide is based on:
 | `ResearchOrchestratorConfig__DefaultDiscoveryMode` | default source-discovery policy preselected in the composer, including `Auto` | bootstrap config initially, then the runtime settings UI |
 | `AuthenticationOptions__ApiKeys__0` | API access key | secret |
 | `API_BASE_URL` | default API URL used by the Web UI container | env var |
+
+Aspire local runs configure these values from `ResearchEngine.AppHost`. AppHost defaults live in `ResearchEngine.AppHost/apphost.env`, with this precedence:
+
+```text
+CLI flag > process environment variable > ResearchEngine.AppHost/apphost.env
+```
+
+Pass AppHost options after `--`, for example:
+
+```powershell
+aspire run --project ResearchEngine.AppHost/ResearchEngine.AppHost.csproj -- --profile light --chat-endpoint https://openrouter.ai/api/v1 --chat-api-key <key> --chat-model-id <model>
+```
+
+Use `--defaults-file <path>` or `RESEARCH_ASPIRE_DEFAULTS_FILE` to run with a different env defaults file.
 
 ## Where Settings Live
 
@@ -83,7 +97,7 @@ Important consequence:
 
 - if you change `ChatConfig__*`, `ResearchOrchestratorConfig__*`, or `LearningSimilarityOptions__*` in environment variables after first startup, the existing database row still wins until you update the runtime settings or reset that row
 
-In the current `Deploy/single-host` manifests:
+In the Aspire AppHost profiles:
 
 - `ResearchOrchestratorConfig` may be present in config as a bootstrap default
 - `LearningSimilarityOptions` may be present in config as a bootstrap default
@@ -171,7 +185,7 @@ env:
 
 ```json
 "FirecrawlOptions": {
-  "BaseUrl": "http://firecrawl:3002",
+  "BaseUrl": "http://research-crawl:3002",
   "ApiKey": "...",
   "HttpClientTimeoutSeconds": 600
 }
@@ -228,36 +242,26 @@ Important:
 - `MaxContextLength` is validated on startup when provided; other bad `ChatConfig` values may still fail when first used
 - `MaxOutputTokens`, when provided, caps generated response length for chat calls and must be greater than zero
 - the current implementation requires a non-empty `ApiKey` value even for local backends that ignore authentication; use a dummy value such as `ollama` if needed
-- the current single-host example is tuned for a single `16 GB` NVIDIA GPU and uses `openai/gpt-oss-20b` as a conservative default
+- the default full Aspire profile is tuned for a single `16 GB` NVIDIA GPU and uses `openai/gpt-oss-20b` as a conservative default
 - `openai/gpt-oss-20b` is the current baseline example because it fits `16 GB` cards well and supports the structured-output and tool-calling features this app needs
 - the app has been tested mainly with Qwen3 family models, which have been the most capable for this workload in the author's testing so far, but other compatible models are still worth trying
-- if you have around `16 GB` of VRAM, the current single-host example is the recommended starting point; if you change it, prefer efficient quantization such as `AWQ`, `NVFP4`, or `MXFP4` when supported and keep `MaxContextLength` at or above `10000`
+- if you have around `16 GB` of VRAM, the default full Aspire profile is the recommended starting point; if you change it, prefer efficient quantization such as `AWQ`, `NVFP4`, or `MXFP4` when supported and keep `MaxContextLength` at or above `10000`
 - if you have more GPU headroom, you can usually raise the context limit first and then try higher-quality alternatives such as `Qwen3-14B` or `Qwen3-14B-AWQ`
-- [`Deploy/single-host/40-llm.yaml`](../Deploy/single-host/40-llm.yaml) is the main local backend example; if you change the served model there, keep [`Deploy/single-host/20-app.yaml`](../Deploy/single-host/20-app.yaml) `ChatConfig__ModelId` aligned with it
+- `ResearchEngine.AppHost` is the main local backend source; if you change the served vLLM model, keep the AppHost `ChatConfig__ModelId` value aligned with it
 
-Single-host deployment example:
+Aspire AppHost defaults:
 
-```yaml
-env:
-  - name: ChatConfig__Endpoint
-    value: "http://research-llm:8000/v1"
-  - name: ChatConfig__ModelId
-    value: "openai/gpt-oss-20b"
-  - name: ChatConfig__ApiKey
-    valueFrom:
-      secretKeyRef:
-        name: research-app-secrets
-        key: ChatConfig__ApiKey
+```text
+ChatConfig__Endpoint=http://research-llm:8000/v1
+ChatConfig__ModelId=openai/gpt-oss-20b
+ChatConfig__ApiKey=local-chat-key
 ```
 
 Optional override for backends that do not expose `/tokenize`:
 
-```yaml
-env:
-  - name: ChatConfig__MaxContextLength
-    value: "10240"
-  - name: ChatConfig__MaxOutputTokens
-    value: "2048"
+```text
+ChatConfig__MaxContextLength=10240
+ChatConfig__MaxOutputTokens=2048
 ```
 
 #### Chat Backend Requirements
@@ -307,21 +311,13 @@ Important:
 - if `Dimension` does not match the actual vector length, persistence and vector search will break
 - The example config uses the `Qwen/Qwen3-Embedding-0.6B` embedding model.
 
-Single-host deployment example:
+Aspire AppHost defaults:
 
-```yaml
-env:
-  - name: EmbeddingConfig__Endpoint
-    value: "http://127.0.0.1:11434/v1"
-  - name: EmbeddingConfig__ModelId
-    value: "qwen3-embedding:0.6b"
-  - name: EmbeddingConfig__Dimension
-    value: "1024"
-  - name: EmbeddingConfig__ApiKey
-    valueFrom:
-      secretKeyRef:
-        name: research-app-secrets
-        key: EmbeddingConfig__ApiKey
+```text
+EmbeddingConfig__Endpoint=http://research-ollama:11434/v1
+EmbeddingConfig__ModelId=qwen3-embedding:0.6b
+EmbeddingConfig__Dimension=1024
+EmbeddingConfig__ApiKey=ollama
 ```
 
 ### `ResearchOrchestratorConfig`
@@ -376,7 +372,7 @@ Source trust rules:
 
 These settings are loaded from the shared runtime-settings row in PostgreSQL and are exposed in the Web UI settings dialog.
 
-In the current `Deploy/single-host` deployment, this section is not overridden by environment variables, so UI changes remain effective.
+In the Aspire profiles, this section is not overridden by environment variables, so UI changes remain effective.
 
 ### `LearningSimilarityOptions`
 
@@ -428,7 +424,7 @@ Meaning:
 
 These settings are loaded from the shared runtime-settings row in PostgreSQL and are exposed in the Web UI settings dialog.
 
-In the current `Deploy/single-host` deployment, this section is not overridden by environment variables, so UI changes remain effective.
+In the Aspire profiles, this section is not overridden by environment variables, so UI changes remain effective.
 
 <details>
 <summary>Advanced API sections: authentication, Redis, Hangfire, CORS, rate limiting, and logging</summary>
@@ -662,17 +658,11 @@ The same dialog also loads and updates the API runtime settings described above.
 
 ### Web UI Container Mapping
 
-Both deployment paths set `API_BASE_URL=same-origin` and pass the API key into the Web UI container. In the single-host deployment, that looks like:
+The Aspire image-mode path sets `API_BASE_URL=same-origin` and passes the API key into the Web UI container:
 
-```yaml
-env:
-  - name: API_BASE_URL
-    value: "same-origin"
-  - name: AuthenticationOptions__ApiKeys__0
-    valueFrom:
-      secretKeyRef:
-        name: research-app-secrets
-        key: AuthenticationOptions__ApiKeys__0
+```text
+API_BASE_URL=same-origin
+AuthenticationOptions__ApiKeys__0=local-dev-key
 ```
 
 `entrypoint.sh` maps those to:
@@ -684,11 +674,11 @@ The special value `same-origin` tells the Web UI to use the current page origin 
 If `API_BASE_URL` is not provided, the container keeps the default `ApiBaseUrl` from `wwwroot/appsettings.json`.
 These are only startup defaults. The browser can still override them later.
 
-In `Deploy/compose/compose.yaml`, the same mapping is provided through normal compose environment variables instead of a Kubernetes-style secret block. `Deploy/compose/Caddyfile` also proxies `/api*`, `/health*`, `/openapi*`, `/scalar*`, and `/hangfire*` to `research-api`, so the browser only needs `http://localhost:8090/`.
+The Aspire-managed Caddy edge proxies `/api*`, `/health*`, `/openapi*`, `/scalar*`, and `/hangfire*` to `research-api`, so the browser only needs `http://localhost:8090/` or the trusted local HTTPS hostnames.
 
-## Compose Deployment Summary
+## Aspire Deployment Summary
 
-`Deploy/compose/compose.yaml` configures these important runtime values through `Deploy/compose/.env`:
+`ResearchEngine.AppHost` configures these important runtime values through `ResearchEngine.AppHost/apphost.env`, command-line flags, process environment variables, and generated compose environment:
 
 - released app image tag
 - PostgreSQL database name, user, and password
@@ -697,15 +687,17 @@ In `Deploy/compose/compose.yaml`, the same mapping is provided through normal co
 - Web UI host port
 - API key auth value shared by the API and Web UI
 
-The same compose file also starts local `postgres`, `redis`, and `ollama` containers for the app stack.
+The same AppHost starts local `postgres`, `redis`, `ollama`, Caddy, and, in the full profile, Firecrawl and vLLM resources.
 
 Important consequence:
 
-- if you change `CHAT_*` values in `.env` after the first startup, the existing PostgreSQL `runtime_settings` row still wins until you update the runtime settings through the app or reset the compose database volume
+- if you change `CHAT_*` values after the first startup, the existing PostgreSQL `runtime_settings` row still wins until you update the runtime settings through the app or reset the AppHost database volume
 
-## Single-Host Deployment Summary
+## Generated Compose Release Summary
 
-The current `Deploy/single-host` manifests configure these important runtime values through environment variables:
+The release workflow publishes API/WebUI images and then asks Aspire to generate a Docker Compose bundle that references those images. Container-only users can run that bundle without the source tree or a local .NET runtime.
+
+The generated compose path configures these important runtime values through environment variables:
 
 - database connection strings
 - Firecrawl base URL and API key
@@ -733,7 +725,7 @@ Treat these values as secrets and inject them outside source control:
 - `EmbeddingConfig__ApiKey`
 - `AuthenticationOptions__ApiKeys__*`
 
-The single-host example stores them as Kubernetes-style `Secret` manifests in `Deploy/single-host/20-app.yaml` and `Deploy/single-host/30-crawl.yaml`.
+For local source runs, pass secrets as environment variables, user secrets, or AppHost command-line flags. For release compose runs, inject them through compose environment or an uncommitted env file.
 
 ## Minimal Environment Variable Example
 
@@ -745,10 +737,10 @@ API example:
 ```text
 ConnectionStrings__ResearchDb=Host=localhost;Port=5432;Database=research;Username=app;Password=secret
 ConnectionStrings__HangfireDb=Host=localhost;Port=5432;Database=jobs;Username=app;Password=secret
-FirecrawlOptions__BaseUrl=http://localhost:3002
+FirecrawlOptions__BaseUrl=http://research-crawl:3002
 FirecrawlOptions__ApiKey=your-firecrawl-key
 FirecrawlOptions__HttpClientTimeoutSeconds=600
-ChatConfig__Endpoint=http://localhost:8000/v1
+ChatConfig__Endpoint=http://research-llm:8000/v1
 ChatConfig__ApiKey=your-chat-key
 ChatConfig__ModelId=your-chat-model
 ChatConfig__MaxContextLength=10240

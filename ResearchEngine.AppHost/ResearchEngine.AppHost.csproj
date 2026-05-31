@@ -1,0 +1,27 @@
+<Project Sdk="Aspire.AppHost.Sdk/13.3.3">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <UserSecretsId>research-engine-apphost</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Aspire.Hosting.Docker" Version="13.3.3" />
+    <PackageReference Include="Aspire.Hosting.PostgreSQL" Version="13.3.3" />
+    <PackageReference Include="Aspire.Hosting.Redis" Version="13.3.3" />
+    <PackageReference Include="Aspire.Hosting.RabbitMQ" Version="13.3.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\ResearchEngine.API\ResearchEngine.API.csproj" />
+    <ProjectReference Include="..\ResearchEngine.WebUI\ResearchEngine.WebUI.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="apphost.env" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

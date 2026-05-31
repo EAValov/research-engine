@@ -52,21 +52,22 @@ No subscription required. Your prompts, sources, and reports stay under you cont
 The main requirement is that the system must be powerful enough to run at least an 8B-14B instruct model at a reasonable speed and with enough context for planning, synthesis, and evidence extraction.
 
 > [!TIP]
-> If you don't have a LLM-capable local hardware, check out the [Deployment guide Compose Setup section](./Docs/Deployment.md#compose-setup).
+> If you don't have local LLM-capable hardware, use the [light Aspire profile](./Docs/Deployment.md#light-local-profile) with external chat and crawl services.
 
-The app is containerized and **Podman** is the recommended platform because it is secure and open source. The full single-host setup was tested on Windows 11 with WSL2 and Podman, and it works well there. The example below uses [podman kube play](https://docs.podman.io/en/latest/markdown/podman-kube-play.1.html) and vLLM CUDA image.
+The local stack is orchestrated with **Aspire**. Aspire starts the .NET API and WebUI from source, manages the backing containers, wires dependencies, and gives you a dashboard for logs, health, and lifecycle control. You still need an OCI container runtime such as Podman or Docker for PostgreSQL, Redis, Ollama, Firecrawl, vLLM, and Caddy.
 
-For AMD or Intel GPU, check the [hardware sizing notes in the Deployment guide](./Docs/Deployment.md#hardware-sizing-guide) before using the local single-host setup.
+For AMD or Intel GPU, check the [hardware sizing notes in the Deployment guide](./Docs/Deployment.md#hardware-sizing-guide) before using the full local setup.
 
-If you have an **NVIDIA GPU with `16 GB` of VRAM** or more and **Podman** with [GPU container access](https://podman-desktop.io/docs/podman/gpu) configured, you can use this one-command installer flow:
+If you have an **NVIDIA GPU with `16 GB` of VRAM** or more and a container runtime with GPU access configured, you can use this one-command local flow:
 
 ```bash
 git clone --depth 1 https://github.com/EAValov/research-engine.git
 cd research-engine
-powershell -File .\Deploy\single-host.ps1 up
+aspire run --project ResearchEngine.AppHost/ResearchEngine.AppHost.csproj
 ```
 
-That command builds the local `research-api` and `research-webui` images and then deploys the **full local single-host stack**.
+That command starts the **full local stack**. The API and WebUI run as source projects; backing services run as Aspire-managed containers.
+Default ports, images, volumes, and vLLM command arguments live in `ResearchEngine.AppHost/apphost.env`.
 
 The first startup can take several minutes while `vLLM` downloads the model and compiles kernels.
 
@@ -172,7 +173,7 @@ For the deeper architecture walkthrough, see the [Architecture guide](./Docs/Arc
 ## Documentation
 
 - [Architecture](./Docs/Architecture.md) - how evidence collection and synthesis fit together
-- [Deployment](./Docs/Deployment.md) - single-host setup, pod layout, and backend choices
+- [Deployment](./Docs/Deployment.md) - Aspire profiles, local orchestration, and release compose bundles
 - [Configuration](./Docs/Configuration.md) - runtime settings, environment variables, and live-editable options
 - [Contributing](./CONTRIBUTING.md) - branch workflow, SemVer, and pull request expectations
 

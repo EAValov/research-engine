@@ -7,12 +7,15 @@ namespace ResearchEngine.Infrastructure;
 public sealed class VllmTokenizer : TokenizerBase, IDisposable
 {
     private readonly HttpClient _httpClient;
+    private readonly IEndpointAliasResolver _endpointAliasResolver;
 
     public VllmTokenizer(
         IRuntimeSettingsAccessor runtimeSettings,
+        IEndpointAliasResolver endpointAliasResolver,
         HttpClient? httpClient = null)
         : base(runtimeSettings)
     {
+        _endpointAliasResolver = endpointAliasResolver ?? throw new ArgumentNullException(nameof(endpointAliasResolver));
         _httpClient = httpClient ?? new HttpClient();
     }
 
@@ -23,7 +26,8 @@ public sealed class VllmTokenizer : TokenizerBase, IDisposable
     {
         if (payload is null) throw new ArgumentNullException(nameof(payload));
 
-        var uri = OpenAiEndpointUri.AppendServerPath(config.Endpoint, "tokenize");
+        var uri = _endpointAliasResolver.Resolve(
+            OpenAiEndpointUri.AppendServerPath(config.Endpoint, "tokenize"));
 
         using var resp = await _httpClient.PostAsJsonAsync(
                 uri,

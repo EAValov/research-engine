@@ -6,7 +6,7 @@ on:
       - published
 
 permissions:
-  contents: read
+  contents: write
   packages: write
 
 concurrency:
@@ -88,3 +88,61 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha,scope=${{ matrix.image_name }}
           cache-to: type=gha,mode=max,scope=${{ matrix.image_name }}
+
+  compose-bundle:
+    name: Publish Aspire Compose bundle
+    runs-on: ubuntu-latest
+    needs: publish
+    steps:
+      - name: Checkout release tag
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.release.tag_name }}
+
+      - name: Prepare bundle metadata
+        id: prep
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          REPOSITORY_OWNER: ${{ github.repository_owner }}
+        run: |
+          echo "owner_lc=${REPOSITORY_OWNER,,}" >> "$GITHUB_OUTPUT"
+          echo "version=${RELEASE_TAG#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Install Aspire CLI
+        run: dotnet tool install -g aspire.cli --version 13.3.3
+
+      - name: Publish Docker Compose bundle from Aspire
+        run: >
+          aspire publish
+          --project ResearchEngine.AppHost/ResearchEngine.AppHost.csproj
+          -o artifacts/research-engine-compose
+          --
+          --profile full
+          --app-mode images
+            --api-image ghcr.io/${{ steps.prep.outputs.owner_lc }}/research-api:${{ steps.prep.outputs.version }}
+            --webui-image ghcr.io/${{ steps.prep.outputs.owner_lc }}/research-webui:${{ steps.prep.outputs.version }}
+            --container-runtime docker
+          --host-gateway host.docker.internal
+
+      - name: Add compose bind-mount files
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path artifacts/research-engine-compose/crawl | Out-Null
+          Copy-Item ResearchEngine.AppHost/Caddyfile artifacts/research-engine-compose/Caddyfile -Force
+          Copy-Item ResearchEngine.AppHost/crawl/nuq-schema-fix.sql artifacts/research-engine-compose/crawl/nuq-schema-fix.sql -Force
+          Copy-Item ResearchEngine.AppHost/crawl/searxng-settings.yml artifacts/research-engine-compose/crawl/searxng-settings.yml -Force
+
+      - name: Archive Docker Compose bundle
+        shell: pwsh
+        run: Compress-Archive -Path artifacts/research-engine-compose/* -DestinationPath "research-engine-compose-${{ steps.prep.outputs.version }}.zip" -Force
+
+      - name: Upload bundle to GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release upload "${{ github.event.release.tag_name }}" "research-engine-compose-${{ steps.prep.outputs.version }}.zip" --clobber

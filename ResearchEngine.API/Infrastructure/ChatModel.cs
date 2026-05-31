@@ -11,12 +11,16 @@ namespace ResearchEngine.Infrastructure;
 public sealed class OpenAiChatModel : IChatModel
 {
     private readonly IRuntimeSettingsAccessor _runtimeSettings;
+    private readonly IEndpointAliasResolver _endpointAliasResolver;
     private readonly object _sync = new();
     private ChatClientState? _state;
 
-    public OpenAiChatModel(IRuntimeSettingsAccessor runtimeSettings)
+    public OpenAiChatModel(
+        IRuntimeSettingsAccessor runtimeSettings,
+        IEndpointAliasResolver endpointAliasResolver)
     {
         _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
+        _endpointAliasResolver = endpointAliasResolver ?? throw new ArgumentNullException(nameof(endpointAliasResolver));
     }
 
     public string ModelId => GetOrCreateStateAsync(CancellationToken.None).GetAwaiter().GetResult().Config.ModelId;
@@ -120,7 +124,7 @@ public sealed class OpenAiChatModel : IChatModel
 
             var clientOptions = new OpenAIClientOptions
             {
-                Endpoint = new Uri(config.Endpoint, UriKind.Absolute)
+                Endpoint = _endpointAliasResolver.Resolve(new Uri(config.Endpoint, UriKind.Absolute))
             };
 
             var rawChatClient = new ChatClient(

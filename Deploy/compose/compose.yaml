@@ -51,7 +51,7 @@ services:
       - ${EMBEDDING_MODEL_ID:-qwen3-embedding:0.6b}
 
   research-api:
-    image: ghcr.io/eavalov/research-api:${RESEARCH_ENGINE_TAG:-latest}
+    image: ${RESEARCH_API_IMAGE:-ghcr.io/eavalov/research-api:latest}
     restart: unless-stopped
     depends_on:
       research-postgres:
@@ -90,7 +90,7 @@ services:
       retries: 15
 
   research-webui:
-    image: ghcr.io/eavalov/research-webui:${RESEARCH_ENGINE_TAG:-latest}
+    image: ${RESEARCH_WEBUI_IMAGE:-ghcr.io/eavalov/research-webui:latest}
     restart: unless-stopped
     depends_on:
       - research-api

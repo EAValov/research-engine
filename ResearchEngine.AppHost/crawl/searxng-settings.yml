@@ -1,0 +1,35 @@
+use_default_settings: true
+general:
+  instance_name: "Research Stack Search"
+server:
+  bind_address: "0.0.0.0"
+  port: 8085
+  secret_key: "overwritten-by-env"
+search:
+  formats:
+    - html
+    - json
+engines:
+  - name: ahmia
+    disabled: true
+    inactive: true
+  - name: torch
+    disabled: true
+    inactive: true
+  - name: wikidata
+    disabled: true
+    inactive: true
+  - name: karmasearch
+    disabled: true
+    inactive: true
+  - name: karmasearch images
+    disabled: true
+    inactive: true
+  - name: karmasearch videos
+    disabled: true
+    inactive: true
+  - name: karmasearch news
+    disabled: true
+    inactive: true
+ui:
+  static_use_hash: true

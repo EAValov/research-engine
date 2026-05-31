@@ -14,7 +14,9 @@ public sealed class OpenAiEmbeddingModel : IEmbeddingModel
 
     public string ModelId { get; }
 
-    public OpenAiEmbeddingModel(IOptions<EmbeddingConfig> options)
+    public OpenAiEmbeddingModel(
+        IOptions<EmbeddingConfig> options,
+        IEndpointAliasResolver endpointAliasResolver)
     {
         var cfg = options.Value ?? throw new ArgumentNullException(nameof(options));
 
@@ -22,7 +24,7 @@ public sealed class OpenAiEmbeddingModel : IEmbeddingModel
 
         var clientOptions = new OpenAIClientOptions
         {
-            Endpoint = new Uri(cfg.Endpoint)
+            Endpoint = endpointAliasResolver.Resolve(new Uri(cfg.Endpoint))
         };
 
         if (string.IsNullOrWhiteSpace(cfg.ApiKey))

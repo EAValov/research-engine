@@ -1,0 +1,30 @@
+{
+  admin off
+}
+
+http://localhost:{$EDGE_HTTP_PORT} {
+  encode zstd gzip
+  @api path /api* /health* /openapi* /scalar* /hangfire* /version-control*
+  reverse_proxy @api {$API_UPSTREAM} {
+    header_up Authorization "Bearer {$API_AUTH_TOKEN}"
+  }
+  reverse_proxy {$WEBUI_UPSTREAM}
+}
+
+https://{$WEBUI_HTTPS_HOST}:{$EDGE_HTTPS_PORT} {
+  tls internal
+  encode zstd gzip
+  @api path /api* /health* /openapi* /scalar* /hangfire* /version-control*
+  reverse_proxy @api {$API_UPSTREAM} {
+    header_up Authorization "Bearer {$API_AUTH_TOKEN}"
+  }
+  reverse_proxy {$WEBUI_UPSTREAM}
+}
+
+https://{$API_HTTPS_HOST}:{$EDGE_HTTPS_PORT} {
+  tls internal
+  encode zstd gzip
+  reverse_proxy {$API_UPSTREAM} {
+    header_up Authorization "Bearer {$API_AUTH_TOKEN}"
+  }
+}

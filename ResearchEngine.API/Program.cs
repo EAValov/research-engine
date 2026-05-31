@@ -11,22 +11,63 @@ using ResearchEngine.API;
 using ResearchEngine.API.Authentication;
 using Scalar.AspNetCore;
 using Serilog;
+using Serilog.Sinks.OpenTelemetry;
 using AspNetCoreRateLimit;
 using StackExchange.Redis;
 using Microsoft.AspNetCore.HttpOverrides;
 using System.Net.Http.Headers;
+using OpenTelemetry.Metrics;
+using OpenTelemetry.Resources;
+using OpenTelemetry.Trace;
 
 var builder = WebApplication.CreateBuilder(args);
 var runtimeSettingsBootstrap = RuntimeSettingsBootstrap.LoadValidated(builder.Configuration);
+var serviceName = builder.Configuration["OTEL_SERVICE_NAME"] ?? builder.Environment.ApplicationName;
+var serviceVersion = builder.Configuration["AppVersion"] ?? typeof(Program).Assembly.GetName().Version?.ToString();
 
 // ---------- Logging ----------
-Log.Logger = new LoggerConfiguration()
+var loggerConfiguration = new LoggerConfiguration()
     .ReadFrom.Configuration(builder.Configuration)
-    .Enrich.FromLogContext()
-    .CreateLogger();
+    .Enrich.FromLogContext();
+
+if (HasOtlpEndpoint(builder.Configuration))
+{
+    loggerConfiguration.WriteTo.OpenTelemetry(options =>
+    {
+        options.Endpoint = ResolveOtlpEndpoint(builder.Configuration);
+        options.Protocol = ResolveSerilogOtlpProtocol(builder.Configuration);
+        options.ResourceAttributes = CreateResourceAttributes(
+            serviceName,
+            serviceVersion,
+            builder.Environment.EnvironmentName);
+    });
+}
+
+Log.Logger = loggerConfiguration.CreateLogger();
 
 builder.Logging.ClearProviders();
 builder.Host.UseSerilog();
+
+if (HasOtlpEndpoint(builder.Configuration))
+{
+    builder.Services
+        .AddOpenTelemetry()
+        .ConfigureResource(resource => resource
+            .AddService(serviceName: serviceName, serviceVersion: serviceVersion)
+            .AddAttributes(CreateResourceAttributes(
+                serviceName,
+                serviceVersion,
+                builder.Environment.EnvironmentName)))
+        .WithTracing(tracing => tracing
+            .AddAspNetCoreInstrumentation()
+            .AddHttpClientInstrumentation()
+            .AddOtlpExporter())
+        .WithMetrics(metrics => metrics
+            .AddAspNetCoreInstrumentation()
+            .AddHttpClientInstrumentation()
+            .AddRuntimeInstrumentation()
+            .AddOtlpExporter());
+}
 
 var researchDb = builder.Configuration.GetConnectionString("ResearchDb")
     ?? throw new InvalidOperationException("Missing connection string: ResearchDb");
@@ -82,7 +123,13 @@ if (enableHangfireServer && !builder.Environment.IsEnvironment("Testing"))
 }
 
 // ---------- Http ----------
-builder.Services.AddHttpClient();
+builder.Services
+    .AddOptions<EndpointAliasOptions>()
+    .Bind(builder.Configuration.GetSection(nameof(EndpointAliasOptions)));
+builder.Services.AddSingleton<IEndpointAliasResolver, EndpointAliasResolver>();
+builder.Services.AddTransient<EndpointAliasHandler>();
+builder.Services.AddHttpClient(string.Empty)
+    .AddHttpMessageHandler<EndpointAliasHandler>();
 builder.Services.AddMemoryCache();
 
 builder.Services
@@ -189,7 +236,8 @@ builder.Services
 
         if (!string.IsNullOrWhiteSpace(firecrawlOptions?.BaseUrl))
             c.BaseAddress = new Uri(firecrawlOptions.BaseUrl);
-    });
+    })
+    .AddHttpMessageHandler<EndpointAliasHandler>();
 
 builder.Services.AddScoped<ISearchClient, FirecrawlClient>();
 builder.Services.AddScoped<ICrawlClient, FirecrawlClient>();
@@ -226,8 +274,7 @@ builder.Services.AddHealthChecks()
     .AddCheck<ChatBackendHealthCheck>(
         "chat",
         tags: ["ready", "llm", "chat"])
-    .AddUrlGroup(
-        new Uri($"{builder.Configuration["EmbeddingConfig:Endpoint"]!.TrimEnd('/')}/models"),
+    .AddCheck<EmbeddingBackendHealthCheck>(
         "embedding",
         tags: ["ready", "llm", "embedding"])
     .AddNpgSql(
@@ -307,9 +354,60 @@ if (!app.Environment.IsEnvironment("Testing"))
 {
     using var scope = app.Services.CreateScope();
     var db = scope.ServiceProvider.GetRequiredService<ResearchDbContext>();
+    db.Database.ExecuteSqlRaw("""
+        CREATE TABLE IF NOT EXISTS "__EFMigrationsHistory" (
+            "MigrationId" character varying(150) NOT NULL,
+            "ProductVersion" character varying(32) NOT NULL,
+            CONSTRAINT "PK___EFMigrationsHistory" PRIMARY KEY ("MigrationId")
+        );
+        """);
     db.Database.Migrate();
     var runtimeSettingsRepository = scope.ServiceProvider.GetRequiredService<IRuntimeSettingsRepository>();
     await runtimeSettingsRepository.EnsureInitializedAsync();
 }
 
 app.Run();
+
+static bool HasOtlpEndpoint(IConfiguration configuration)
+    => !string.IsNullOrWhiteSpace(ResolveOtlpEndpoint(configuration));
+
+static string? ResolveOtlpEndpoint(IConfiguration configuration)
+    => FirstConfiguredValue(
+        configuration["OTEL_EXPORTER_OTLP_ENDPOINT"],
+        configuration["OTEL_EXPORTER_OTLP_LOGS_ENDPOINT"],
+        configuration["OTEL_EXPORTER_OTLP_TRACES_ENDPOINT"],
+        configuration["OTEL_EXPORTER_OTLP_METRICS_ENDPOINT"]);
+
+static OtlpProtocol ResolveSerilogOtlpProtocol(IConfiguration configuration)
+{
+    var protocol = FirstConfiguredValue(
+        configuration["OTEL_EXPORTER_OTLP_PROTOCOL"],
+        configuration["OTEL_EXPORTER_OTLP_LOGS_PROTOCOL"]);
+
+    return string.Equals(protocol, "http/protobuf", StringComparison.OrdinalIgnoreCase)
+        ? OtlpProtocol.HttpProtobuf
+        : OtlpProtocol.Grpc;
+}
+
+static Dictionary<string, object> CreateResourceAttributes(
+    string serviceName,
+    string? serviceVersion,
+    string environmentName)
+{
+    var attributes = new Dictionary<string, object>
+    {
+        ["service.name"] = serviceName,
+        ["service.namespace"] = "ResearchEngine",
+        ["deployment.environment.name"] = environmentName
+    };
+
+    if (!string.IsNullOrWhiteSpace(serviceVersion))
+    {
+        attributes["service.version"] = serviceVersion;
+    }
+
+    return attributes;
+}
+
+static string? FirstConfiguredValue(params string?[] values)
+    => values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
