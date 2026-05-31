@@ -6,7 +6,7 @@ spec:
   hostname: research-llm
   containers:
     - name: vllm
-      image: vllm/vllm-openai:v0.20.2
+      image: vllm/vllm-openai:v0.22.0
       ports:
         - containerPort: 8000
       resources:
