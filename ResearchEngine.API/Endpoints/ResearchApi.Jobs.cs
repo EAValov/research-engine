@@ -67,11 +67,11 @@ public static partial class ResearchApi
     /// Lists jobs for the UX sidebar.
     /// </summary>
     private static async Task<IResult> ListJobsAsync(
-        [FromQuery] bool archived,
+        [FromQuery] bool? archived,
         IResearchJobRepository jobRepository,
         CancellationToken ct)
     {
-        var jobs = archived
+        var jobs = archived == true
             ? await jobRepository.ListArchivedJobsAsync(ct)
             : await jobRepository.ListJobsAsync(ct);
 
