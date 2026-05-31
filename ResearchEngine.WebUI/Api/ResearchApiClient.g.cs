@@ -58,7 +58,7 @@ namespace ResearchEngine.WebUI.Api
         /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
         /// <returns>OK</returns>
         /// <exception cref="ApiException">A server side error occurred.</exception>
-        System.Threading.Tasks.Task<ListResearchJobsResponse> JobsGETAsync(bool archived, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken));
+        System.Threading.Tasks.Task<ListResearchJobsResponse> JobsGETAsync(bool? archived = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken));
 
         /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
         /// <returns>Created</returns>
@@ -721,11 +721,8 @@ namespace ResearchEngine.WebUI.Api
         /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
         /// <returns>OK</returns>
         /// <exception cref="ApiException">A server side error occurred.</exception>
-        public virtual async System.Threading.Tasks.Task<ListResearchJobsResponse> JobsGETAsync(bool archived, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))
+        public virtual async System.Threading.Tasks.Task<ListResearchJobsResponse> JobsGETAsync(bool? archived = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))
         {
-            if (archived == null)
-                throw new System.ArgumentNullException("archived");
-
             var client_ = _httpClient;
             var disposeClient_ = false;
             try
@@ -740,7 +737,10 @@ namespace ResearchEngine.WebUI.Api
                     // Operation Path: "api/jobs"
                     urlBuilder_.Append("api/jobs");
                     urlBuilder_.Append('?');
-                    urlBuilder_.Append(System.Uri.EscapeDataString("archived")).Append('=').Append(System.Uri.EscapeDataString(ConvertToString(archived, System.Globalization.CultureInfo.InvariantCulture))).Append('&');
+                    if (archived != null)
+                    {
+                        urlBuilder_.Append(System.Uri.EscapeDataString("archived")).Append('=').Append(System.Uri.EscapeDataString(ConvertToString(archived, System.Globalization.CultureInfo.InvariantCulture))).Append('&');
+                    }
                     urlBuilder_.Length--;
 
                     PrepareRequest(client_, request_, urlBuilder_);
