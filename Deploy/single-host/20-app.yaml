@@ -22,7 +22,7 @@ spec:
   hostname: research-app
   containers:
     - name: research-postgres
-      image: docker.io/pgvector/pgvector:pg17
+      image: pgvector/pgvector:pg17
       env:
         - name: POSTGRES_DB
           valueFrom:
@@ -46,13 +46,13 @@ spec:
           mountPath: /var/lib/postgresql/data
 
     - name: research-redis
-      image: docker.io/library/redis:7-alpine
+      image: redis:7-alpine
       command: ["redis-server", "--bind", "0.0.0.0"]
       ports:
         - containerPort: 6379
 
     - name: ollama
-      image: docker.io/ollama/ollama:0.22.1
+      image: ollama/ollama:0.23.4
       command: ["/bin/sh", "-c"]
       args:
         - |
