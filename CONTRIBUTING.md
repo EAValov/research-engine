@@ -6,10 +6,36 @@ Thanks for contributing to Research Engine!
 
 Before working on the code locally, make sure you have:
 
-- `.NET 10 SDK`
+- `.NET 10.0.401 SDK` or a newer patch in the `10.0.4xx` feature band, as selected by `global.json`
 - `pwsh` or `powershell` available on your `PATH`
-- [`nswag`](https://github.com/RicoSuter/NSwag) available on your `PATH` for Web UI client generation
 - a Docker-compatible container runtime for integration tests, which use Testcontainers to start PostgreSQL and Redis dependencies
+
+From the repository root, restore the pinned local tools before the first build:
+
+```powershell
+dotnet tool restore
+```
+
+The tool manifest in `.config/dotnet-tools.json` pins [`NSwag`](https://github.com/RicoSuter/NSwag) for Web UI client generation and `dotnet-ef` for Entity Framework migrations. Builds invoke the repository's NSwag version through `dotnet tool run nswag`. Use `dotnet tool run dotnet-ef -- <arguments>` to explicitly invoke the pinned Entity Framework tool.
+
+`NuGet.Config` uses the public nuget.org feed for this repository's packages and tools. It clears inherited package sources so unrelated machine or user feeds do not affect restore.
+
+For an isolated SDK installation on Windows, run these commands from the repository root:
+
+```powershell
+New-Item -ItemType Directory -Path artifacts -Force | Out-Null
+Invoke-WebRequest https://dot.net/v1/dotnet-install.ps1 -OutFile artifacts/dotnet-install.ps1
+pwsh -NoProfile -File artifacts/dotnet-install.ps1 -Version 10.0.401 -InstallDir .dotnet -NoPath
+dotnet --version
+dotnet tool restore
+```
+
+The SDK and installer stay in ignored local folders. With a .NET 10 host on `PATH`, `global.json` automatically searches `.dotnet` first and then the host's installation, so ordinary `dotnet` commands use the pinned SDK without changing your environment. If your `dotnet` host is older than .NET 10 or is not on `PATH`, select the local installation for the current PowerShell session before running `dotnet` commands:
+
+```powershell
+$env:DOTNET_ROOT = (Resolve-Path .dotnet).Path
+$env:PATH = "$env:DOTNET_ROOT;$env:PATH"
+```
 
 ## Repository Layout
 
@@ -47,6 +73,7 @@ If you are opening a pull request:
 4. Run these checks locally before opening or updating the pull request:
 
 ```powershell
+dotnet tool restore
 dotnet build ResearchEngine.slnx
 dotnet test ResearchEngine.IntegrationTests/ResearchEngine.IntegrationTests.csproj
 ```
