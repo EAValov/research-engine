@@ -2,7 +2,7 @@ name: research-engine
 
 services:
   research-postgres:
-    image: docker.io/pgvector/pgvector:pg17
+    image: docker.io/pgvector/pgvector:0.8.6-pg17
     restart: unless-stopped
     environment:
       POSTGRES_DB: ${RESEARCH_DB_NAME:-research}
@@ -17,7 +17,7 @@ services:
       retries: 10
 
   research-redis:
-    image: docker.io/library/redis:7-alpine
+    image: docker.io/library/redis:7.4.11-alpine
     restart: unless-stopped
     command: ["redis-server", "--bind", "0.0.0.0"]
     healthcheck:
@@ -27,7 +27,7 @@ services:
       retries: 10
 
   research-ollama:
-    image: docker.io/ollama/ollama:0.21.0
+    image: docker.io/ollama/ollama:0.34.2
     restart: unless-stopped
     environment:
       OLLAMA_HOST: "0.0.0.0:11434"
@@ -40,7 +40,7 @@ services:
       retries: 20
 
   research-ollama-init:
-    image: docker.io/ollama/ollama:0.21.0
+    image: docker.io/ollama/ollama:0.34.2
     restart: "no"
     depends_on:
       - research-ollama

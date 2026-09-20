@@ -35,7 +35,7 @@ spec:
   hostname: research-edge
   containers:
     - name: caddy
-      image: caddy:2.11.3
+      image: caddy:2.11.4
       ports:
         - containerPort: 8090
           hostPort: 8090

@@ -112,7 +112,7 @@ spec:
   restartPolicy: OnFailure
   initContainers:
     - name: crawl-postgres-initdb
-      image: ghcr.io/firecrawl/nuq-postgres:latest@sha256:8565e5f46000085c16d247a4354c41e2439dbcf1640f7dd6e6406c0b18c31732
+      image: ghcr.io/firecrawl/nuq-postgres:latest@sha256:9b638af78d99873bc0ba2b57c9cbcd01df6ce96efeaa72d36cfbe0f76521e8fc
       command:
         - sh
         - -ec
@@ -128,7 +128,7 @@ spec:
           readOnly: true
   containers:
     - name: crawl-postgres
-      image: ghcr.io/firecrawl/nuq-postgres:latest@sha256:8565e5f46000085c16d247a4354c41e2439dbcf1640f7dd6e6406c0b18c31732
+      image: ghcr.io/firecrawl/nuq-postgres:latest@sha256:9b638af78d99873bc0ba2b57c9cbcd01df6ce96efeaa72d36cfbe0f76521e8fc
       env:
         - name: POSTGRES_DB
           valueFrom:
@@ -154,20 +154,20 @@ spec:
           mountPath: /docker-entrypoint-initdb.d
 
     - name: crawl-redis
-      image: redis:7-alpine
+      image: redis:7.4.11-alpine
       command: ["redis-server", "--bind", "0.0.0.0"]
       ports:
         - containerPort: 6379
 
     - name: crawl-rabbitmq
-      image: rabbitmq:3-management
+      image: rabbitmq:4.3.6-management
       command: ["rabbitmq-server"]
       ports:
         - containerPort: 5672
         - containerPort: 15672
 
     - name: firecrawl-playwright
-      image: ghcr.io/firecrawl/playwright-service:latest@sha256:9e0737bc09df28275aab29726b1c0824a7725113945434e843385d487b7f7ec6
+      image: ghcr.io/firecrawl/playwright-service:latest@sha256:df1a393ce8bfc3801570a826a9b0dcc400ae48789adb4a0ad9d6cbf0229b059b
       ports:
         - containerPort: 3000
       env:
@@ -178,7 +178,7 @@ spec:
           mountPath: /app/data
 
     - name: searxng
-      image: searxng/searxng:latest@sha256:0bbe85fb9bebe413a26c0e385c76309d15c91fdb9dc8a6bf01b35b714d0ece43
+      image: searxng/searxng:2026.9.20-fdd8525b1@sha256:cd8812607ab73730a0b1a0dc4990223fe1b9e383f6f35947114d0bef7f8bb441
       env:
         - name: SEARXNG_SECRET
           valueFrom:
@@ -199,7 +199,7 @@ spec:
           mountPath: /var/cache/searxng
 
     - name: firecrawl
-      image: ghcr.io/firecrawl/firecrawl:latest@sha256:86e8bf1ec55bc39cc3fe2ab146f73104e3028376e5812bbf300c65209c46a3d3
+      image: ghcr.io/firecrawl/firecrawl:latest@sha256:c56e4e896415e5df4c65eb0e06fe9d1c194f06a59cb88fbc4d2d5fd7a54dc76c
       ports:
         - containerPort: 3002
       livenessProbe:

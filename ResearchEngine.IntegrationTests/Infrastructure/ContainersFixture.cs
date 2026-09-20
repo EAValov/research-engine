@@ -37,14 +37,14 @@ public sealed class ContainersFixture : IAsyncLifetime
 
     public ContainersFixture()
     {
-        Postgres = new PostgreSqlBuilder("pgvector/pgvector:pg17")
+        Postgres = new PostgreSqlBuilder("pgvector/pgvector:0.8.6-pg17")
             .WithDatabase("research")   // container default, we create our own DBs inside
             .WithLogger(NullLogger.Instance)
             .WithUsername("postgres")
             .WithPassword("postgres")
             .Build();
 
-        Redis = new RedisBuilder("redis:7-alpine")
+        Redis = new RedisBuilder("redis:7.4.11-alpine")
             .WithLogger(NullLogger.Instance)
             .Build();
     }
