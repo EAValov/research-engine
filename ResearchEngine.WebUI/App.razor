@@ -3,19 +3,24 @@
 @inject AppStateStore AppState
 @inject ResearchEngine.WebUI.Services.ApiConnectionSettings ApiConnection
 
-<Router AppAssembly="@typeof(App).Assembly">
-    <Found Context="routeData">
-        <RouteView RouteData="@routeData" DefaultLayout="@typeof(MainLayout)" />
-        <FocusOnNavigate RouteData="@routeData" Selector="#mainContent" />
-    </Found>
-    <NotFound>
-        <LayoutView Layout="@typeof(MainLayout)">
-            <p>Sorry, there’s nothing at this address.</p>
-        </LayoutView>
-    </NotFound>
-</Router>
+@if (_apiSettingsInitialized)
+{
+    <Router AppAssembly="@typeof(App).Assembly">
+        <Found Context="routeData">
+            <RouteView RouteData="@routeData" DefaultLayout="@typeof(MainLayout)" />
+            <FocusOnNavigate RouteData="@routeData" Selector="#mainContent" />
+        </Found>
+        <NotFound>
+            <LayoutView Layout="@typeof(MainLayout)">
+                <p>Sorry, there’s nothing at this address.</p>
+            </LayoutView>
+        </NotFound>
+    </Router>
+}
 
 @code {
+    private bool _apiSettingsInitialized;
+
     protected override async Task OnInitializedAsync()
     {
         await AppState.InitializeAsync();
@@ -23,6 +28,19 @@
         var saved = AppState.GetApiSettings();
         var apiKey = saved.ApiKey ?? string.Empty;
         var authEnabled = saved.AuthEnabled;
+        var savedBaseUrl = ApiConnectionSettings.NormalizeBaseUrl(saved.BaseUrl);
+
+        // An empty browser state must keep the deployment's configured key.
+        // Never apply that key to a different API selected in this browser.
+        if (string.IsNullOrWhiteSpace(apiKey)
+            && (savedBaseUrl is null
+                || string.Equals(
+                    savedBaseUrl,
+                    ApiConnectionSettings.NormalizeBaseUrl(ApiConnection.ConfiguredApiBaseUrl),
+                    StringComparison.OrdinalIgnoreCase)))
+        {
+            apiKey = ApiConnection.ApiKey;
+        }
 
         if (ApiConnection.TryApply(saved.BaseUrl, apiKey, authEnabled))
         {
@@ -32,10 +50,12 @@
             {
                 AppState.SetApiSettings(ApiConnection.ApiBaseUrl, apiKey, authEnabled);
             }
+            _apiSettingsInitialized = true;
             return;
         }
 
         ApiConnection.TryApply(ApiConnection.ConfiguredApiBaseUrl, apiKey, authEnabled);
         AppState.SetApiSettings(ApiConnection.ApiBaseUrl, apiKey, authEnabled);
+        _apiSettingsInitialized = true;
     }
 }

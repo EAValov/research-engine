@@ -1,6 +1,6 @@
 ARG APP_VERSION=dev
 
-FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+FROM mcr.microsoft.com/dotnet/sdk:10.0.401 AS build
 WORKDIR /src
 
 COPY . .
@@ -11,7 +11,7 @@ RUN dotnet workload install wasm-tools
 RUN dotnet restore ResearchEngine.WebUI.csproj /p:GenerateApiClientOnBuild=false
 RUN dotnet publish ResearchEngine.WebUI.csproj -c Release -o /app/publish /p:GenerateApiClientOnBuild=false
 
-FROM caddy:2.9-alpine AS final
+FROM caddy:2.11.4-alpine AS final
 ARG APP_VERSION
 WORKDIR /srv
 
