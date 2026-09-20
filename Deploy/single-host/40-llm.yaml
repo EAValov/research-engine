@@ -6,13 +6,16 @@ spec:
   hostname: research-llm
   containers:
     - name: vllm
-      image: vllm/vllm-openai:v0.22.0
+      image: vllm/vllm-openai:v0.29.0
       ports:
         - containerPort: 8000
       resources:
         limits:
           "nvidia.com/gpu=all": 1
       env:
+        # The v2 runner requires CUDA UVA, which is unavailable under WSL2.
+        - name: VLLM_USE_V2_MODEL_RUNNER
+          value: "0"
         - name: HF_HOME
           value: /root/.cache/huggingface
         - name: HUGGINGFACE_HUB_CACHE

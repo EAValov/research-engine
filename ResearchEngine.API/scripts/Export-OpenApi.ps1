@@ -61,7 +61,7 @@ try {
         RedirectStandardError = $stderrLog
     }
 
-    if ($IsWindows) {
+    if ($IsWindows -or $env:OS -eq "Windows_NT") {
         $startProcessParameters.WindowStyle = "Hidden"
     }
 
